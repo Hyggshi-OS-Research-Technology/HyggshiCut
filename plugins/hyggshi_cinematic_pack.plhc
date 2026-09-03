@@ -1,0 +1,153 @@
+{
+  "version": 1,
+  "pluginId": "hyggshi_cinematic_pack",
+  "name": "Hyggshi Cinematic Color Pack",
+  "author": "HyggshiCut Team",
+  "version_num": "1.0.0",
+  "description": "A collection of cinematic color grading presets and custom video effects. Includes Anime-style, K-Drama warm look, Lo-Fi Aesthetic, Matte Black, and Fuji Film emulation effects.",
+  "type": "effects",
+  "enabled": true,
+  "effects": [
+    {
+      "id": "anime_vivid",
+      "name": "🎌 Anime Vivid (Hoạt hình sống động)",
+      "type": "color_grade",
+      "params": {
+        "lift_r": -0.05,
+        "lift_g": 0.02,
+        "lift_b": 0.12,
+        "lift_luma": -0.05,
+        "gamma_r": 0.05,
+        "gamma_g": 0.08,
+        "gamma_b": 0.15,
+        "gamma_luma": 0.04,
+        "gain_r": 0.18,
+        "gain_g": 0.12,
+        "gain_b": 0.20,
+        "gain_luma": 0.10
+      }
+    },
+    {
+      "id": "kdrama_warm",
+      "name": "🌸 K-Drama Warm (Phim Hàn ấm áp)",
+      "type": "color_grade",
+      "params": {
+        "lift_r": 0.08,
+        "lift_g": 0.04,
+        "lift_b": -0.06,
+        "lift_luma": 0.02,
+        "gamma_r": 0.15,
+        "gamma_g": 0.08,
+        "gamma_b": -0.10,
+        "gamma_luma": 0.05,
+        "gain_r": 0.25,
+        "gain_g": 0.15,
+        "gain_b": -0.18,
+        "gain_luma": 0.08
+      }
+    },
+    {
+      "id": "lofi_pastel",
+      "name": "🎵 Lo-Fi Pastel Aesthetic",
+      "type": "color_grade",
+      "params": {
+        "lift_r": 0.12,
+        "lift_g": 0.10,
+        "lift_b": 0.15,
+        "lift_luma": 0.08,
+        "gamma_r": 0.05,
+        "gamma_g": 0.03,
+        "gamma_b": 0.08,
+        "gamma_luma": 0.02,
+        "gain_r": -0.05,
+        "gain_g": -0.05,
+        "gain_b": -0.02,
+        "gain_luma": -0.10
+      }
+    },
+    {
+      "id": "matte_black",
+      "name": "⬛ Matte Black Cinematic",
+      "type": "color_grade",
+      "params": {
+        "lift_r": 0.05,
+        "lift_g": 0.05,
+        "lift_b": 0.05,
+        "lift_luma": 0.12,
+        "gamma_r": -0.05,
+        "gamma_g": -0.05,
+        "gamma_b": -0.05,
+        "gamma_luma": -0.05,
+        "gain_r": -0.08,
+        "gain_g": -0.08,
+        "gain_b": -0.08,
+        "gain_luma": -0.15
+      }
+    },
+    {
+      "id": "fuji_film",
+      "name": "📷 Fuji Film Emulation (Phim Fuji cổ điển)",
+      "type": "color_grade",
+      "params": {
+        "lift_r": 0.05,
+        "lift_g": 0.03,
+        "lift_b": -0.02,
+        "lift_luma": 0.05,
+        "gamma_r": 0.10,
+        "gamma_g": 0.05,
+        "gamma_b": -0.08,
+        "gamma_luma": 0.00,
+        "gain_r": 0.20,
+        "gain_g": 0.08,
+        "gain_b": -0.15,
+        "gain_luma": 0.05
+      }
+    },
+    {
+      "id": "moonlight_blue",
+      "name": "🌙 Moonlight Blue (Ánh trăng xanh)",
+      "type": "color_grade",
+      "params": {
+        "lift_r": -0.12,
+        "lift_g": -0.05,
+        "lift_b": 0.18,
+        "lift_luma": -0.08,
+        "gamma_r": -0.08,
+        "gamma_g": 0.00,
+        "gamma_b": 0.15,
+        "gamma_luma": 0.00,
+        "gain_r": -0.05,
+        "gain_g": 0.05,
+        "gain_b": 0.20,
+        "gain_luma": 0.05
+      }
+    },
+    {
+      "id": "forest_green",
+      "name": "🌿 Forest Green (Rừng xanh)",
+      "type": "color_grade",
+      "params": {
+        "lift_r": -0.08,
+        "lift_g": 0.10,
+        "lift_b": -0.05,
+        "lift_luma": -0.05,
+        "gamma_r": -0.05,
+        "gamma_g": 0.15,
+        "gamma_b": -0.08,
+        "gamma_luma": 0.00,
+        "gain_r": -0.10,
+        "gain_g": 0.20,
+        "gain_b": -0.10,
+        "gain_luma": 0.05
+      }
+    }
+  ],
+  "colorPresets": [
+    {
+      "name": "Plugin: Anime Vivid",
+      "liftR": -0.05, "liftG": 0.02, "liftB": 0.12, "liftLuma": -0.05,
+      "gammaR": 0.05, "gammaG": 0.08, "gammaB": 0.15, "gammaLuma": 0.04,
+      "gainR": 0.18, "gainG": 0.12, "gainB": 0.20, "gainLuma": 0.10
+    }
+  ]
+}

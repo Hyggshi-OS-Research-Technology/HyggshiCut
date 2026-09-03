@@ -1,0 +1,34 @@
+Source: hyggshicut
+Section: video
+Priority: optional
+Maintainer: Hyggshi <hyggshidev@gmail.com>
+Build-Depends:
+ debhelper-compat (= 13),
+ cmake (>= 3.20),
+ pkg-config,
+ build-essential,
+ qt6-base-dev,
+ libqt6opengl6-dev,
+ libavformat-dev,
+ libavcodec-dev,
+ libavutil-dev,
+ libswscale-dev,
+ libswresample-dev,
+ libavfilter-dev,
+ libmpv-dev,
+ libasound2-dev,
+ libgl1-mesa-dev
+Standards-Version: 4.6.2
+Homepage: https://hyggshi-os-website.pages.dev/
+Rules-Requires-Root: no
+
+Package: hyggshicut
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Modern, lightweight professional video editor
+ A professional, modern, lightweight video editor written in C++20
+ with Qt6, FFmpeg (libav*) and OpenGL 3.3 Core.
+ .
+ Features a multi-track timeline, GPU realtime compositing and effects
+ (shaders), GPU preview, audio meters, a headless CLI render engine and
+ ffmpeg-based export to MP4/MOV/MKV/WebM/MP3/WAV.

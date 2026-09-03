@@ -1,0 +1,12 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=HyggshiCut
+GenericName=Video Editor
+Comment=Modern, lightweight professional video editor
+Exec=HyggshiCut %F
+Icon=hyggshicut
+Terminal=false
+Categories=AudioVideo;Video;AudioVideoEditing;
+MimeType=application/x-hyggshicut-project;
+Keywords=video;editor;timeline;ffmpeg;cut;
