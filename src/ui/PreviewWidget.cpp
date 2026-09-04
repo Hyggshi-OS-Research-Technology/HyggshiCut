@@ -62,7 +62,7 @@ PreviewWidget::PreviewWidget(QWidget* parent) : QWidget(parent) {
     m_timeLabel->setStyleSheet("color: #ccc; font-family: monospace;");
     transport->addWidget(m_timeLabel);
 
-    m_meterToggleBtn = new QPushButton(tr("📊 VU"), this);
+    m_meterToggleBtn = new QPushButton(tr("VU"), this);
     m_meterToggleBtn->setCheckable(true);
     m_meterToggleBtn->setChecked(false);
     m_meterToggleBtn->setToolTip(tr("Bật/tắt thanh đo âm lượng (Digital Audio Volume Meter)"));

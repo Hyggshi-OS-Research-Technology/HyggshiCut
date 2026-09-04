@@ -1,4 +1,4 @@
-# 🎬 HyggshiCut
+# HyggshiCut
 
 <div id="NexCode-logo" align="center">
     <br />
@@ -33,7 +33,7 @@
 
 ---
 
-## 📖 Overview
+## Overview
 
 **HyggshiCut** is an open-source, professional video editor that is ultra-lightweight and highly optimized for Linux. Built on **C++20**, **Qt6**, **FFmpeg (libav\*)**, and an **OpenGL 3.3 Core** rendering backend, HyggshiCut delivers a smooth editing experience with an extremely low RAM footprint.
 
@@ -41,14 +41,14 @@ Beyond its intuitive, modern graphical interface, HyggshiCut also ships with a b
 
 ---
 
-## ✨ Key Features
+## Key Features
 
-### 🎞️ 1. Multi-Track Timeline & Powerful Editing
+### 1. Multi-Track Timeline & Powerful Editing
 - **Flexible multi-layer support:** Unlimited Video, Audio, Image, and Text tracks.
 - **Precise cutting tools:** Split at playhead (`S`), trim both ends of a clip, duration stretching, ripple delete, smart snapping.
 - **Full history system:** Safe Undo and Redo across every action on the timeline.
 
-### ⚡ 2. Real-Time GPU Compositing & Effects (OpenGL 3.3 Core)
+### 2. Real-Time GPU Compositing & Effects (OpenGL 3.3 Core)
 - **19 Blend Modes:** Normal, Multiply, Screen, Overlay, Add, Subtract, Darken, Lighten, HardLight, SoftLight, Difference, Exclusion, Dodge, Burn, Saturate, HSL Hue/Saturation/Color/Luminosity.
 - **Real-time post-processing chain (GPU Shader Pipeline):**
   - Brightness, Contrast, Saturation, Hue Rotate.
@@ -57,27 +57,27 @@ Beyond its intuitive, modern graphical interface, HyggshiCut also ships with a b
   - Three color wheels: **Lift (Shadows)**, **Gamma (Midtones)**, **Gain (Highlights)**, plus a Luma brightness slider.
   - Built-in color presets: *Teal & Orange*, *Warm Sunset*, *Cool Nordic*, *Vintage 70s*, *Cyberpunk Neon*, *Bleach Bypass*, *Golden Hour*, *Horror Green*.
 
-### 📐 3. Free Transform & Keyframe Animation
+### 3. Free Transform & Keyframe Animation
 - **Free-form frame transforms:** Adjust position $(X, Y)$, scale $(X, Y)$, rotation angle (°), and opacity.
 - **Visual Transform Gizmo Overlay:** Drag, rotate, and align directly on the Preview canvas.
 - **Smart keyframe system:** Set keyframes on the timeline (shown as diamonds `◆`) to create smooth motion (PIP, zoom, layer slide, fade).
 
-### 🔀 4. Smooth Transitions & Fades
+### 4. Smooth Transitions & Fades
 - **Crossfade transitions:** Smooth cross-dissolve using a RAM-efficient single-pass algorithm.
 - **Fade handles:** Drag directly on a clip to create fade-in / fade-out for both video and audio.
 
-### 🅣 5. Text & Subtitle Generator
+### 5. Text & Subtitle Generator
 - Create text layers with customizable font, size, alignment, color, bold/italic/underline.
 - Support for crisp outline strokes and background boxes with custom color and padding.
 
-### 🔊 6. Professional Audio Suite
+### 6. Professional Audio Suite
 - **Direct ALSA audio output:** Extremely responsive preview playback with ultra-low latency and no device-drop issues on PipeWire.
 - **3-band EQ:** Low (~100Hz), Mid (~1kHz), High (~8kHz).
 - **Smart noise reduction:** FFT-based spectral denoising (`afftdn`).
 - **Dynamic Range Compressor:** Stable loudness with `acompressor` (Threshold & Ratio).
 - **Live stereo VU meter:** Real-time Peak and RMS level metering.
 
-### 🚀 7. Optimized Video Export (Low-RAM Exporter)
+### 7. Optimized Video Export (Low-RAM Exporter)
 - **Single-pass algorithm:** Smart filter-complex chaining with no RAM spikes, even on long projects.
 - **Wide codec & format support:**
   - Video: `H.264` (libx264), `H.265 / HEVC` (libx265), `VP9` (libvpx-vp9), `AV1` (libsvtav1), `Apple ProRes 422 HQ` (prores_ks).
@@ -85,13 +85,13 @@ Beyond its intuitive, modern graphical interface, HyggshiCut also ships with a b
   - Container: `MP4`, `MKV`, `MOV`, `WebM`, `MP3`, `WAV`.
 - **Built-in export presets:** YouTube 1080p/4K, TikTok / Reels / Shorts 9:16, Instagram 1:1, Low-spec / Ultrafast, Lossless Master.
 
-### 🖥️ 8. Headless CLI Render Mode
+### 8. Headless CLI Render Mode
 - Render video projects directly from a terminal or automated server / CI/CD scripts.
 - Includes a render progress bar, ETA estimation, and standard exit codes.
 
 ---
 
-## 🛠️ System Requirements & Dependencies
+## System Requirements & Dependencies
 
 ### Minimum requirements:
 - **Operating system:** Linux (Ubuntu 22.04+, Debian 12+, Fedora 38+, Arch Linux, etc.)
@@ -120,7 +120,7 @@ sudo pacman -S base-devel cmake qt6-base qt6-declarative \
 
 ---
 
-## 🚀 Building from Source
+## Building from Source
 
 ```bash
 # 1. Clone the repository
@@ -154,7 +154,7 @@ cmake --build . -j"$(nproc)"
 
 ---
 
-## 📦 Packaging & Installing the `.deb` Package (Debian / Ubuntu)
+## Packaging & Installing the `.deb` Package (Debian / Ubuntu)
 
 You can build a standard Debian `.deb` package yourself:
 
@@ -168,7 +168,7 @@ sudo dpkg -i ../hyggshicut_*.deb || sudo apt-get install -f
 
 ---
 
-## 💻 Headless CLI Render Guide
+## Headless CLI Render Guide
 
 HyggshiCut can render video directly from the terminal without launching the GUI:
 
@@ -208,7 +208,7 @@ HyggshiCut -r -p podcast.hcproj -o podcast_audio.mp3 --preset audio-mp3
 
 ---
 
-## ⌨️ Keyboard Shortcuts
+## Keyboard Shortcuts
 
 | Shortcut | Action |
 |---|---|
@@ -230,32 +230,32 @@ HyggshiCut -r -p podcast.hcproj -o podcast_audio.mp3 --preset audio-mp3
 
 ---
 
-## 🔌 Plugin System & Multi-Language Support
+## Plugin System & Multi-Language Support
 
-### 🧩 Plugins (`.plhc`)
+### Plugins (`.plhc`)
 HyggshiCut supports an extensible color-preset and effects plugin system using `.plhc` files (JSON manifests). It ships with the **Hyggshi Cinematic Color Pack**:
-- 🎌 *Anime Vivid*
-- 🌸 *K-Drama Warm*
-- 🎵 *Lo-Fi Pastel Aesthetic*
-- ⬛ *Matte Black Cinematic*
-- 📷 *Fuji Film Emulation*
-- 🌙 *Moonlight Blue*
-- 🌿 *Forest Green*
+- *Anime Vivid*
+- *K-Drama Warm*
+- *Lo-Fi Pastel Aesthetic*
+- *Matte Black Cinematic*
+- *Fuji Film Emulation*
+- *Moonlight Blue*
+- *Forest Green*
 
 You can manage and load additional custom plugins from `Settings` → `Manage Plugins (.plhc)...`.
 
-### 🌐 Multi-Language Support (`.langhc`)
+### Multi-Language Support (`.langhc`)
 The UI supports multiple languages with instant switching — no application restart required:
-- 🇻🇳 **Vietnamese** (`vi.langhc`)
-- 🇬🇧 **English** (`en.langhc`)
-- 🇯🇵 **Japanese** (`ja.langhc`)
-- 🇰🇷 **Korean** (`ko.langhc`)
-- 🇹🇭 **Thai** (`th.langhc`)
-- 🇨🇳 **Simplified Chinese** (`zh.langhc`)
+-  **Vietnamese** (`vi.langhc`)
+-  **English** (`en.langhc`)
+-  **Japanese** (`ja.langhc`)
+-  **Korean** (`ko.langhc`)
+-  **Thai** (`th.langhc`)
+-  **Simplified Chinese** (`zh.langhc`)
 
 ---
 
-## 🏗️ Project Structure
+## Project Structure
 
 ```
 HyggshiCut/
@@ -280,7 +280,7 @@ HyggshiCut/
 
 ---
 
-## 📄 License & Authors
+## License & Authors
 
 - **Author:** Hyggshi OS Foundation / Hyggshi OS Research Technology
 - **Contact / Support:** [hyggshidev@gmail.com](mailto:hyggshidev@gmail.com)
