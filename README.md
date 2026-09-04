@@ -20,6 +20,7 @@
 
 [![GitHub License](https://hyggshi-badge.vercel.app/api/badge?message=MIT&label=icense&color=3b82f6&labelColor=0f172a&animation=gradient-shift)](LICENSE)
 [![HOSL13](https://hyggshi-badge.vercel.app/api/badge?message=HOSL+1.3&label=icense&color=3b82f6&labelColor=0f172a&animation=gradient-shift)](license)
+[![HOSL13](https://hyggshi-badge.vercel.app/api/badge?message=protected+by+license+HOSL+1.3&label=Hyggshi+DMCA+Report+System+Team&color=6366f1&labelColor=0f172a&animation=gradient-shift)](license)
 
 [**Features**](#-key-features) •
 [**Installation**](#-installation) •
