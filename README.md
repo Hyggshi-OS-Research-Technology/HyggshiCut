@@ -123,7 +123,7 @@ sudo pacman -S base-devel cmake qt6-base qt6-declarative \
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/hyggshi/HyggshiCut.git
+git clone https://github.com/Hyggshi-OS-Research-Technology/HyggshiCut.git
 cd HyggshiCut
 
 # 2. Create the build directory
