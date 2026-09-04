@@ -9,6 +9,8 @@
 
 <div id="badges" align="center">
 
+[![HyggshiCut](./Resources/image.png)](image.png)
+
 **Modern, Lightweight & High-Performance Professional Video Editor for Linux**
 
 [![C++20](https://hyggshi-badge.vercel.app/api/badge?message=20&label=C%2B%2B&color=3b82f6&labelColor=0f172a&icon=cpp&animation=gradient-shift)](https://en.wikipedia.org/wiki/C%2B%2B20)
