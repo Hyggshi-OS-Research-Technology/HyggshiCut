@@ -17,19 +17,18 @@ namespace hc {
 namespace {
 static std::mutex s_cacheMutex;
 static std::unordered_map<QString, QImage> s_textCache;
-constexpr size_t kMaxCacheEntries = 32;
+constexpr size_t kMaxCacheEntries = 8;
 }
 
-QImage TextRenderer::renderText(const Clip& clip, int canvasW, int canvasH) {
+QString TextRenderer::cacheKey(const Clip& clip, int canvasW, int canvasH, bool fullCanvas) {
     if (canvasW <= 0) canvasW = 1920;
     if (canvasH <= 0) canvasH = 1080;
 
     QString content = clip.displayLabel;
     if (content.isEmpty()) content = QStringLiteral("Văn bản");
 
-    // Construct a cache key to avoid re-rendering identical static text frames
-    const QString cacheKey = QString(
-        "%1|%2|%3|%4|%5|%6|%7|%8|%9|%10|%11|%12|%13|%14|%15|%16")
+    return QString(
+        "%1|%2|%3|%4|%5|%6|%7|%8|%9|%10|%11|%12|%13|%14|%15|%16|%17")
         .arg(content,
              clip.textFontFamily,
              QString::number(clip.textFontSize),
@@ -45,15 +44,26 @@ QImage TextRenderer::renderText(const Clip& clip, int canvasW, int canvasH) {
              clip.textBackgroundColor,
              QString::number(clip.textPadding),
              QString::number(canvasW),
-             QString::number(canvasH));
+             QString::number(canvasH),
+             fullCanvas ? "1" : "0");
+}
+
+QImage TextRenderer::renderText(const Clip& clip, int canvasW, int canvasH, bool fullCanvas) {
+    if (canvasW <= 0) canvasW = 1920;
+    if (canvasH <= 0) canvasH = 1080;
+
+    const QString key = cacheKey(clip, canvasW, canvasH, fullCanvas);
 
     {
         std::lock_guard<std::mutex> lock(s_cacheMutex);
-        auto it = s_textCache.find(cacheKey);
+        auto it = s_textCache.find(key);
         if (it != s_textCache.end()) {
             return it->second;
         }
     }
+
+    QString content = clip.displayLabel;
+    if (content.isEmpty()) content = QStringLiteral("Văn bản");
 
     QFont font;
     font.setFamily(clip.textFontFamily.isEmpty() ? QStringLiteral("Segoe UI") : clip.textFontFamily);
@@ -79,7 +89,14 @@ QImage TextRenderer::renderText(const Clip& clip, int canvasW, int canvasH) {
     const int cardW = qMin(canvasW, textBounding.width() + (pad + outlineW) * 2 + 16);
     const int cardH = qMin(canvasH, textBounding.height() + (pad + outlineW) * 2 + 16);
 
-    QImage img(canvasW, canvasH, QImage::Format_RGBA8888_Premultiplied);
+    // If fullCanvas is true (e.g. for Exporter PNG overlay), use full canvas dimensions.
+    // If fullCanvas is false (default preview), allocate only the tight bounding box card (~100 KiB vs ~7.9 MiB).
+    const int outW = fullCanvas ? canvasW : cardW;
+    const int outH = fullCanvas ? canvasH : cardH;
+    const int cardX = fullCanvas ? (canvasW - cardW) / 2 : 0;
+    const int cardY = fullCanvas ? (canvasH - cardH) / 2 : 0;
+
+    QImage img(outW, outH, QImage::Format_RGBA8888_Premultiplied);
     img.fill(Qt::transparent);
 
     QPainter p(&img);
@@ -87,8 +104,6 @@ QImage TextRenderer::renderText(const Clip& clip, int canvasW, int canvasH) {
     p.setRenderHint(QPainter::TextAntialiasing, true);
     p.setFont(font);
 
-    const int cardX = (canvasW - cardW) / 2;
-    const int cardY = (canvasH - cardH) / 2;
     const QRect cardRect(cardX, cardY, cardW, cardH);
     const QRect drawRect = cardRect.adjusted(pad + outlineW, pad + outlineW, -(pad + outlineW), -(pad + outlineW));
 
@@ -179,7 +194,7 @@ QImage TextRenderer::renderText(const Clip& clip, int canvasW, int canvasH) {
         if (s_textCache.size() >= kMaxCacheEntries) {
             s_textCache.clear();
         }
-        s_textCache[cacheKey] = img;
+        s_textCache[key] = img;
     }
 
     return img;

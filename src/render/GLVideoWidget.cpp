@@ -5,6 +5,7 @@
 #include <QVector4D>
 #include <QThread>
 #include <QDebug>
+#include <QPainter>
 #include <algorithm>
 #include <cmath>
 #include <memory>
@@ -283,6 +284,10 @@ GLVideoWidget::GLVideoWidget(QWidget* parent) : QOpenGLWidget(parent) {
 
 GLVideoWidget::~GLVideoWidget() {
     makeCurrent();
+    for (auto& pair : m_textTextureCache) {
+        if (pair.second.texture) glDeleteTextures(1, &pair.second.texture);
+    }
+    m_textTextureCache.clear();
     for (auto& layer : m_gpuLayers) destroyLayerTextures(layer);
     m_sceneFbo.reset();
     m_vbo.destroy();
@@ -296,20 +301,40 @@ void GLVideoWidget::initializeGL() {
     initializeOpenGLFunctions();
     glClearColor(0.06f, 0.06f, 0.07f, 1.0f);
 
+    qInfo() << "HyggshiCut Graphics Renderer:"
+            << reinterpret_cast<const char*>(glGetString(GL_RENDERER))
+            << "| Version:" << reinterpret_cast<const char*>(glGetString(GL_VERSION))
+            << "| GLSL:" << reinterpret_cast<const char*>(glGetString(GL_SHADING_LANGUAGE_VERSION));
+
+    if (qEnvironmentVariableIsSet("HYGGSHICUT_FORCE_CPU_RENDER")) {
+        qWarning() << "HyggshiCut: HYGGSHICUT_FORCE_CPU_RENDER is set. Activating CPU preview fallback mode.";
+        m_forceCpuFallback = true;
+    }
+
     m_program = new QOpenGLShaderProgram(this);
     m_program->addShaderFromSourceCode(QOpenGLShader::Vertex, kVertexShader);
     m_program->addShaderFromSourceCode(QOpenGLShader::Fragment, kFragmentShader);
-    if (!m_program->link()) qWarning() << "HyggshiCut YUV shader:" << m_program->log();
+    bool okYUV = m_program->link();
+    if (!okYUV) qWarning() << "HyggshiCut YUV shader:" << m_program->log();
 
     m_programRGBA = new QOpenGLShaderProgram(this);
     m_programRGBA->addShaderFromSourceCode(QOpenGLShader::Vertex, kVertexShader);
     m_programRGBA->addShaderFromSourceCode(QOpenGLShader::Fragment, kFragmentShaderRGBA);
-    if (!m_programRGBA->link()) qWarning() << "HyggshiCut RGBA shader:" << m_programRGBA->log();
+    bool okRGBA = m_programRGBA->link();
+    if (!okRGBA) qWarning() << "HyggshiCut RGBA shader:" << m_programRGBA->log();
 
     m_presentProgram = new QOpenGLShaderProgram(this);
     m_presentProgram->addShaderFromSourceCode(QOpenGLShader::Vertex, kPresentVertexShader);
     m_presentProgram->addShaderFromSourceCode(QOpenGLShader::Fragment, kPresentFragmentShader);
-    if (!m_presentProgram->link()) qWarning() << "HyggshiCut present shader:" << m_presentProgram->log();
+    bool okPresent = m_presentProgram->link();
+    if (!okPresent) qWarning() << "HyggshiCut present shader:" << m_presentProgram->log();
+
+    if (!okYUV || !okRGBA || !okPresent) {
+        m_gpuAvailable = false;
+        qWarning() << "HyggshiCut: OpenGL 3.3 core shaders could not be linked! Activating CPU preview renderer.";
+        return;
+    }
+    m_gpuAvailable = true;
 
     const float verts[] = {
         -1.0f, -1.0f,  0.0f, 1.0f,
@@ -342,6 +367,7 @@ void GLVideoWidget::initializeGL() {
     m_vbo.release();
     ensureSceneFbo();
 }
+
 
 void GLVideoWidget::ensureSceneFbo() {
     if (width() <= 0 || height() <= 0) return;
@@ -452,6 +478,59 @@ void GLVideoWidget::uploadRgbaLayer(GpuLayer& layer, const QImage& image) {
     layer.usesCache = false;
 }
 
+unsigned int GLVideoWidget::uploadNewRgbaTexture(const QImage& image) {
+    if (image.isNull()) return 0;
+    unsigned int tex = 0;
+    glGenTextures(1, &tex);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    QImage glImg = (image.format() == QImage::Format_RGBA8888_Premultiplied)
+                       ? image
+                       : image.convertToFormat(QImage::Format_RGBA8888_Premultiplied);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, glImg.width(), glImg.height(), 0, GL_RGBA, GL_UNSIGNED_BYTE, glImg.constBits());
+    return tex;
+}
+
+QImage GLVideoWidget::convertYuvToRgb(const VideoFrame& frame) {
+    if (!frame.isValid() || frame.width <= 0 || frame.height <= 0) return {};
+
+    QImage rgb(frame.width, frame.height, QImage::Format_RGB888);
+    const bool useBt709 = frame.colorMatrixBt709;
+
+    for (int y = 0; y < frame.height; ++y) {
+        const uint8_t* yRow = frame.y.data() + y * frame.strideY;
+        const uint8_t* uRow = frame.u.data() + (y / 2) * frame.strideU;
+        const uint8_t* vRow = frame.v.data() + (y / 2) * frame.strideV;
+        uchar* dst = rgb.scanLine(y);
+
+        for (int x = 0; x < frame.width; ++x) {
+            const int Y = yRow[x];
+            const int U = uRow[x / 2] - 128;
+            const int V = vRow[x / 2] - 128;
+
+            int r, g, b;
+            if (useBt709) {
+                r = qBound(0, static_cast<int>(Y + 1.5748 * V), 255);
+                g = qBound(0, static_cast<int>(Y - 0.1873 * U - 0.4681 * V), 255);
+                b = qBound(0, static_cast<int>(Y + 1.8556 * U), 255);
+            } else {
+                r = qBound(0, static_cast<int>(Y + 1.402 * V), 255);
+                g = qBound(0, static_cast<int>(Y - 0.344136 * U - 0.714136 * V), 255);
+                b = qBound(0, static_cast<int>(Y + 1.772 * U), 255);
+            }
+
+            dst[x * 3 + 0] = static_cast<uchar>(r);
+            dst[x * 3 + 1] = static_cast<uchar>(g);
+            dst[x * 3 + 2] = static_cast<uchar>(b);
+        }
+    }
+    return rgb;
+}
+
 void GLVideoWidget::bindCachedLayer(GpuLayer& layer) {
     if (!m_textureCache) return;
     const auto info = m_textureCache->snapshot(layer.cachedAssetId);
@@ -468,6 +547,7 @@ void GLVideoWidget::bindCachedLayer(GpuLayer& layer) {
     layer.tileSize = info->tileSize;
     layer.tiled = info->isTiled;
     layer.isRGBA = true;
+    layer.isText = false;
     layer.sourceRotationDeg = 0.0;
     layer.hasFrame = true;
     layer.usesCache = true;
@@ -482,13 +562,18 @@ void GLVideoWidget::destroyLayerTextures(GpuLayer& layer) {
     }
     layer.texY = layer.texU = layer.texV = layer.texRGBA = 0;
     layer.isRGBA = false;
+    layer.isText = false;
+    layer.textCacheKey.clear();
+    layer.cpuImage = QImage();
     layer.sourceRotationDeg = 0.0;
     layer.tiled = false;
     layer.tileSize = 0;
     layer.texWidth = layer.texHeight = 0;
+    layer.canvasW = layer.canvasH = 0;
     layer.hasFrame = false;
     layer.usesCache = false;
 }
+
 
 void GLVideoWidget::setFrame(const VideoFrame& frame) {
     GLLayer layer;
@@ -549,8 +634,89 @@ void GLVideoWidget::uploadPendingLayers() {
         gpu.opacity = layers[i].opacity;
         gpu.blendMode = layers[i].blendMode;
         gpu.effects = layers[i].effects;
+        gpu.isText = layers[i].isText;
+        gpu.canvasW = layers[i].canvasW;
+        gpu.canvasH = layers[i].canvasH;
 
-        if (!layers[i].rgbaImage.isNull()) {
+        if (!m_gpuAvailable || m_forceCpuFallback) {
+            if (!layers[i].rgbaImage.isNull()) {
+                gpu.cpuImage = layers[i].rgbaImage;
+                gpu.hasFrame = true;
+            } else if (layers[i].frame.isValid()) {
+                gpu.cpuImage = convertYuvToRgb(layers[i].frame);
+                gpu.hasFrame = true;
+            } else {
+                gpu.cpuImage = QImage();
+                gpu.hasFrame = false;
+            }
+            continue;
+        }
+
+        if (layers[i].isText && !layers[i].textCacheKey.isEmpty()) {
+            gpu.cachedAssetId.clear();
+            auto it = m_textTextureCache.find(layers[i].textCacheKey);
+            if (it != m_textTextureCache.end() && it->second.texture != 0) {
+                // CACHE HIT: Re-use existing GL texture across frames without uploading!
+                if (!gpu.usesCache) destroyLayerTextures(gpu);
+                gpu.texRGBA = it->second.texture;
+                gpu.texWidth = it->second.width;
+                gpu.texHeight = it->second.height;
+                gpu.canvasW = it->second.canvasW;
+                gpu.canvasH = it->second.canvasH;
+                gpu.isRGBA = true;
+                gpu.isText = true;
+                gpu.textCacheKey = layers[i].textCacheKey;
+                gpu.hasFrame = true;
+                gpu.usesCache = true;
+                it->second.lastUsed = ++m_textTextureCounter;
+            } else if (!layers[i].rgbaImage.isNull()) {
+                // CACHE MISS: Upload new tight text texture once
+                if (!gpu.usesCache) destroyLayerTextures(gpu);
+
+                // Evict LRU if text texture cache full
+                if (m_textTextureCache.size() >= kMaxTextTextures) {
+                    auto oldestIt = m_textTextureCache.begin();
+                    for (auto cit = m_textTextureCache.begin(); cit != m_textTextureCache.end(); ++cit) {
+                        if (cit->second.lastUsed < oldestIt->second.lastUsed) {
+                            oldestIt = cit;
+                        }
+                    }
+                    if (oldestIt != m_textTextureCache.end()) {
+                        for (auto& gl : m_gpuLayers) {
+                            if (gl.texRGBA == oldestIt->second.texture) {
+                                gl.texRGBA = 0;
+                                gl.hasFrame = false;
+                            }
+                        }
+                        glDeleteTextures(1, &oldestIt->second.texture);
+                        m_textTextureCache.erase(oldestIt);
+                    }
+                }
+
+                unsigned int newTex = uploadNewRgbaTexture(layers[i].rgbaImage);
+                CachedTextTexture entry;
+                entry.texture = newTex;
+                entry.width = layers[i].rgbaImage.width();
+                entry.height = layers[i].rgbaImage.height();
+                entry.canvasW = layers[i].canvasW;
+                entry.canvasH = layers[i].canvasH;
+                entry.lastUsed = ++m_textTextureCounter;
+                m_textTextureCache[layers[i].textCacheKey] = entry;
+
+                gpu.texRGBA = newTex;
+                gpu.texWidth = entry.width;
+                gpu.texHeight = entry.height;
+                gpu.canvasW = entry.canvasW;
+                gpu.canvasH = entry.canvasH;
+                gpu.isRGBA = true;
+                gpu.isText = true;
+                gpu.textCacheKey = layers[i].textCacheKey;
+                gpu.hasFrame = true;
+                gpu.usesCache = true;
+            } else {
+                gpu.hasFrame = false;
+            }
+        } else if (!layers[i].rgbaImage.isNull()) {
             gpu.cachedAssetId.clear();
             uploadRgbaLayer(gpu, layers[i].rgbaImage);
         } else if (!layers[i].cachedAssetId.isEmpty()) {
@@ -567,6 +733,7 @@ void GLVideoWidget::uploadPendingLayers() {
         }
     }
 }
+
 
 QVector2D GLVideoWidget::fitFor(int sourceW, int sourceH) const {
     if (sourceW <= 0 || sourceH <= 0 || width() <= 0 || height() <= 0) return {1.0f, 1.0f};
@@ -771,13 +938,24 @@ void GLVideoWidget::renderLayer(const GpuLayer& layer) {
         orientedDimensions(layer.texWidth, layer.texHeight, layer.sourceRotationDeg, displayW, displayH);
     }
     const float aspect = static_cast<float>(width()) / static_cast<float>(height());
-    prog->setUniformValue("uFit", fitFor(displayW, displayH));
+
+    QVector2D tileScale(1.0f, 1.0f);
+    QVector2D fit;
+    if (layer.isText && layer.canvasW > 0 && layer.canvasH > 0) {
+        tileScale = QVector2D(static_cast<float>(layer.texWidth) / static_cast<float>(layer.canvasW),
+                              static_cast<float>(layer.texHeight) / static_cast<float>(layer.canvasH));
+        fit = fitFor(layer.canvasW, layer.canvasH);
+    } else {
+        fit = fitFor(displayW, displayH);
+    }
+
+    prog->setUniformValue("uFit", fit);
     prog->setUniformValue("uScale", QVector2D(static_cast<float>(layer.transform.scaleX), static_cast<float>(layer.transform.scaleY)));
     prog->setUniformValue("uRotationDeg", static_cast<float>(layer.transform.rotationDeg));
     prog->setUniformValue("uAspect", aspect);
     prog->setUniformValue("uSourceRotationDeg", static_cast<float>(layer.isRGBA ? 0.0 : layer.sourceRotationDeg));
     prog->setUniformValue("uOffset", QVector2D(static_cast<float>(layer.transform.x), static_cast<float>(-layer.transform.y)));
-    prog->setUniformValue("uTileScale", QVector2D(1.0f, 1.0f));
+    prog->setUniformValue("uTileScale", tileScale);
     prog->setUniformValue("uTileCenter", QVector2D(0.0f, 0.0f));
     prog->setUniformValue("uOpacity", static_cast<float>(std::clamp(layer.opacity, 0.0, 1.0)));
     setEffectUniforms(prog, layer.effects);
@@ -799,7 +977,90 @@ void GLVideoWidget::renderLayer(const GpuLayer& layer) {
     prog->release();
 }
 
+void GLVideoWidget::paintCpuFallback() {
+    uploadPendingLayers();
+
+    QPainter p(this);
+    p.setRenderHint(QPainter::Antialiasing, true);
+    p.setRenderHint(QPainter::SmoothPixmapTransform, true);
+
+    const int w = width();
+    const int h = height();
+    if (w <= 0 || h <= 0) return;
+
+    p.fillRect(rect(), QColor(15, 15, 18));
+
+    for (const auto& layer : m_gpuLayers) {
+        if (!layer.hasFrame || layer.cpuImage.isNull()) continue;
+
+        const QImage& img = layer.cpuImage;
+        p.save();
+        p.setOpacity(std::clamp(layer.opacity, 0.0, 1.0));
+
+        const qreal cx = w / 2.0 + layer.transform.x * (w / 2.0);
+        const qreal cy = h / 2.0 + layer.transform.y * (h / 2.0);
+
+        p.translate(cx, cy);
+        if (std::abs(layer.transform.rotationDeg) > 0.001) {
+            p.rotate(layer.transform.rotationDeg);
+        }
+
+        qreal drawW = img.width();
+        qreal drawH = img.height();
+
+        if (layer.isText && layer.canvasW > 0 && layer.canvasH > 0) {
+            const qreal widgetAspect = static_cast<qreal>(w) / h;
+            const qreal canvasAspect = static_cast<qreal>(layer.canvasW) / layer.canvasH;
+            qreal fitScale = (canvasAspect > widgetAspect)
+                ? (static_cast<qreal>(w) / layer.canvasW)
+                : (static_cast<qreal>(h) / layer.canvasH);
+            drawW = img.width() * fitScale * std::abs(layer.transform.scaleX);
+            drawH = img.height() * fitScale * std::abs(layer.transform.scaleY);
+        } else {
+            const qreal widgetAspect = static_cast<qreal>(w) / h;
+            const qreal imgAspect = static_cast<qreal>(img.width()) / img.height();
+            qreal baseW, baseH;
+            if (imgAspect > widgetAspect) {
+                baseW = w;
+                baseH = w / imgAspect;
+            } else {
+                baseH = h;
+                baseW = h * imgAspect;
+            }
+            drawW = baseW * std::abs(layer.transform.scaleX);
+            drawH = baseH * std::abs(layer.transform.scaleY);
+        }
+
+        const QRectF dstRect(-drawW / 2.0, -drawH / 2.0, drawW, drawH);
+        p.drawImage(dstRect, img);
+        p.restore();
+    }
+
+    // Informational overlay badge
+    p.save();
+    const QString badgeText = QStringLiteral("⚠️ CPU Fallback Mode (OpenGL 3.3 Unavailable)");
+    QFont badgeFont("Segoe UI", 9, QFont::Bold);
+    p.setFont(badgeFont);
+    QFontMetrics fm(badgeFont);
+    const int badgeW = fm.horizontalAdvance(badgeText) + 16;
+    const int badgeH = fm.height() + 8;
+    const QRect badgeRect(w - badgeW - 12, 12, badgeW, badgeH);
+
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(30, 30, 35, 200));
+    p.drawRoundedRect(badgeRect, 4, 4);
+
+    p.setPen(QColor(240, 180, 40));
+    p.drawText(badgeRect, Qt::AlignCenter, badgeText);
+    p.restore();
+}
+
 void GLVideoWidget::paintGL() {
+    if (!m_gpuAvailable || m_forceCpuFallback) {
+        paintCpuFallback();
+        return;
+    }
+
     if (m_textureCache) m_textureCache->pumpUploads(2);
     uploadPendingLayers();
     ensureSceneFbo();
@@ -836,5 +1097,6 @@ void GLVideoWidget::paintGL() {
     m_vao.release();
     m_presentProgram->release();
 }
+
 
 } // namespace hc

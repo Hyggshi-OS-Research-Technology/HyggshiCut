@@ -480,7 +480,7 @@ QStringList Exporter::buildFfmpegArgs(const Settings& s, QString* filterGraphDeb
             if (clip.timelineEnd() <= clip.timelineStart) continue;
             const QString pngPath = m_tempDir.filePath(
                 QString("hc_text_%1.png").arg(textPngPaths.size()));
-            QImage raster = TextRenderer::renderText(clip, outW, outH);
+            QImage raster = TextRenderer::renderText(clip, outW, outH, true);
             if (raster.isNull()) continue;
             if (!raster.save(pngPath, "PNG")) continue;
             textInputIndex.insert(&clip, textPngPaths.size());

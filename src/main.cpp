@@ -3,6 +3,9 @@
 #include <QCommandLineOption>
 #include <QFileInfo>
 #include <QDir>
+#include <QSurfaceFormat>
+#include <QSettings>
+#include <QDebug>
 #include <iostream>
 #include <clocale>
 #if defined(__linux__)
@@ -123,6 +126,32 @@ int main(int argc, char* argv[]) {
         if (std::strcmp(argv[i], "-ot") == 0) {
             argv[i] = const_cast<char*>("--ot");
         }
+    }
+
+    // Configure Graphics Backend Profile from user settings
+    {
+        QSettings prefSettings("HyggshiCut", "Preferences");
+        QString backend = prefSettings.value("graphicsBackend", "opengl33").toString();
+        QSurfaceFormat fmt;
+        if (backend == "opengl_latest") {
+            // Request latest available Core Profile (driver negotiates down to highest supported, e.g. 4.6 / 4.5)
+            fmt.setVersion(4, 6);
+            fmt.setProfile(QSurfaceFormat::CoreProfile);
+            qInfo() << "HyggshiCut: Requested graphics backend -> Latest OpenGL Core Profile (4.6 requested)";
+        } else if (backend == "vulkan") {
+            qputenv("QSG_RHI_BACKEND", "vulkan");
+            fmt.setVersion(3, 3);
+            fmt.setProfile(QSurfaceFormat::CoreProfile);
+            qInfo() << "HyggshiCut: Requested graphics backend -> Vulkan (RHI/Experimental)";
+        } else {
+            // Default: OpenGL 3.3 Core
+            fmt.setVersion(3, 3);
+            fmt.setProfile(QSurfaceFormat::CoreProfile);
+            qInfo() << "HyggshiCut: Requested graphics backend -> OpenGL 3.3 Core Profile";
+        }
+        fmt.setDepthBufferSize(24);
+        fmt.setStencilBufferSize(8);
+        QSurfaceFormat::setDefaultFormat(fmt);
     }
 
     QApplication app(argc, argv);

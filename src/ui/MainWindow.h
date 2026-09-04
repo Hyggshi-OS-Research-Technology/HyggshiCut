@@ -69,6 +69,8 @@ private slots:
     void onLanguageSelected(const QString& langCode);
     void onLoadCustomLanguage();
     void onOpenPluginManager();
+    void onGraphicsBackendSelected(const QString& backend);
+    void onScreenRecord();
     void updateUiTexts();
 
     // Bounding-box overlay signals from PreviewWidget.
@@ -90,6 +92,7 @@ private:
     void updateWindowTitle();
     void generateThumbnail(const MediaAssetPtr& asset);
     void generateWaveform(const MediaAssetPtr& asset);
+    void importFileAndAddToProject(const QString& filePath, bool addToTimeline = false);
     bool maybeSaveUnsavedChanges();
     void updateUndoRedoActions();
     void refreshTextPreview();

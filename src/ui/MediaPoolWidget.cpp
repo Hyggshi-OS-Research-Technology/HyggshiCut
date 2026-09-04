@@ -27,9 +27,20 @@ MediaPoolWidget::MediaPoolWidget(Project* project, ProxyManager* proxyManager, Q
     m_headerLabel->setStyleSheet("font-weight: 600; padding: 2px;");
     layout->addWidget(m_headerLabel);
 
+    auto* btnLayout = new QHBoxLayout();
+    btnLayout->setContentsMargins(0, 0, 0, 0);
+    btnLayout->setSpacing(6);
+
     m_importBtn = new QPushButton(this);
     connect(m_importBtn, &QPushButton::clicked, this, &MediaPoolWidget::importRequested);
-    layout->addWidget(m_importBtn);
+    btnLayout->addWidget(m_importBtn);
+
+    m_recordBtn = new QPushButton(this);
+    m_recordBtn->setStyleSheet("QPushButton { background-color: #3b2525; color: #ff7777; font-weight: bold; border-radius: 4px; padding: 4px 8px; } QPushButton:hover { background-color: #4a2e2e; color: #ff9999; }");
+    connect(m_recordBtn, &QPushButton::clicked, this, &MediaPoolWidget::recordScreenRequested);
+    btnLayout->addWidget(m_recordBtn);
+
+    layout->addLayout(btnLayout);
 
     m_list = new AssetListWidget(this);
     m_list->setIconSize(QSize(120, 68));
@@ -50,6 +61,7 @@ MediaPoolWidget::MediaPoolWidget(Project* project, ProxyManager* proxyManager, Q
 void MediaPoolWidget::retranslateUi() {
     if (m_headerLabel) m_headerLabel->setText(LTR("media.pool.title"));
     if (m_importBtn) m_importBtn->setText(LTR("media.pool.import"));
+    if (m_recordBtn) m_recordBtn->setText(QString("🔴 %1").arg(LTR("screenRecord.btn")));
 }
 
 void MediaPoolWidget::refresh() {

@@ -37,6 +37,7 @@ public slots:
 
 signals:
     void importRequested();
+    void recordScreenRequested();
     void assetActivated(QString assetId); // double-click, e.g. to load into preview
 
 private:
@@ -44,6 +45,7 @@ private:
     ProxyManager* m_proxyManager; // not owned, may be nullptr
     QLabel* m_headerLabel = nullptr;
     QPushButton* m_importBtn = nullptr;
+    QPushButton* m_recordBtn = nullptr;
     AssetListWidget* m_list;
 };
 

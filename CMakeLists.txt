@@ -11,7 +11,7 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif()
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets OpenGLWidgets)
+find_package(Qt6 REQUIRED COMPONENTS Widgets OpenGLWidgets DBus)
 find_package(PkgConfig REQUIRED)
 find_package(OpenGL REQUIRED)
 
@@ -53,11 +53,13 @@ target_include_directories(HyggshiCut PRIVATE
     src/export
     src/ui
     src/cache
+    src/capture
 )
 
 target_link_libraries(HyggshiCut PRIVATE
     Qt6::Widgets
     Qt6::OpenGLWidgets
+    Qt6::DBus
     OpenGL::GL
     PkgConfig::FFMPEG
     PkgConfig::MPV
@@ -158,6 +160,9 @@ if(HYGGSHICUT_BUILD_TESTS)
         src/render/TextRenderer.cpp
         src/export/Exporter.cpp
     )
+    target_include_directories(MixedEffectsExportTest PRIVATE src src/core src/decode src/render src/export)
+    target_link_libraries(MixedEffectsExportTest PRIVATE Qt6::Core Qt6::Gui OpenGL::GL PkgConfig::FFMPEG)
+
     add_executable(UserProjectExportTest
         tests/user_project_export_test.cpp
         src/core/Timeline.h
@@ -170,4 +175,26 @@ if(HYGGSHICUT_BUILD_TESTS)
     )
     target_include_directories(UserProjectExportTest PRIVATE src src/core src/decode src/render src/export)
     target_link_libraries(UserProjectExportTest PRIVATE Qt6::Core Qt6::Gui OpenGL::GL PkgConfig::FFMPEG)
+
+    add_executable(TextCacheAndCpuFallbackTest
+        tests/text_cache_and_cpu_fallback_test.cpp
+        src/core/Timeline.h
+        src/core/MediaAsset.cpp
+        src/core/Project.cpp
+        src/decode/Decoder.cpp
+        src/render/TextureCache.cpp
+        src/render/TextRenderer.cpp
+        src/render/GLVideoWidget.cpp
+        src/export/Exporter.cpp
+    )
+    target_include_directories(TextCacheAndCpuFallbackTest PRIVATE src src/core src/decode src/render src/export)
+    target_link_libraries(TextCacheAndCpuFallbackTest PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets OpenGL::GL PkgConfig::FFMPEG)
+
+    add_executable(ScreenRecorderTest
+        tests/screen_recorder_test.cpp
+        src/capture/ScreenRecorder.cpp
+    )
+    target_include_directories(ScreenRecorderTest PRIVATE src src/capture)
+    target_link_libraries(ScreenRecorderTest PRIVATE Qt6::Core Qt6::DBus)
 endif()
+

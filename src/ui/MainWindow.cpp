@@ -10,6 +10,7 @@
 #include "ExportDialog.h"
 #include "SourcePreviewDialog.h"
 #include "PluginManagerDialog.h"
+#include "ScreenRecordDialog.h"
 #include "../i18n/LanguageManager.h"
 #include "../playback/PlaybackController.h"
 #include "../decode/Decoder.h"
@@ -25,6 +26,8 @@
 #include <QMessageBox>
 #include <QStatusBar>
 #include <QKeySequence>
+#include <QActionGroup>
+#include <QSettings>
 #include <QResizeEvent>
 #include <QCloseEvent>
 #include <QFileInfo>
@@ -103,6 +106,7 @@ void MainWindow::buildMenus() {
     fileMenu->addAction(LTR("menu.settings.canvas"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_P), this, &MainWindow::onProjectSettings);
     fileMenu->addSeparator();
     fileMenu->addAction(tr("Nhập media..."), QKeySequence(Qt::CTRL | Qt::Key_I), this, &MainWindow::onImportRequested);
+    fileMenu->addAction(LTR("menu.file.screenRecord"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_R), this, &MainWindow::onScreenRecord);
     fileMenu->addAction(LTR("menu.file.relinkMedia"), this, &MainWindow::onRelinkMissingMedia);
     fileMenu->addSeparator();
     fileMenu->addAction(LTR("menu.file.export"), QKeySequence(Qt::CTRL | Qt::Key_E), this, &MainWindow::onExport);
@@ -141,6 +145,38 @@ void MainWindow::buildMenus() {
     // --- Settings & Extensions Menu ---
     auto* settingsMenu = menuBar()->addMenu(LTR("menu.settings"));
     settingsMenu->addAction(LTR("menu.settings.canvas"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_P), this, &MainWindow::onProjectSettings);
+
+    // Graphics Backend Submenu (OpenGL 3.3, Latest OpenGL, Vulkan)
+    auto* backendSubMenu = settingsMenu->addMenu(LTR("menu.settings.graphicsBackend"));
+    auto* backendGroup = new QActionGroup(this);
+    backendGroup->setExclusive(true);
+
+    QSettings prefSettings("HyggshiCut", "Preferences");
+    const QString curBackend = prefSettings.value("graphicsBackend", "opengl33").toString();
+
+    struct BackendItem {
+        QString key;
+        QString code;
+    };
+    const BackendItem backendItems[] = {
+        { "menu.settings.backend.gl33", "opengl33" },
+        { "menu.settings.backend.glLatest", "opengl_latest" },
+        { "menu.settings.backend.vulkan", "vulkan" }
+    };
+
+    for (const auto& item : backendItems) {
+        QString text = LTR(item.key);
+        auto* act = backendSubMenu->addAction(text);
+        act->setCheckable(true);
+        act->setChecked(curBackend == item.code);
+        backendGroup->addAction(act);
+        const QString code = item.code;
+        connect(act, &QAction::triggered, this, [this, code]() {
+            onGraphicsBackendSelected(code);
+        });
+    }
+
+    settingsMenu->addSeparator();
 
     // Language Submenu
     auto* langSubMenu = settingsMenu->addMenu(LTR("menu.settings.language"));
@@ -330,6 +366,7 @@ void MainWindow::rebuildProjectDependentUi() {
     m_playback->setUseProxy(m_useProxyAction ? m_useProxyAction->isChecked() : true);
 
     connect(m_mediaPool, &MediaPoolWidget::importRequested, this, &MainWindow::onImportRequested);
+    connect(m_mediaPool, &MediaPoolWidget::recordScreenRequested, this, &MainWindow::onScreenRecord);
     connect(m_project.get(), &Project::assetsChanged, m_mediaPool, &MediaPoolWidget::refresh);
     connect(m_mediaPool, &MediaPoolWidget::assetActivated, this, [this](QString assetId) {
         auto asset = m_project->findAsset(assetId);
@@ -466,6 +503,76 @@ void MainWindow::onImportRequested() {
 
     if (!failures.isEmpty()) {
         QMessageBox::warning(this, tr("Một số file không nhập được"), failures.join("\n"));
+    }
+}
+
+void MainWindow::onScreenRecord() {
+    ScreenRecordDialog dlg(this);
+    connect(&dlg, &ScreenRecordDialog::recordingCompleted, this,
+            [this](const QString& filePath, bool autoImport, bool insertTimeline) {
+        if (autoImport) {
+            importFileAndAddToProject(filePath, insertTimeline);
+        }
+    });
+    dlg.exec();
+}
+
+void MainWindow::importFileAndAddToProject(const QString& filePath, bool addToTimeline) {
+    if (filePath.isEmpty() || !QFile::exists(filePath)) return;
+
+    QString err;
+    auto asset = m_project->importMedia(filePath, &err);
+    if (!asset) {
+        QMessageBox::warning(this, tr("Lỗi nhập media"), err);
+        return;
+    }
+    generateThumbnail(asset);
+    generateWaveform(asset);
+    m_mediaPool->refresh();
+    m_modified = true;
+    updateWindowTitle();
+
+    if (addToTimeline && m_timelineWidget) {
+        // Find or create a visual track
+        Track* targetTrack = nullptr;
+        for (auto& track : m_project->timeline().tracks()) {
+            if (track.type == TrackType::Visual && !track.locked) {
+                targetTrack = &track;
+                break;
+            }
+        }
+        if (!targetTrack) {
+            const QString name = QString("Visual %1").arg(m_project->timeline().tracks().size() + 1);
+            targetTrack = &m_project->timeline().addTrack(TrackType::Visual, name);
+        }
+
+        Clip clip;
+        clip.assetId = asset->id;
+        clip.type = ClipType::Video;
+        clip.sourceIn = 0;
+        clip.sourceOut = asset->duration > 0 ? asset->duration : secondsToTicks(5.0);
+
+        // Place at current playhead position without overlapping existing clips
+        Ticks placedStart = m_playback ? m_playback->currentTime() : 0;
+        const Ticks duration = clip.timelineDuration();
+        const auto& existing = targetTrack->clips();
+        for (size_t guard = 0; guard < existing.size() + 1; ++guard) {
+            bool collided = false;
+            for (const auto& other : existing) {
+                const Ticks oStart = other.timelineStart;
+                const Ticks oEnd = other.timelineStart + other.timelineDuration();
+                if (placedStart < oEnd && (placedStart + duration) > oStart) {
+                    placedStart = oEnd;
+                    collided = true;
+                    break;
+                }
+            }
+            if (!collided) break;
+        }
+        clip.timelineStart = placedStart;
+        targetTrack->addClip(std::move(clip));
+        m_timelineWidget->update();
+        if (m_playback) m_playback->seek(placedStart);
     }
 }
 
@@ -976,6 +1083,19 @@ void MainWindow::onLoadCustomLanguage() {
 void MainWindow::onOpenPluginManager() {
     PluginManagerDialog dlg(this);
     dlg.exec();
+}
+
+void MainWindow::onGraphicsBackendSelected(const QString& backend) {
+    QSettings prefSettings("HyggshiCut", "Preferences");
+    prefSettings.setValue("graphicsBackend", backend);
+
+    QString name = "OpenGL 3.3 Core";
+    if (backend == "opengl_latest") name = "OpenGL Mới nhất (Latest Core Profile)";
+    else if (backend == "vulkan") name = "Vulkan (Experimental)";
+
+    QString msg = LTR("menu.settings.backend.restartNotice").arg(name);
+
+    QMessageBox::information(this, LTR("menu.settings.graphicsBackend"), msg);
 }
 
 void MainWindow::updateUiTexts() {

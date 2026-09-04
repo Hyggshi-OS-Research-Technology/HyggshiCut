@@ -352,7 +352,11 @@ void PlaybackController::renderFrameAt(Ticks t) {
                 // ━━━ TEXT CLIP: rasterize styled text with font, color, outline, etc. ━━━
                 const int cw = m_project->timeline().videoWidth > 0 ? m_project->timeline().videoWidth : 1920;
                 const int ch = m_project->timeline().videoHeight > 0 ? m_project->timeline().videoHeight : 1080;
-                layer.rgbaImage = TextRenderer::renderText(*activeClip, cw, ch);
+                layer.isText = true;
+                layer.canvasW = cw;
+                layer.canvasH = ch;
+                layer.textCacheKey = TextRenderer::cacheKey(*activeClip, cw, ch, false);
+                layer.rgbaImage = TextRenderer::renderText(*activeClip, cw, ch, false);
             } else if (activeClip->type == ClipType::Image) {
                 // ━━━ IMAGE CLIP: asynchronous RGBA8 image cache ━━━
                 // Never decode an image on the playback/UI thread. requestAsset()
