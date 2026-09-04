@@ -37,7 +37,9 @@ jobs:
         run: |
           # dpkg-buildpackage outputs the .deb one level above the source dir
           dpkg-buildpackage -us -uc -b -j"$(nproc)"
-          DEB_FILE="$(ls ../hyggshicut_*.deb | head -n 1)"
+          mkdir -p dist
+          mv ../hyggshicut_*.deb dist/
+          DEB_FILE="$(ls dist/hyggshicut_*.deb | head -n 1)"
           echo "Packaged: $DEB_FILE"
           echo "deb_file=$DEB_FILE" >> "$GITHUB_ENV"
 
@@ -51,7 +53,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: hyggshicut-linux-deb
-          path: ${{ env.deb_file }}
+          path: dist/*.deb
           if-no-files-found: error
 
       - name: Create GitHub Release (only for version tags)
