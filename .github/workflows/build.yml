@@ -31,7 +31,7 @@ jobs:
             qt6-base-dev libqt6opengl6-dev \
             libavformat-dev libavcodec-dev libavutil-dev libswscale-dev \
             libswresample-dev libavfilter-dev \
-            libmpv-dev libasound2-dev libgl1-mesa-dev
+            libmpv-dev libasound2-dev libgl-dev
 
       - name: Build Debian package (.deb)
         run: |

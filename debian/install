@@ -1,2 +1,2 @@
 debian/hyggshicut.desktop usr/share/applications/
-debian/hyggshicut.svg usr/share/icons/hicolor/scalable/apps/
+debian/hyggshicut.png usr/share/pixmaps/

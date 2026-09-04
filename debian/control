@@ -17,14 +17,14 @@ Build-Depends:
  libavfilter-dev,
  libmpv-dev,
  libasound2-dev,
- libgl1-mesa-dev
+ libgl-dev | libgl1-mesa-dev
 Standards-Version: 4.6.2
 Homepage: https://hyggshi-os-website.pages.dev/
 Rules-Requires-Root: no
 
 Package: hyggshicut
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}
+Depends: ${shlibs:Depends}, ${misc:Depends}, ffmpeg
 Description: Modern, lightweight professional video editor
  A professional, modern, lightweight video editor written in C++20
  with Qt6, FFmpeg (libav*) and OpenGL 3.3 Core.
