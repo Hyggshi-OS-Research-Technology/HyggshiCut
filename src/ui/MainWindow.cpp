@@ -27,6 +27,7 @@
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QStatusBar>
+#include <QLabel>
 #include <QKeySequence>
 #include <QActionGroup>
 #include <QSettings>
@@ -34,6 +35,7 @@
 #include <QCloseEvent>
 #include <QFileInfo>
 #include <QTimer>
+#include <cmath>
 
 namespace hc {
 
@@ -92,6 +94,13 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 
     buildMenus();
     buildToolbar();
+
+    // Permanent zoom readout in the status bar (updated live via
+    // TimelineWidget::zoomChanged). Created once here so language/UI rebuilds
+    // never accumulate duplicate labels.
+    m_zoomLabel = new QLabel(this);
+    statusBar()->addPermanentWidget(m_zoomLabel);
+
     rebuildProjectDependentUi();
     statusBar()->showMessage(tr("Sẵn sàng. Kéo media vào timeline để bắt đầu dựng."));
 }
@@ -198,6 +207,7 @@ void MainWindow::buildMenus() {
     m_viewMenu = menuBar()->addMenu(LTR("menu.view"));
     m_viewMenu->addAction(LTR("menu.view.zoomin"), QKeySequence::ZoomIn, this, &MainWindow::onZoomIn);
     m_viewMenu->addAction(LTR("menu.view.zoomout"), QKeySequence::ZoomOut, this, &MainWindow::onZoomOut);
+    m_viewMenu->addAction(tr("Vừa khớp toàn bộ timeline (Zoom to fit)"), QKeySequence(Qt::SHIFT | Qt::Key_Z), this, &MainWindow::onZoomToFit);
     m_viewMenu->addSeparator();
 
     // Snap toggle: when on (default), clip edges/keyframes/playhead magnetize
@@ -364,6 +374,7 @@ void MainWindow::buildToolbar() {
     m_mainToolbar->addSeparator();
     m_mainToolbar->addAction(LTR("menu.view.zoomin"), this, &MainWindow::onZoomIn);
     m_mainToolbar->addAction(LTR("menu.view.zoomout"), this, &MainWindow::onZoomOut);
+    m_mainToolbar->addAction(tr("Vừa khớp"), this, &MainWindow::onZoomToFit);
 }
 
 QMenu* MainWindow::buildAddLayerMenu() {
@@ -517,6 +528,8 @@ void MainWindow::rebuildProjectDependentUi() {
     connect(m_timelineWidget, &TimelineWidget::selectionChanged, this, &MainWindow::onTimelineSelectionChanged);
     connect(m_timelineWidget, &TimelineWidget::togglePlaybackRequested, m_playback.get(),
             &PlaybackController::togglePlay);
+    connect(m_timelineWidget, &TimelineWidget::zoomChanged, this, &MainWindow::updateZoomLabel);
+    updateZoomLabel(m_timelineWidget->zoom());
 
     connect(m_preview, &PreviewWidget::playPauseClicked, m_playback.get(), &PlaybackController::togglePlay);
     connect(m_preview, &PreviewWidget::seekRequested, this, &MainWindow::onSeekRequested);
@@ -888,8 +901,16 @@ void MainWindow::onAddTextTrack() {
 void MainWindow::onSplitAtPlayhead() { m_timelineWidget->splitAtPlayhead(); }
 void MainWindow::onDeleteSelectedClip() { m_timelineWidget->deleteSelectedClip(); }
 void MainWindow::onDeleteSelectedTrack() { m_timelineWidget->deleteSelectedTrack(); }
-void MainWindow::onZoomIn() { m_timelineWidget->setZoom(m_timelineWidget->zoom() * 1.25); }
-void MainWindow::onZoomOut() { m_timelineWidget->setZoom(m_timelineWidget->zoom() / 1.25); }
+void MainWindow::onZoomIn() { if (m_timelineWidget) m_timelineWidget->zoomBy(1.25); }
+void MainWindow::onZoomOut() { if (m_timelineWidget) m_timelineWidget->zoomBy(1.0 / 1.25); }
+void MainWindow::onZoomToFit() { if (m_timelineWidget) m_timelineWidget->zoomToFit(); }
+
+void MainWindow::updateZoomLabel(double pixelsPerSecond) {
+    if (!m_zoomLabel) return;
+    // Report zoom relative to the default (60 px/s = 100%).
+    const int pct = static_cast<int>(std::lround(pixelsPerSecond / 60.0 * 100.0));
+    m_zoomLabel->setText(tr("Thu phóng: %1%").arg(pct));
+}
 
 void MainWindow::onToggleCutTool(bool checked) {
     if (m_timelineWidget) m_timelineWidget->setCutToolActive(checked);

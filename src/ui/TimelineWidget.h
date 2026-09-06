@@ -5,6 +5,9 @@
 #include <optional>
 #include "../core/Project.h"
 
+class QScrollArea;
+class QWheelEvent;
+
 namespace hc {
 
 // The multi-track editing surface. Owns no data itself — it reads/mutates
@@ -25,6 +28,18 @@ public:
 
     void setZoom(double pixelsPerSecond);
     double zoom() const { return m_pixelsPerSecond; }
+
+    // Zoom anchored to a specific timeline time, keeping `cursorWidgetX`
+    // (a widget x coordinate, as reported by mouse events) fixed on screen.
+    // Pass -1 for cursorWidgetX to left-anchor instead (plain zoom-in/out).
+    void zoomAt(Ticks anchorTime, double factor, int cursorWidgetX = -1);
+    // Zoom around the centre of the visible viewport (used by the View menu
+    // and toolbar zoom buttons).
+    void zoomBy(double factor);
+    // Fit the whole timeline duration into the visible viewport width.
+    void zoomToFit();
+    // Scroll the viewport (if any) so the playhead is on screen.
+    void ensurePlayheadVisible();
 
     QString selectedClipId() const { return m_selectedClipId; }
     QString selectedTrackId() const { return m_selectedTrackId; }
@@ -68,6 +83,7 @@ signals:
     void timelineEdited();          // clip moved/trimmed/added/removed
     void selectionChanged(QString clipId, QString trackId);
     void togglePlaybackRequested(); // e.g. Space pressed while timeline focused
+    void zoomChanged(double pixelsPerSecond); // zoom level changed (wheel/menu/fit)
 
 protected:
     void paintEvent(QPaintEvent* event) override;
@@ -82,6 +98,7 @@ protected:
     void dragEnterEvent(QDragEnterEvent* event) override;
     void dragMoveEvent(QDragMoveEvent* event) override;
     void dropEvent(QDropEvent* event) override;
+    void wheelEvent(QWheelEvent* event) override;
 
 private:
     enum class DragMode { None, MoveClip, TrimLeft, TrimRight, FadeIn, FadeOut, ScrubPlayhead, ReorderTrack, ToggleTrackControl };
@@ -106,6 +123,9 @@ private:
     QRect trackControlRect(int row, TrackControl control) const;
     void toggleTrackControl(int row, TrackControl control);
     void pushUndo();
+    // The outer QScrollArea (found by walking up from the viewport), used to
+    // drive horizontal/vertical scrolling and cursor-anchored zooming.
+    QScrollArea* outerScrollArea() const;
     // Trigger a minimal repaint covering only the regions dirtied by a drag
     // event (the affected track row + the old/new snap line columns). Avoids a
     // full widget repaint on every mouseMoveEvent.
@@ -115,6 +135,8 @@ private:
     QList<Ticks> computeSnapPoints(const QString& excludeClipId = {}) const;
     Ticks snapTime(Ticks t, const QList<Ticks>& pts, bool enabled) const;
     static constexpr int kSnapThresholdPx = 8;
+    static constexpr double kMinZoomPxPerSec = 5.0;
+    static constexpr double kMaxZoomPxPerSec = 2000.0;
 
     Project* m_project;
     Ticks m_playheadTime = 0;

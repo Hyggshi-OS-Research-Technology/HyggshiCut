@@ -13,7 +13,11 @@
 #include <QDragMoveEvent>
 #include <QDropEvent>
 #include <QMimeData>
+#include <QWheelEvent>
+#include <QScrollArea>
+#include <QScrollBar>
 #include <algorithm>
+#include <cmath>
 
 namespace hc {
 
@@ -385,13 +389,99 @@ void TimelineWidget::setPlayheadTime(Ticks t) {
         const int newPx = timeToPixel(m_playheadTime);
         update(QRect(oldPx - 12, 0, 24, height()));
         update(QRect(newPx - 12, 0, 24, height()));
+        // Follow the playhead: when it moves off the visible area (during
+        // playback or edge scrubbing), scroll the minimum amount to reveal it.
+        ensurePlayheadVisible();
     }
 }
 
 void TimelineWidget::setZoom(double pixelsPerSecond) {
-    m_pixelsPerSecond = std::clamp(pixelsPerSecond, 5.0, 2000.0);
+    const double clamped = std::clamp(pixelsPerSecond, kMinZoomPxPerSec, kMaxZoomPxPerSec);
+    if (qFuzzyCompare(clamped, m_pixelsPerSecond)) return;
+    m_pixelsPerSecond = clamped;
+    recomputeTrackHeight(); // resize the widget so the scrollbar range follows the zoom
     updateGeometry();
     update();
+    emit zoomChanged(m_pixelsPerSecond);
+}
+
+QScrollArea* TimelineWidget::outerScrollArea() const {
+    // After QScrollArea::setWidget() the timeline is reparented to the
+    // scroll area's viewport, so walk up until we hit the QScrollArea.
+    for (QWidget* w = parentWidget(); w; w = w->parentWidget()) {
+        if (auto* sa = qobject_cast<QScrollArea*>(w)) return sa;
+    }
+    return nullptr;
+}
+
+void TimelineWidget::zoomAt(Ticks anchorTime, double factor, int cursorWidgetX) {
+    const double newZoom = std::clamp(m_pixelsPerSecond * factor, kMinZoomPxPerSec, kMaxZoomPxPerSec);
+    if (qFuzzyCompare(newZoom, m_pixelsPerSecond)) return;
+
+    QScrollArea* sa = outerScrollArea();
+    const int oldScroll = sa ? sa->horizontalScrollBar()->value() : 0;
+
+    m_pixelsPerSecond = newZoom;
+    recomputeTrackHeight(); // resize the widget so the scrollbar range follows the zoom
+    updateGeometry();
+
+    if (sa) {
+        QScrollBar* hbar = sa->horizontalScrollBar();
+        if (cursorWidgetX >= 0) {
+            // Keep the timeline *time* under the cursor fixed on screen:
+            // newScroll = newWidgetX - cursorWidgetX + oldScroll.
+            hbar->setValue(timeToPixel(anchorTime) - cursorWidgetX + oldScroll);
+        } else {
+            hbar->setValue(oldScroll); // left-anchored (menu zoom)
+        }
+    }
+    update();
+    emit zoomChanged(m_pixelsPerSecond);
+}
+
+void TimelineWidget::zoomBy(double factor) {
+    QScrollArea* sa = outerScrollArea();
+    if (!sa) {
+        zoomAt(m_playheadTime, factor, -1);
+        return;
+    }
+    const int scroll = sa->horizontalScrollBar()->value();
+    const int vw = sa->viewport()->width();
+    const int centerX = scroll + std::max(0, vw / 2);
+    const Ticks centerTime = pixelToTime(centerX);
+    zoomAt(centerTime, factor, centerX);
+}
+
+void TimelineWidget::zoomToFit() {
+    if (!m_project) return;
+    QScrollArea* sa = outerScrollArea();
+    const int viewW = sa ? sa->viewport()->width() : width();
+    const int usable = std::max(100, viewW - m_headerWidth);
+    const Ticks dur = std::max<Ticks>(m_project->timeline().totalDuration(), secondsToTicks(1));
+    const double seconds = std::max(0.001, ticksToSeconds(dur));
+    const double newZoom = std::clamp(static_cast<double>(usable) / seconds,
+                                      kMinZoomPxPerSec, kMaxZoomPxPerSec);
+    m_pixelsPerSecond = newZoom;
+    recomputeTrackHeight();
+    updateGeometry();
+    if (sa) sa->horizontalScrollBar()->setValue(0);
+    update();
+    emit zoomChanged(m_pixelsPerSecond);
+}
+
+void TimelineWidget::ensurePlayheadVisible() {
+    QScrollArea* sa = outerScrollArea();
+    if (!sa) return;
+    QScrollBar* hbar = sa->horizontalScrollBar();
+    const int scroll = hbar->value();
+    const int vw = sa->viewport()->width();
+    const int px = timeToPixel(m_playheadTime);
+    constexpr int margin = 12;
+    if (px < scroll + margin) {
+        hbar->setValue(std::max(0, px - margin));
+    } else if (px > scroll + vw - margin) {
+        hbar->setValue(px - vw + margin);
+    }
 }
 
 Ticks TimelineWidget::pixelToTime(int x) const {
@@ -1461,6 +1551,53 @@ void TimelineWidget::mouseReleaseEvent(QMouseEvent*) {
     update();
 }
 
+void TimelineWidget::wheelEvent(QWheelEvent* event) {
+    if (!m_project) {
+        QWidget::wheelEvent(event);
+        return;
+    }
+
+    const Qt::KeyboardModifiers mods = event->modifiers();
+    // Ctrl/Alt + wheel zooms around the cursor (the standard NLE gesture).
+    if (mods & (Qt::ControlModifier | Qt::AltModifier)) {
+        const int deltaY = event->angleDelta().y();
+        if (deltaY == 0) return;
+        // Accumulate across high-resolution trackpads: one notch ≈ 1.25×.
+        const double factor = std::pow(1.25, static_cast<double>(deltaY) / 120.0);
+        zoomAt(pixelToTime(event->position().x()), factor,
+               static_cast<int>(event->position().x()));
+        event->accept();
+        return;
+    }
+
+    QScrollArea* sa = outerScrollArea();
+    if (!sa) {
+        QWidget::wheelEvent(event);
+        return;
+    }
+
+    int dy = event->angleDelta().y();
+    int dx = event->angleDelta().x();
+    // Prefer pixel deltas (high-res trackpads) when available.
+    const QPoint pixelDelta = event->pixelDelta();
+    if (!pixelDelta.isNull()) {
+        dx = pixelDelta.x();
+        dy = pixelDelta.y();
+    }
+
+    if (mods & Qt::ShiftModifier) {
+        // Shift + wheel = vertical scroll (pass through).
+        QScrollBar* vbar = sa->verticalScrollBar();
+        vbar->setValue(vbar->value() - (dy != 0 ? dy : dx));
+    } else {
+        // Plain wheel = horizontal pan of the timeline (the standard NLE
+        // convention where vertical wheel scrolls the timeline sideways).
+        QScrollBar* hbar = sa->horizontalScrollBar();
+        hbar->setValue(hbar->value() - (dy != 0 ? dy : dx));
+    }
+    event->accept();
+}
+
 void TimelineWidget::leaveEvent(QEvent* event) {
     QWidget::leaveEvent(event);
     if (m_hoverTrackRow != -1 || m_hoverControl != TrackControl::None) {
@@ -1525,6 +1662,15 @@ void TimelineWidget::keyPressEvent(QKeyEvent* event) {
         // Nudge the selected clip by one frame (comma = left, period = right).
         const Ticks frame = frameStepTicks();
         nudgeSelectedClip(event->key() == Qt::Key_Comma ? -frame : frame);
+    } else if (event->key() == Qt::Key_Home) {
+        // Jump to the start of the timeline (standard NLE navigation).
+        setPlayheadTime(0);
+        emit seekRequested(m_playheadTime);
+    } else if (event->key() == Qt::Key_End) {
+        // Jump to the end of the timeline.
+        const Ticks end = m_project ? m_project->timeline().totalDuration() : 0;
+        setPlayheadTime(end);
+        emit seekRequested(m_playheadTime);
     } else {
         QWidget::keyPressEvent(event);
     }

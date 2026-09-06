@@ -224,6 +224,7 @@ HyggshiCut -r -p podcast.hcproj -o podcast_audio.mp3 --preset audio-mp3
 | `,` / `.` | Nudge the selected clip left / right by one frame |
 | `←` / `→` | Move back / forward 1 frame |
 | `↑` / `↓` | Move back / forward 5 seconds |
+| `Home` / `End` | Jump to the start / end of the timeline |
 | `Ctrl + Z` | Undo |
 | `Ctrl + Y` / `Ctrl + Shift + Z` | Redo |
 | `Ctrl + I` | Open the Import Media dialog |
@@ -233,6 +234,8 @@ HyggshiCut -r -p podcast.hcproj -o podcast_audio.mp3 --preset audio-mp3
 | `Ctrl + S` | Save project |
 | `Ctrl + Shift + S` | Save project as (Save As) |
 | `+` / `-` (or `Ctrl + Scroll`) | Zoom In / Zoom Out on the Timeline |
+| `Shift + Z` | Fit the whole timeline to the window (Zoom to fit) |
+| `Mouse Wheel` | Pan the timeline horizontally (`Shift + Wheel` scrolls vertically) |
 
 > **Ripple delete** (remove a clip and close the gap) is available from the clip's right-click menu and the Edit menu.
 

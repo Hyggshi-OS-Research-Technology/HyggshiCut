@@ -11,6 +11,7 @@ All notable changes to HyggshiCut are documented in this file.
 - **Ripple delete**: remove a clip and automatically close the gap by shifting every later clip on the track left (Edit menu + clip right-click menu).
 - **Frame-accurate clip nudge**: move the selected clip one frame left/right with `,` / `.` (or the Edit menu), for precise sync adjustments.
 - **Snap toggle**: edge/playhead/keyframe snapping during drags can now be switched on/off from the View menu and is remembered across sessions.
+- **Standard timeline navigation**: `Ctrl`/`Alt` + mouse wheel now zooms the timeline around the cursor, plain mouse wheel pans horizontally (`Shift` + wheel scrolls vertically), `Home`/`End` jump to the start/end, and a **Zoom to fit** action (`Shift+Z`) fits the whole timeline into the window. The playhead auto-scrolls into view during playback and edge scrubbing, with a live zoom readout in the status bar.
 
 ### Bug Fixes
 - **HD thumbnail color accuracy**: Media-pool/timeline thumbnails now honor each source's BT.601 vs BT.709 matrix (previously always converted as BT.601, so HD thumbnails could differ slightly from Preview/Export).

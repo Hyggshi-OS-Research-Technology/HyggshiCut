@@ -7,6 +7,7 @@
 class QDockWidget;
 class QAction;
 class QMenu;
+class QLabel;
 
 #include "WindowSettingsDialog.h"
 
@@ -51,6 +52,8 @@ private slots:
     void onDeleteSelectedTrack();
     void onZoomIn();
     void onZoomOut();
+    void onZoomToFit();
+    void updateZoomLabel(double pixelsPerSecond);
     void onToggleCutTool(bool checked);
     void onUndo();
     void onRedo();
@@ -135,6 +138,7 @@ private:
     QAction* m_redoAction = nullptr;
     QAction* m_useProxyAction = nullptr;
     QAction* m_snapAction = nullptr;
+    QLabel* m_zoomLabel = nullptr;
     bool m_modified = false;
     bool m_initialLayoutDone = false;
 
