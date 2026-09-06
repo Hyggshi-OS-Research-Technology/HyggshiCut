@@ -41,6 +41,7 @@ public:
     // Save language preference to QSettings
     void savePreference() const;
     void loadPreference();
+    void discoverBundledLanguages();
 
 signals:
     void languageChanged(const QString& newLanguageCode);

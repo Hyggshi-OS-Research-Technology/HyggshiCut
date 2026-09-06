@@ -1,0 +1,16 @@
+build/
+.git/
+.github/
+obj-*/
+dist/
+*.deb
+*.ddeb
+*.buildinfo
+*.changes
+*.mp4
+*.wav
+debian/.debhelper/
+debian/debhelper-build-stamp
+debian/files
+debian/hyggshicut.substvars
+debian/hyggshicut/

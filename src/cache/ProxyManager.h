@@ -77,6 +77,12 @@ public:
     void setMaxProxyWidth(int width) { m_maxProxyWidth = std::max(160, width); }
     int maxProxyWidth() const { return m_maxProxyWidth; }
 
+    QString cacheDirectory() const { return m_cacheDir; }
+    void setCacheDirectory(const QString& dir);
+    void clearCache();
+    qint64 cacheSizeBytes() const;
+    int cachedProxyCount() const;
+
 signals:
     // Fired on every state transition for one asset.
     void proxyStatusChanged(QString assetId, ProxyStatus status);

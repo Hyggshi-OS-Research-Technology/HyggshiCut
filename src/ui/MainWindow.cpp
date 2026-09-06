@@ -11,6 +11,8 @@
 #include "SourcePreviewDialog.h"
 #include "PluginManagerDialog.h"
 #include "ScreenRecordDialog.h"
+#include "WindowSettingsDialog.h"
+#include "ThemeManager.h"
 #include "../i18n/LanguageManager.h"
 #include "../playback/PlaybackController.h"
 #include "../decode/Decoder.h"
@@ -94,7 +96,26 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     statusBar()->showMessage(tr("Sẵn sàng. Kéo media vào timeline để bắt đầu dựng."));
 }
 
-MainWindow::~MainWindow() = default;
+MainWindow::~MainWindow() {
+    if (m_playback) {
+        m_playback->pause();
+    }
+    if (m_timelineWidget) {
+        m_timelineWidget->setProject(nullptr);
+    }
+    if (m_mediaPool) {
+        m_mediaPool->setProject(nullptr);
+    }
+    if (m_transformPanel) {
+        m_transformPanel->setSelectedClip(nullptr, {}, {});
+    }
+    if (m_textPanel) {
+        m_textPanel->setSelectedClip(nullptr, {}, {});
+    }
+    if (m_audioFilterPanel) {
+        m_audioFilterPanel->setSelectedClip(nullptr, {}, {});
+    }
+}
 
 void MainWindow::buildMenus() {
     auto* fileMenu = menuBar()->addMenu(LTR("menu.file"));
@@ -117,6 +138,30 @@ void MainWindow::buildMenus() {
     m_undoAction = editMenu->addAction(LTR("menu.edit.undo"), QKeySequence::Undo, this, &MainWindow::onUndo);
     m_redoAction = editMenu->addAction(LTR("menu.edit.redo"), QKeySequence::Redo, this, &MainWindow::onRedo);
     m_redoAction->setShortcuts({QKeySequence::Redo, QKeySequence(Qt::CTRL | Qt::Key_Y)});
+
+    editMenu->addSeparator();
+    auto* cutToolAct = editMenu->addAction(LTR("menu.edit.cutTool"), QKeySequence(Qt::Key_C), this, [this]() {
+        if (m_cutToolAction) m_cutToolAction->toggle();
+    });
+    cutToolAct->setCheckable(true);
+    if (m_cutToolAction) {
+        cutToolAct->setChecked(m_cutToolAction->isChecked());
+        connect(m_cutToolAction, &QAction::toggled, cutToolAct, &QAction::setChecked);
+    }
+
+    editMenu->addAction(LTR("menu.edit.splitAtPlayhead"), QKeySequence(Qt::Key_S), this, &MainWindow::onSplitAtPlayhead);
+    editMenu->addAction(LTR("menu.edit.deleteClip"), QKeySequence::Delete, this, &MainWindow::onDeleteSelectedClip);
+    editMenu->addAction(LTR("menu.edit.deleteTrack"), QKeySequence(Qt::SHIFT | Qt::Key_Delete), this, &MainWindow::onDeleteSelectedTrack);
+
+    editMenu->addSeparator();
+    editMenu->addAction(tr("Chọn clip đầu tiên"), QKeySequence(Qt::CTRL | Qt::Key_A), this, &MainWindow::onSelectFirstClip);
+    editMenu->addAction(tr("Bỏ chọn tất cả"), QKeySequence(Qt::Key_Escape), this, &MainWindow::onDeselectAll);
+
+    editMenu->addSeparator();
+    editMenu->addAction(LTR("menu.settings.preferences"), QKeySequence(Qt::CTRL | Qt::Key_Comma), this, [this]() {
+        openSettingsDialog(SettingsTab::Window);
+    });
+
     updateUndoRedoActions();
 
     auto* timelineMenu = menuBar()->addMenu(LTR("dock.timeline"));
@@ -141,10 +186,38 @@ void MainWindow::buildMenus() {
         if (m_preview) m_preview->setAudioMeterVisible(checked);
     });
     m_viewMenu->addSeparator();
+    m_viewMenu->addAction(LTR("windowSettings.resetLayout"), this, &MainWindow::resetDockLayout);
+    m_viewMenu->addSeparator();
 
     // --- Settings & Extensions Menu ---
     auto* settingsMenu = menuBar()->addMenu(LTR("menu.settings"));
+    settingsMenu->addAction(LTR("menu.settings.preferences"), QKeySequence(Qt::CTRL | Qt::Key_Comma), this, [this]() {
+        openSettingsDialog(SettingsTab::Window);
+    });
     settingsMenu->addAction(LTR("menu.settings.canvas"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_P), this, &MainWindow::onProjectSettings);
+    settingsMenu->addSeparator();
+
+    // Theme / Appearance Submenu (Dark, Light, System)
+    auto* themeSubMenu = settingsMenu->addMenu(LTR("menu.settings.theme"));
+    auto* themeGroup = new QActionGroup(this);
+    themeGroup->setExclusive(true);
+    const QString curTheme = ThemeManager::currentTheme();
+    struct ThemeItem { QString key; QString code; };
+    const ThemeItem themeItems[] = {
+        { "menu.settings.theme.dark", "dark" },
+        { "menu.settings.theme.light", "light" },
+        { "menu.settings.theme.system", "system" }
+    };
+    for (const auto& item : themeItems) {
+        auto* act = themeSubMenu->addAction(LTR(item.key));
+        act->setCheckable(true);
+        act->setChecked(curTheme == item.code);
+        themeGroup->addAction(act);
+        const QString code = item.code;
+        connect(act, &QAction::triggered, this, [this, code]() {
+            onThemeSelected(code);
+        });
+    }
 
     // Graphics Backend Submenu (OpenGL 3.3, Latest OpenGL, Vulkan)
     auto* backendSubMenu = settingsMenu->addMenu(LTR("menu.settings.graphicsBackend"));
@@ -176,8 +249,6 @@ void MainWindow::buildMenus() {
         });
     }
 
-    settingsMenu->addSeparator();
-
     // Language Submenu
     auto* langSubMenu = settingsMenu->addMenu(LTR("menu.settings.language"));
     const auto availableLangs = LanguageManager::instance().availableLanguages();
@@ -195,23 +266,40 @@ void MainWindow::buildMenus() {
     langSubMenu->addSeparator();
     langSubMenu->addAction(LTR("lang.loadFile"), this, &MainWindow::onLoadCustomLanguage);
 
+    // Proxy Submenu
+    auto* proxySubMenu = settingsMenu->addMenu(LTR("menu.settings.proxy"));
+    m_useProxyAction = proxySubMenu->addAction(LTR("menu.view.useProxy"));
+    m_useProxyAction->setCheckable(true);
+    m_useProxyAction->setChecked(prefSettings.value("proxy/useProxy", true).toBool());
+    connect(m_useProxyAction, &QAction::toggled, this, &MainWindow::onToggleUseProxy);
+
+    proxySubMenu->addAction(LTR("menu.settings.generateProxies"), this, &MainWindow::onGenerateProxiesForAll);
+    proxySubMenu->addAction(LTR("menu.settings.proxy.openSettings"), this, [this]() {
+        openSettingsDialog(SettingsTab::Proxy);
+    });
+
     settingsMenu->addSeparator();
     settingsMenu->addAction(LTR("menu.settings.plugins"), this, &MainWindow::onOpenPluginManager);
     settingsMenu->addSeparator();
-    settingsMenu->addAction(LTR("menu.settings.generateProxies"), this, &MainWindow::onGenerateProxiesForAll);
+    settingsMenu->addAction(LTR("menu.settings.about"), this, &MainWindow::onAbout);
 
     // --- Performance Menu ---
     auto* perfMenu = menuBar()->addMenu(LTR("menu.perf"));
     perfMenu->addAction(LTR("menu.settings.generateProxies"), this, &MainWindow::onGenerateProxiesForAll);
-    m_useProxyAction = perfMenu->addAction(LTR("menu.view.useProxy"));
-    m_useProxyAction->setCheckable(true);
-    m_useProxyAction->setChecked(true);
-    connect(m_useProxyAction, &QAction::toggled, this, &MainWindow::onToggleUseProxy);
+    auto* perfProxyAct = perfMenu->addAction(LTR("menu.view.useProxy"));
+    perfProxyAct->setCheckable(true);
+    perfProxyAct->setChecked(m_useProxyAction->isChecked());
+    connect(perfProxyAct, &QAction::toggled, m_useProxyAction, &QAction::setChecked);
+
+    // --- Help Menu ---
+    auto* helpMenu = menuBar()->addMenu(LTR("menu.help"));
+    helpMenu->addAction(LTR("menu.help.about"), this, &MainWindow::onAbout);
 }
 
 void MainWindow::buildToolbar() {
     if (!m_mainToolbar) {
         m_mainToolbar = addToolBar(tr("Toolbar"));
+        m_mainToolbar->setObjectName("MainToolbar");
         m_mainToolbar->setMovable(false);
     }
     m_mainToolbar->clear();
@@ -266,6 +354,7 @@ void MainWindow::ensureDocks() {
     setCorner(Qt::TopRightCorner, Qt::RightDockWidgetArea);
 
     m_mediaDock = new QDockWidget(LTR("dock.mediaPool"), this);
+    m_mediaDock->setObjectName("MediaPoolDock");
     m_mediaDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
     addDockWidget(Qt::LeftDockWidgetArea, m_mediaDock);
 
@@ -275,20 +364,24 @@ void MainWindow::ensureDocks() {
     addDockWidget(Qt::BottomDockWidgetArea, m_timelineDock);
 
     m_transformDock = new QDockWidget(LTR("dock.transform"), this);
+    m_transformDock->setObjectName("TransformDock");
     m_transformDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
     addDockWidget(Qt::RightDockWidgetArea, m_transformDock);
 
     m_textDock = new QDockWidget(LTR("dock.text"), this);
+    m_textDock->setObjectName("TextDock");
     m_textDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
     addDockWidget(Qt::RightDockWidgetArea, m_textDock);
     tabifyDockWidget(m_transformDock, m_textDock);
 
     m_audioFilterDock = new QDockWidget(LTR("dock.audioFilter"), this);
+    m_audioFilterDock->setObjectName("AudioFilterDock");
     m_audioFilterDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
     addDockWidget(Qt::RightDockWidgetArea, m_audioFilterDock);
     tabifyDockWidget(m_textDock, m_audioFilterDock);
 
     m_effectsDock = new QDockWidget(LTR("dock.effects"), this);
+    m_effectsDock->setObjectName("EffectsDock");
     m_effectsDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
     addDockWidget(Qt::RightDockWidgetArea, m_effectsDock);
     tabifyDockWidget(m_audioFilterDock, m_effectsDock);
@@ -435,6 +528,25 @@ void MainWindow::showEvent(QShowEvent* event) {
     QMainWindow::showEvent(event);
     if (!m_initialLayoutDone) {
         m_initialLayoutDone = true;
+        WindowSettings ws = WindowSettings::loadFromPreferences();
+        applyWindowSettings(ws);
+
+        if (ws.startupMode == "maximized") {
+            setWindowState(windowState() | Qt::WindowMaximized);
+        } else if (ws.startupMode == "fullscreen") {
+            setWindowState(windowState() | Qt::WindowFullScreen);
+        } else if (ws.startupMode == "default") {
+            resize(1400, 900);
+        } else {
+            QSettings prefSettings("HyggshiCut", "Preferences");
+            if (prefSettings.contains("window/geometry")) {
+                restoreGeometry(prefSettings.value("window/geometry").toByteArray());
+            }
+            if (prefSettings.contains("window/state")) {
+                restoreState(prefSettings.value("window/state").toByteArray());
+            }
+        }
+
         QTimer::singleShot(50, this, [this]() {
             if (m_timelineDock) {
                 const int timelineH = std::clamp(height() * 35 / 100, 240, 450);
@@ -496,6 +608,10 @@ void MainWindow::onImportRequested() {
         }
         generateThumbnail(asset);
         generateWaveform(asset);
+        QSettings pref("HyggshiCut", "Preferences");
+        if (pref.value("proxy/autoGenerate", false).toBool() && m_proxyManager && asset->hasVideo()) {
+            m_proxyManager->requestProxy(asset);
+        }
     }
     m_mediaPool->refresh();
     m_modified = true;
@@ -528,11 +644,16 @@ void MainWindow::importFileAndAddToProject(const QString& filePath, bool addToTi
     }
     generateThumbnail(asset);
     generateWaveform(asset);
+    QSettings pref("HyggshiCut", "Preferences");
+    if (pref.value("proxy/autoGenerate", false).toBool() && m_proxyManager && asset->hasVideo()) {
+        m_proxyManager->requestProxy(asset);
+    }
     m_mediaPool->refresh();
     m_modified = true;
     updateWindowTitle();
 
     if (addToTimeline && m_timelineWidget) {
+        m_project->pushUndoSnapshot();
         // Find or create a visual track
         Track* targetTrack = nullptr;
         for (auto& track : m_project->timeline().tracks()) {
@@ -571,7 +692,7 @@ void MainWindow::importFileAndAddToProject(const QString& filePath, bool addToTi
         }
         clip.timelineStart = placedStart;
         targetTrack->addClip(std::move(clip));
-        m_timelineWidget->update();
+        onTimelineEdited();
         if (m_playback) m_playback->seek(placedStart);
     }
 }
@@ -739,6 +860,10 @@ void MainWindow::onToggleCutTool(bool checked) {
 }
 
 void MainWindow::onUndo() {
+    if (!m_project || !m_project->canUndo()) {
+        statusBar()->showMessage(tr("Không có thao tác nào để hoàn tác (Undo)."), 2500);
+        return;
+    }
     if (!m_project->undo()) return;
     if (m_playback) m_playback->pause();
     if (m_timelineWidget) m_timelineWidget->clearSelection();
@@ -747,10 +872,14 @@ void MainWindow::onUndo() {
     if (m_preview) m_preview->clearTransformOverlay();
     onTimelineEdited();
     updateUndoRedoActions();
-    statusBar()->showMessage(tr("Đã hoàn tác."), 1500);
+    statusBar()->showMessage(tr("Đã hoàn tác (Undo)."), 1500);
 }
 
 void MainWindow::onRedo() {
+    if (!m_project || !m_project->canRedo()) {
+        statusBar()->showMessage(tr("Không có thao tác nào để làm lại (Redo)."), 2500);
+        return;
+    }
     if (!m_project->redo()) return;
     if (m_playback) m_playback->pause();
     if (m_timelineWidget) m_timelineWidget->clearSelection();
@@ -759,7 +888,32 @@ void MainWindow::onRedo() {
     if (m_preview) m_preview->clearTransformOverlay();
     onTimelineEdited();
     updateUndoRedoActions();
-    statusBar()->showMessage(tr("Đã làm lại."), 1500);
+    statusBar()->showMessage(tr("Đã làm lại (Redo)."), 1500);
+}
+
+void MainWindow::onSelectFirstClip() {
+    if (!m_project) return;
+    for (const auto& track : m_project->timeline().tracks()) {
+        if (!track.clips().empty()) {
+            m_selectedTrackId = track.id;
+            m_selectedClipId = track.clips().front().id;
+            onTimelineSelectionChanged(m_selectedClipId, m_selectedTrackId);
+            statusBar()->showMessage(tr("Đã chọn clip: %1").arg(track.clips().front().displayLabel.isEmpty() ? track.clips().front().id : track.clips().front().displayLabel), 2000);
+            return;
+        }
+    }
+    statusBar()->showMessage(tr("Chưa có clip nào trên timeline để chọn."), 2000);
+}
+
+void MainWindow::onDeselectAll() {
+    if (m_timelineWidget) m_timelineWidget->clearSelection();
+    m_selectedTrackId.clear();
+    m_selectedClipId.clear();
+    if (m_preview) m_preview->clearTransformOverlay();
+    if (m_transformPanel) m_transformPanel->setSelectedClip(m_project.get(), {}, {});
+    if (m_textPanel) m_textPanel->setSelectedClip(m_project.get(), {}, {});
+    if (m_audioFilterPanel) m_audioFilterPanel->setSelectedClip(m_project.get(), {}, {});
+    statusBar()->showMessage(tr("Đã bỏ chọn tất cả."), 2000);
 }
 
 void MainWindow::onRelinkMissingMedia() {
@@ -1029,8 +1183,22 @@ void MainWindow::onProxyQueueProgress(int done, int total) {
 }
 
 void MainWindow::updateUndoRedoActions() {
-    if (m_undoAction) m_undoAction->setEnabled(m_project && m_project->canUndo());
-    if (m_redoAction) m_redoAction->setEnabled(m_project && m_project->canRedo());
+    if (m_undoAction) {
+        m_undoAction->setEnabled(true);
+        if (m_project && m_project->canUndo()) {
+            m_undoAction->setToolTip(tr("Hoàn tác thao tác trước đó (Ctrl+Z)"));
+        } else {
+            m_undoAction->setToolTip(tr("Chưa có thao tác nào để hoàn tác"));
+        }
+    }
+    if (m_redoAction) {
+        m_redoAction->setEnabled(true);
+        if (m_project && m_project->canRedo()) {
+            m_redoAction->setToolTip(tr("Làm lại thao tác vừa hoàn tác (Ctrl+Shift+Z hoặc Ctrl+Y)"));
+        } else {
+            m_redoAction->setToolTip(tr("Chưa có thao tác nào để làm lại"));
+        }
+    }
 }
 
 void MainWindow::refreshTextPreview() {
@@ -1116,10 +1284,112 @@ void MainWindow::updateUiTexts() {
     updateWindowTitle();
 }
 
+void MainWindow::onWindowSettings() {
+    openSettingsDialog(SettingsTab::Window);
+}
+
+void MainWindow::openSettingsDialog(SettingsTab tab) {
+    // A QDialog::exec() runs its own nested event loop, but QTimer-driven
+    // repaints elsewhere in the app (notably the preview's playback timer,
+    // which keeps calling GLVideoWidget::update()/paintGL on its own clock)
+    // still fire *during* that nested loop, because they belong to the same
+    // thread. If playback is running when the dialog is shown, paintGL can
+    // end up racing the dialog's own window-activation/backing-store setup
+    // for the shared GL context — on some drivers (real GPU, not the
+    // software llvmpipe path) this segfaults inside Qt's own repaint code.
+    // Pausing first removes the race entirely; it costs nothing when
+    // playback wasn't running.
+    if (m_playback) m_playback->pause();
+
+    WindowSettingsDialog dlg(this, tab);
+    connect(&dlg, &WindowSettingsDialog::applySettings, this, &MainWindow::applyWindowSettings);
+    connect(&dlg, &WindowSettingsDialog::resetLayoutRequested, this, &MainWindow::resetDockLayout);
+    connect(&dlg, &WindowSettingsDialog::generateProxiesRequested, this, &MainWindow::onGenerateProxiesForAll);
+    connect(&dlg, &WindowSettingsDialog::proxyUsageToggled, this, &MainWindow::onToggleUseProxy);
+    connect(&dlg, &WindowSettingsDialog::languageChanged, this, &MainWindow::onLanguageSelected);
+    connect(&dlg, &WindowSettingsDialog::themeChanged, this, &MainWindow::onThemeSelected);
+    dlg.exec();
+}
+
+void MainWindow::onThemeSelected(const QString& theme) {
+    ThemeManager::setTheme(theme);
+    updateUiTexts();
+    statusBar()->showMessage(QString("Đã áp dụng giao diện: %1").arg(theme), 2500);
+}
+
+void MainWindow::onAbout() {
+    openSettingsDialog(SettingsTab::About);
+}
+
+void MainWindow::applyWindowSettings(const hc::WindowSettings& settings) {
+    // 1. Always on top
+    Qt::WindowFlags flags = windowFlags();
+    if (settings.alwaysOnTop) {
+        flags |= Qt::WindowStaysOnTopHint;
+    } else {
+        flags &= ~Qt::WindowStaysOnTopHint;
+    }
+    if (flags != windowFlags()) {
+        const bool wasVisible = isVisible();
+        setWindowFlags(flags);
+        if (wasVisible) show();
+    }
+
+    // 2. Opacity
+    setWindowOpacity(settings.opacityPercent / 100.0);
+
+    // 3. Lock docks
+    QDockWidget::DockWidgetFeatures features = QDockWidget::NoDockWidgetFeatures;
+    if (!settings.lockDocks) {
+        features = QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable;
+    }
+    if (m_mediaDock) m_mediaDock->setFeatures(features);
+    if (m_timelineDock) m_timelineDock->setFeatures(features);
+    if (m_transformDock) m_transformDock->setFeatures(features);
+    if (m_textDock) m_textDock->setFeatures(features);
+    if (m_audioFilterDock) m_audioFilterDock->setFeatures(features);
+    if (m_effectsDock) m_effectsDock->setFeatures(features);
+
+    // 4. Bars visibility
+    if (m_mainToolbar) m_mainToolbar->setVisible(settings.showToolbar);
+    if (statusBar()) statusBar()->setVisible(settings.showStatusBar);
+}
+
+void MainWindow::resetDockLayout() {
+    ensureDocks();
+    addDockWidget(Qt::LeftDockWidgetArea, m_mediaDock);
+    addDockWidget(Qt::BottomDockWidgetArea, m_timelineDock);
+    addDockWidget(Qt::RightDockWidgetArea, m_transformDock);
+    addDockWidget(Qt::RightDockWidgetArea, m_textDock);
+    tabifyDockWidget(m_transformDock, m_textDock);
+    addDockWidget(Qt::RightDockWidgetArea, m_audioFilterDock);
+    tabifyDockWidget(m_textDock, m_audioFilterDock);
+    addDockWidget(Qt::RightDockWidgetArea, m_effectsDock);
+    tabifyDockWidget(m_audioFilterDock, m_effectsDock);
+
+    m_mediaDock->show();
+    m_timelineDock->show();
+    m_transformDock->show();
+    m_textDock->show();
+    m_audioFilterDock->show();
+    m_effectsDock->show();
+    m_transformDock->raise();
+
+    const int timelineH = std::clamp(height() * 35 / 100, 240, 450);
+    resizeDocks({m_timelineDock}, {timelineH}, Qt::Vertical);
+    resizeDocks({m_mediaDock, m_transformDock}, {260, 320}, Qt::Horizontal);
+}
+
 void MainWindow::closeEvent(QCloseEvent* event) {
-    if (!maybeSaveUnsavedChanges()) {
+    WindowSettings ws = WindowSettings::loadFromPreferences();
+    if (ws.confirmExit && !maybeSaveUnsavedChanges()) {
         event->ignore();
         return;
+    }
+    if (ws.startupMode == "remember") {
+        QSettings prefSettings("HyggshiCut", "Preferences");
+        prefSettings.setValue("window/geometry", saveGeometry());
+        prefSettings.setValue("window/state", saveState());
     }
     event->accept();
 }

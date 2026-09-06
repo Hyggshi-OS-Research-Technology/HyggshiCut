@@ -171,6 +171,10 @@
     "btn.save": "保存",
     "btn.delete": "削除",
     "btn.reset": "リセット",
-    "btn.browse": "参照…"
+    "btn.browse": "参照…",
+    "dialog.ok": "OK",
+    "dialog.apply": "適用",
+    "dialog.cancel": "キャンセル",
+    "dialog.browse": "参照…"
   }
 }

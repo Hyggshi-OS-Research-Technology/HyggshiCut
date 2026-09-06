@@ -58,6 +58,11 @@ MediaPoolWidget::MediaPoolWidget(Project* project, ProxyManager* proxyManager, Q
     });
 }
 
+void MediaPoolWidget::setProject(Project* project) {
+    m_project = project;
+    refresh();
+}
+
 void MediaPoolWidget::retranslateUi() {
     if (m_headerLabel) m_headerLabel->setText(LTR("media.pool.title"));
     if (m_importBtn) m_importBtn->setText(LTR("media.pool.import"));
@@ -66,6 +71,7 @@ void MediaPoolWidget::retranslateUi() {
 
 void MediaPoolWidget::refresh() {
     m_list->clear();
+    if (!m_project) return;
     for (const auto& asset : m_project->assets()) {
         const QString durationStr = formatTimecode(asset->duration).left(8);
         QString proxyTag;

@@ -20,6 +20,7 @@
 #include "export/Exporter.h"
 #include "i18n/LanguageManager.h"
 #include "plugin/PluginManager.h"
+#include "ui/ThemeManager.h"
 
 namespace {
 
@@ -160,6 +161,7 @@ int main(int argc, char* argv[]) {
     QApplication::setApplicationVersion("1.0.0");
 
     loadBundledAssets(app);
+    hc::ThemeManager::loadPreference();
 
     std::setlocale(LC_NUMERIC, "C");
 

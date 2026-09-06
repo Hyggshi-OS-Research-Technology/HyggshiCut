@@ -8,6 +8,8 @@ class QDockWidget;
 class QAction;
 class QMenu;
 
+#include "WindowSettingsDialog.h"
+
 namespace hc {
 
 class MediaPoolWidget;
@@ -19,6 +21,7 @@ class TextPanel;
 class AudioFilterPanel;
 class EffectsPanel;
 class ProxyManager;
+struct WindowSettings;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -51,6 +54,8 @@ private slots:
     void onToggleCutTool(bool checked);
     void onUndo();
     void onRedo();
+    void onSelectFirstClip();
+    void onDeselectAll();
     void onRelinkMissingMedia();
     void onTimelineEdited();
     void onSeekRequested(hc::Ticks t);
@@ -71,6 +76,10 @@ private slots:
     void onOpenPluginManager();
     void onGraphicsBackendSelected(const QString& backend);
     void onScreenRecord();
+    void onWindowSettings();
+    void openSettingsDialog(hc::SettingsTab tab = hc::SettingsTab::Window);
+    void onThemeSelected(const QString& theme);
+    void onAbout();
     void updateUiTexts();
 
     // Bounding-box overlay signals from PreviewWidget.
@@ -93,6 +102,8 @@ private:
     void generateThumbnail(const MediaAssetPtr& asset);
     void generateWaveform(const MediaAssetPtr& asset);
     void importFileAndAddToProject(const QString& filePath, bool addToTimeline = false);
+    void applyWindowSettings(const hc::WindowSettings& settings);
+    void resetDockLayout();
     bool maybeSaveUnsavedChanges();
     void updateUndoRedoActions();
     void refreshTextPreview();

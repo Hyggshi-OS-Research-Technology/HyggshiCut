@@ -171,6 +171,10 @@
     "btn.save": "保存",
     "btn.delete": "删除",
     "btn.reset": "重置",
-    "btn.browse": "浏览…"
+    "btn.browse": "浏览…",
+    "dialog.ok": "确定",
+    "dialog.apply": "应用",
+    "dialog.cancel": "取消",
+    "dialog.browse": "浏览…"
   }
 }

@@ -196,5 +196,33 @@ if(HYGGSHICUT_BUILD_TESTS)
     )
     target_include_directories(ScreenRecorderTest PRIVATE src src/capture)
     target_link_libraries(ScreenRecorderTest PRIVATE Qt6::Core Qt6::DBus)
+
+    set(APP_LIB_SOURCES ${SOURCES})
+    list(FILTER APP_LIB_SOURCES EXCLUDE REGEX ".*/main\\.cpp$")
+
+    add_executable(SettingsDialogTest
+        tests/settings_dialog_test.cpp
+        ${APP_LIB_SOURCES}
+    )
+    target_include_directories(SettingsDialogTest PRIVATE
+        src
+        src/core
+        src/decode
+        src/render
+        src/playback
+        src/export
+        src/ui
+        src/cache
+        src/capture
+    )
+    target_link_libraries(SettingsDialogTest PRIVATE
+        Qt6::Widgets
+        Qt6::OpenGLWidgets
+        Qt6::DBus
+        OpenGL::GL
+        PkgConfig::FFMPEG
+        PkgConfig::MPV
+        PkgConfig::ALSA
+    )
 endif()
 

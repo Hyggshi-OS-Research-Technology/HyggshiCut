@@ -32,6 +32,7 @@ public:
     explicit MediaPoolWidget(Project* project, ProxyManager* proxyManager = nullptr, QWidget* parent = nullptr);
 
 public slots:
+    void setProject(Project* project);
     void refresh();
     void retranslateUi();
 

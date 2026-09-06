@@ -297,14 +297,37 @@ GLVideoWidget::~GLVideoWidget() {
     doneCurrent();
 }
 
+static QString s_glRenderer = "OpenGL (Initializing)";
+static QString s_glVersion = "Core Profile";
+static QString s_glslVersion = "330 core";
+
+QString GLVideoWidget::rendererString() {
+    return s_glRenderer;
+}
+
+QString GLVideoWidget::versionString() {
+    return s_glVersion;
+}
+
+QString GLVideoWidget::glslVersionString() {
+    return s_glslVersion;
+}
+
 void GLVideoWidget::initializeGL() {
     initializeOpenGLFunctions();
     glClearColor(0.06f, 0.06f, 0.07f, 1.0f);
 
+    const char* r = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
+    const char* v = reinterpret_cast<const char*>(glGetString(GL_VERSION));
+    const char* s = reinterpret_cast<const char*>(glGetString(GL_SHADING_LANGUAGE_VERSION));
+    if (r) s_glRenderer = QString::fromUtf8(r);
+    if (v) s_glVersion = QString::fromUtf8(v);
+    if (s) s_glslVersion = QString::fromUtf8(s);
+
     qInfo() << "HyggshiCut Graphics Renderer:"
-            << reinterpret_cast<const char*>(glGetString(GL_RENDERER))
-            << "| Version:" << reinterpret_cast<const char*>(glGetString(GL_VERSION))
-            << "| GLSL:" << reinterpret_cast<const char*>(glGetString(GL_SHADING_LANGUAGE_VERSION));
+            << s_glRenderer
+            << "| Version:" << s_glVersion
+            << "| GLSL:" << s_glslVersion;
 
     if (qEnvironmentVariableIsSet("HYGGSHICUT_FORCE_CPU_RENDER")) {
         qWarning() << "HyggshiCut: HYGGSHICUT_FORCE_CPU_RENDER is set. Activating CPU preview fallback mode.";

@@ -114,8 +114,12 @@ void PreviewWidget::setAudioLevels(float left, float right) {
 }
 
 void PreviewWidget::setPosition(Ticks t) {
+    m_currentTime = t;
     if (!m_sliderBeingDragged) {
         m_slider->blockSignals(true);
+        if (m_slider->maximum() < static_cast<int>(t / 1000)) {
+            m_slider->setRange(0, static_cast<int>(t / 1000));
+        }
         m_slider->setValue(static_cast<int>(t / 1000));
         m_slider->blockSignals(false);
     }
@@ -124,7 +128,7 @@ void PreviewWidget::setPosition(Ticks t) {
 
 void PreviewWidget::setDuration(Ticks d) {
     m_duration = d;
-    m_slider->setRange(0, static_cast<int>(d / 1000));
+    m_slider->setRange(0, std::max(0, static_cast<int>(d / 1000)));
 }
 
 void PreviewWidget::setTextOverlay(const QString&) {

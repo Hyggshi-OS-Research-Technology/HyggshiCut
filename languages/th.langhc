@@ -171,6 +171,10 @@
     "btn.save": "บันทึก",
     "btn.delete": "ลบ",
     "btn.reset": "รีเซ็ต",
-    "btn.browse": "เลือก…"
+    "btn.browse": "เลือก…",
+    "dialog.ok": "ตกลง",
+    "dialog.apply": "ใช้งาน",
+    "dialog.cancel": "ยกเลิก",
+    "dialog.browse": "เลือก…"
   }
 }

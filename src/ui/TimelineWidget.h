@@ -17,6 +17,7 @@ class TimelineWidget : public QWidget {
     Q_OBJECT
 public:
     explicit TimelineWidget(Project* project, QWidget* parent = nullptr);
+    void setProject(Project* project);
 
     void setPlayheadTime(Ticks t);
     Ticks playheadTime() const { return m_playheadTime; }
@@ -46,6 +47,8 @@ public slots:
     void splitAtPlayhead();
     void setCutToolActive(bool active);
     void clearSelection();
+    Ticks pixelToTime(int x) const;
+    int timeToPixel(Ticks t) const;
 
 signals:
     void seekRequested(hc::Ticks t);
@@ -62,6 +65,7 @@ protected:
     void mouseDoubleClickEvent(QMouseEvent* event) override;
     void contextMenuEvent(QContextMenuEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
+    void leaveEvent(QEvent* event) override;
     void dragEnterEvent(QDragEnterEvent* event) override;
     void dragMoveEvent(QDragMoveEvent* event) override;
     void dropEvent(QDropEvent* event) override;
@@ -71,8 +75,6 @@ private:
 
     enum class TrackControl { Mute = 0, Hidden = 1, Lock = 2, Delete = 3, None = -1 };
 
-    Ticks pixelToTime(int x) const;
-    int timeToPixel(Ticks t) const;
     int trackRowAtY(int y) const;             // visual row, 0 = top
     int trackVectorIndexForRow(int row) const; // maps visual row -> Track::tracks() index
     QRect clipRect(int trackVectorIndex, const Clip& clip) const;
@@ -108,8 +110,8 @@ private:
     static constexpr int kMinTrackHeight = 32; // floor: below this we scroll instead of shrinking further
     static constexpr int kMaxTrackHeight = 800; // allow tracks to scale up freely when timeline is expanded
     int m_availableHeight = 0;      // last known viewport height from the outer scroll area, 0 = unknown yet
-    int m_rulerHeight = 26;
-    int m_headerWidth = 160; // left "layers" column: track name + controls (mute, hide, lock, delete) + drag handle
+    int m_rulerHeight = 32;
+    int m_headerWidth = 220; // left "layers" column: track badge, name + sleek control buttons
 
     bool m_cutToolActive = false;
 
@@ -139,6 +141,10 @@ private:
 
     // --- Fade drag state ---
     Ticks m_dragFadeOrigDuration = 0; // original fadeIn/fadeOut when drag started
+
+    // --- Hover tracking for track controls ---
+    int m_hoverTrackRow = -1;
+    TrackControl m_hoverControl = TrackControl::None;
 
     QString m_selectedClipId, m_selectedTrackId;
 };

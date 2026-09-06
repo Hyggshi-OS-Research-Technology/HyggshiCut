@@ -62,6 +62,10 @@ public:
     void setForceCpuFallback(bool force) { m_forceCpuFallback = force; update(); }
     bool isForceCpuFallback() const { return m_forceCpuFallback; }
 
+    static QString rendererString();
+    static QString versionString();
+    static QString glslVersionString();
+
 protected:
     void initializeGL() override;
     void resizeGL(int w, int h) override;

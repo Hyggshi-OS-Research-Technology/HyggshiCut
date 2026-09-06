@@ -5,11 +5,15 @@
 #include <QSettings>
 #include <QStandardPaths>
 #include <QDir>
+#include <QCoreApplication>
 
 namespace hc {
 
 LanguageManager& LanguageManager::instance() {
     static LanguageManager s;
+    if (s.m_packs.isEmpty()) {
+        s.discoverBundledLanguages();
+    }
     return s;
 }
 
@@ -52,7 +56,33 @@ bool LanguageManager::parseJsonPack(const QJsonObject& root, LanguagePack& out, 
     return true;
 }
 
+void LanguageManager::discoverBundledLanguages() {
+    if (!m_packs.isEmpty()) return;
+    QString appDir = QCoreApplication::instance() ? QCoreApplication::applicationDirPath() : ".";
+    QStringList langDirs = {
+        QDir(appDir).filePath("languages"),
+        QDir(appDir).filePath("../languages"),
+        QDir::current().filePath("languages"),
+        "/home/hyggshi/Downloads/HyggshiCut/languages",
+        "/usr/share/hyggshicut/languages"
+    };
+
+    for (const auto& dPath : langDirs) {
+        QDir dir(dPath);
+        if (dir.exists()) {
+            const auto files = dir.entryInfoList(QStringList() << "*.langhc", QDir::Files);
+            for (const auto& fi : files) {
+                loadFromFile(fi.absoluteFilePath());
+            }
+            if (!m_packs.isEmpty()) break;
+        }
+    }
+}
+
 bool LanguageManager::setLanguage(const QString& languageCode) {
+    if (m_packs.isEmpty()) {
+        discoverBundledLanguages();
+    }
     if (!m_packs.contains(languageCode)) return false;
     if (m_currentLang == languageCode) return true;
     m_currentLang = languageCode;
@@ -62,6 +92,9 @@ bool LanguageManager::setLanguage(const QString& languageCode) {
 }
 
 QString LanguageManager::translate(const QString& key) const {
+    if (m_packs.isEmpty()) {
+        const_cast<LanguageManager*>(this)->discoverBundledLanguages();
+    }
     // Try current language first
     if (m_packs.contains(m_currentLang)) {
         const auto& pack = m_packs[m_currentLang];
@@ -90,6 +123,9 @@ void LanguageManager::savePreference() const {
 }
 
 void LanguageManager::loadPreference() {
+    if (m_packs.isEmpty()) {
+        discoverBundledLanguages();
+    }
     QSettings settings("HyggshiCut", "Language");
     const QString saved = settings.value("language", "vi").toString();
     if (m_packs.contains(saved)) {

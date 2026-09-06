@@ -20,8 +20,20 @@ public:
     QString name = "Untitled Project";
     QString filePath; // path to the .hcproj file, empty if never saved
 
-    Timeline& timeline() { return *m_timeline; }
-    const Timeline& timeline() const { return *m_timeline; }
+    Timeline& timeline() {
+        if (!m_timeline) {
+            static Timeline s_empty;
+            return s_empty;
+        }
+        return *m_timeline;
+    }
+    const Timeline& timeline() const {
+        if (!m_timeline) {
+            static const Timeline s_empty;
+            return s_empty;
+        }
+        return *m_timeline;
+    }
 
     const std::vector<MediaAssetPtr>& assets() const { return m_assets; }
 

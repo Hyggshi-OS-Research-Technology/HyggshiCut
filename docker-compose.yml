@@ -1,0 +1,43 @@
+services:
+  # 1. Build Debian package (.deb) inside isolated container and output to ./dist
+  # Usage: docker compose run --rm build-deb
+  build-deb:
+    build:
+      context: .
+      target: builder
+    volumes:
+      - ./dist:/dist_out
+    command: >
+      sh -c "dpkg-buildpackage -us -uc -b -j$$(nproc) && cp ../hyggshicut_*.deb /dist_out/ && echo '==> Package exported to ./dist/' && ls -la /dist_out/"
+
+  # 2. Run HyggshiCut GUI with GPU, Audio, and Display forwarding
+  # Usage: docker compose run --rm app
+  app:
+    build:
+      context: .
+      target: runtime
+      args:
+        UID: ${UID:-1000}
+        GID: ${GID:-1000}
+    environment:
+      - DISPLAY=${DISPLAY:-:0}
+      - WAYLAND_DISPLAY=${WAYLAND_DISPLAY}
+      - XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/1000}
+      - PULSE_SERVER=unix:/tmp/pulse-socket
+      - QT_X11_NO_MITSHM=1
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ${XDG_RUNTIME_DIR:-/run/user/1000}/${WAYLAND_DISPLAY:-wayland-0}:${XDG_RUNTIME_DIR:-/run/user/1000}/${WAYLAND_DISPLAY:-wayland-0}:rw
+      - ${XDG_RUNTIME_DIR:-/run/user/1000}/pulse/native:/tmp/pulse-socket:rw
+      - ${HOME}/.config/HyggshiCut:/home/hyggshi/.config/HyggshiCut:rw
+      - ${HOME}/Videos:/home/hyggshi/Videos:rw
+      - .:/workspace:rw
+    working_dir: /workspace
+    devices:
+      - /dev/dri:/dev/dri
+      - /dev/snd:/dev/snd
+    group_add:
+      - video
+      - audio
+    ipc: host
+    network_mode: host

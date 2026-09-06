@@ -7,7 +7,8 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QDebug>
-#include <QStringList>
+#include <QIODevice>
+#include <QSettings>
 #include <algorithm>
 
 namespace hc {
@@ -17,14 +18,60 @@ constexpr const char* kIndexFileName = "index.json";
 }
 
 ProxyManager::ProxyManager(QObject* parent) : QObject(parent) {
-    const QString base = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
-    m_cacheDir = (base.isEmpty() ? QDir::tempPath() : base) + "/HyggshiCut/proxies";
-    QDir().mkpath(m_cacheDir);
+    QSettings pref("HyggshiCut", "Preferences");
+    QString customCache = pref.value("proxy/cacheDir").toString();
+    if (!customCache.isEmpty() && QDir().mkpath(customCache)) {
+        m_cacheDir = customCache;
+    } else {
+        const QString base = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+        m_cacheDir = (base.isEmpty() ? QDir::tempPath() : base) + "/HyggshiCut/proxies";
+        QDir().mkpath(m_cacheDir);
+    }
+    m_maxProxyWidth = pref.value("proxy/maxProxyWidth", 960).toInt();
+    if (m_maxProxyWidth < 160) m_maxProxyWidth = 960;
     loadIndex();
 }
 
 ProxyManager::~ProxyManager() {
     cancelAll();
+}
+
+void ProxyManager::setCacheDirectory(const QString& dir) {
+    if (dir.isEmpty() || dir == m_cacheDir) return;
+    cancelAll();
+    m_cacheDir = dir;
+    QDir().mkpath(m_cacheDir);
+    QSettings pref("HyggshiCut", "Preferences");
+    pref.setValue("proxy/cacheDir", m_cacheDir);
+    m_readyProxyPaths.clear();
+    m_statusByKey.clear();
+    loadIndex();
+}
+
+void ProxyManager::clearCache() {
+    cancelAll();
+    QDir dir(m_cacheDir);
+    const auto files = dir.entryInfoList(QStringList() << "*.mp4" << "*.json", QDir::Files);
+    for (const auto& f : files) {
+        QFile::remove(f.absoluteFilePath());
+    }
+    m_readyProxyPaths.clear();
+    m_statusByKey.clear();
+}
+
+qint64 ProxyManager::cacheSizeBytes() const {
+    QDir dir(m_cacheDir);
+    qint64 total = 0;
+    const auto files = dir.entryInfoList(QStringList() << "*.mp4", QDir::Files);
+    for (const auto& f : files) {
+        total += f.size();
+    }
+    return total;
+}
+
+int ProxyManager::cachedProxyCount() const {
+    QDir dir(m_cacheDir);
+    return dir.entryList(QStringList() << "*.mp4", QDir::Files).size();
 }
 
 QString ProxyManager::identityKeyForFile(const QString& filePath) {

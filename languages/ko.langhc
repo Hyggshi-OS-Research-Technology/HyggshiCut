@@ -171,6 +171,10 @@
     "btn.save": "저장",
     "btn.delete": "삭제",
     "btn.reset": "초기화",
-    "btn.browse": "찾아보기…"
+    "btn.browse": "찾아보기…",
+    "dialog.ok": "확인",
+    "dialog.apply": "적용",
+    "dialog.cancel": "취소",
+    "dialog.browse": "찾아보기…"
   }
 }

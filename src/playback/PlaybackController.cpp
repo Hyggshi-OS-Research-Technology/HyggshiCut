@@ -29,7 +29,7 @@ PlaybackController::PlaybackController(Project* project, GLVideoWidget* videoOut
                                          ProxyManager* proxyManager, QObject* parent)
     : QObject(parent), m_project(project), m_videoOutput(videoOutput), m_proxyManager(proxyManager) {
     // Wire up the shared texture cache so GLVideoWidget can bind cached textures.
-    m_videoOutput->setTextureCache(&m_textureCache);
+    if (m_videoOutput) m_videoOutput->setTextureCache(&m_textureCache);
 
     connect(&m_timer, &QTimer::timeout, this, &PlaybackController::onTick);
     connect(&m_audioTimer, &QTimer::timeout, this, &PlaybackController::feedAudio);
@@ -331,7 +331,7 @@ void PlaybackController::renderFrameAt(Ticks t) {
     const auto activeClips = m_project->timeline().activeVisualClipsAt(t);
 
     if (activeClips.empty()) {
-        m_videoOutput->clearFrame();
+        if (m_videoOutput) m_videoOutput->clearFrame();
         return;
     }
 
@@ -452,10 +452,12 @@ void PlaybackController::renderFrameAt(Ticks t) {
         }
     }
 
-    if (!layers.empty()) {
-        m_videoOutput->setLayers(layers);
-    } else {
-        m_videoOutput->clearFrame();
+    if (m_videoOutput) {
+        if (!layers.empty()) {
+            m_videoOutput->setLayers(layers);
+        } else {
+            m_videoOutput->clearFrame();
+        }
     }
 }
 
@@ -505,7 +507,8 @@ void PlaybackController::togglePlay() {
 }
 
 void PlaybackController::seek(Ticks t) {
-    t = std::clamp<Ticks>(t, 0, std::max<Ticks>(duration(), 0));
+    const Ticks maxSeek = std::max<Ticks>(duration() + secondsToTicks(600), secondsToTicks(3600));
+    t = std::clamp<Ticks>(t, 0, maxSeek);
     m_currentTime = t;
     m_audioTimelineTime = t;
     resetAudioState();

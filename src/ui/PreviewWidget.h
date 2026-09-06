@@ -68,6 +68,7 @@ private:
     QLabel*           m_timeLabel;
     QLabel*           m_textLabel = nullptr;
     Ticks             m_duration = 0;
+    Ticks             m_currentTime = 0;
     bool              m_sliderBeingDragged = false;
 };
 
