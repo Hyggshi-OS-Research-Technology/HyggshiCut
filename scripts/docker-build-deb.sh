@@ -21,4 +21,4 @@ docker run --rm \
     sh -c "dpkg-buildpackage -us -uc -b -j\$(nproc) && cp ../hyggshicut_*.deb /dist_out/ && ls -lh /dist_out/"
 
 echo ""
-echo "✅ Build completed successfully! Packages generated in: $DIR/dist/"
+ echo "Build completed successfully! Packages generated in: $DIR/dist/"

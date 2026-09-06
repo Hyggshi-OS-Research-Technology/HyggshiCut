@@ -34,8 +34,8 @@ SourcePreviewDialog::SourcePreviewDialog(const QString& filePath, const QString&
     layout->addWidget(m_gl, 1);
 
     auto* transport = new QHBoxLayout();
-    m_playBtn = new QPushButton(tr("▶"), this);
-    m_playBtn->setFixedWidth(36);
+    m_playBtn = new QPushButton(tr("Phát"), this);
+    m_playBtn->setFixedWidth(80);
     connect(m_playBtn, &QPushButton::clicked, this, [this]() { m_player->togglePause(); });
     transport->addWidget(m_playBtn);
 
@@ -84,7 +84,7 @@ void SourcePreviewDialog::onDurationChanged(double seconds) {
 }
 
 void SourcePreviewDialog::onPausedChanged(bool paused) {
-    m_playBtn->setText(paused ? tr("▶") : tr("⏸"));
+    m_playBtn->setText(paused ? tr("Phát") : tr("Tạm dừng"));
 }
 
 } // namespace hc

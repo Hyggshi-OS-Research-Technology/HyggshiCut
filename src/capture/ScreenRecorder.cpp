@@ -280,7 +280,13 @@ void ScreenRecorder::finalizeRecording() {
             }
         } else {
             qWarning() << "ScreenRecorder: Audio multiplexing failed, using raw video file instead.";
-            QFile::copy(m_videoRawPath, m_finalOutputPath);
+            // Fall back to the raw video so the user still gets a recording.
+            // Clean up the now-unused temp video afterwards (copy, don't move,
+            // so a copy failure doesn't destroy the only usable file).
+            if (!QFile::copy(m_videoRawPath, m_finalOutputPath)) {
+                qWarning() << "ScreenRecorder: Failed to copy raw video to final output path:" << m_finalOutputPath;
+            }
+            QFile::remove(m_videoRawPath);
         }
     } else {
         // No audio: move or copy raw video to final destination

@@ -2,6 +2,7 @@
 #include <QWidget>
 #include <QElapsedTimer>
 #include <limits>
+#include <optional>
 #include "../core/Project.h"
 
 namespace hc {
@@ -33,6 +34,13 @@ public:
 
     bool cutToolActive() const { return m_cutToolActive; }
 
+    // Frame-step size at the project frame rate (used by nudge actions).
+    Ticks frameStepTicks() const;
+
+    // Toggle edge/playhead snapping during drag operations (default on).
+    void setSnapEnabled(bool enabled);
+    bool snapEnabled() const { return m_snapEnabled; }
+
     // Called by the outer scroll area whenever its viewport is resized.
     // Tracks fill the available height smoothly when resized up or down,
     // and when there are too many tracks to fit below kMinTrackHeight,
@@ -45,6 +53,11 @@ public slots:
     void deleteSelectedTrack();
     void deleteTrack(const QString& trackId);
     void splitAtPlayhead();
+    void copySelectedClip();
+    void pasteClip();
+    void duplicateSelectedClip();
+    void rippleDeleteSelectedClip();
+    void nudgeSelectedClip(Ticks deltaTicks);
     void setCutToolActive(bool active);
     void clearSelection();
     Ticks pixelToTime(int x) const;
@@ -147,6 +160,11 @@ private:
     TrackControl m_hoverControl = TrackControl::None;
 
     QString m_selectedClipId, m_selectedTrackId;
+
+    // --- Clip clipboard & snap preference ---
+    // A deep copy of the last copied clip (id regenerated on paste).
+    std::optional<Clip> m_clipboard;
+    bool m_snapEnabled = true;
 };
 
 } // namespace hc

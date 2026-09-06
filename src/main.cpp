@@ -55,8 +55,7 @@ void loadBundledAssets(const QApplication& app) {
     QStringList langDirs = {
         QDir(app.applicationDirPath()).filePath("languages"),
         QDir(app.applicationDirPath()).filePath("../languages"),
-        QDir::current().filePath("languages"),
-        "/home/hyggshi/Downloads/HyggshiCut/languages"
+        QDir::current().filePath("languages")
     };
 
     for (const auto& dPath : langDirs) {
@@ -75,8 +74,7 @@ void loadBundledAssets(const QApplication& app) {
     QStringList pluginDirs = {
         QDir(app.applicationDirPath()).filePath("plugins"),
         QDir(app.applicationDirPath()).filePath("../plugins"),
-        QDir::current().filePath("plugins"),
-        "/home/hyggshi/Downloads/HyggshiCut/plugins"
+        QDir::current().filePath("plugins")
     };
 
     for (const auto& dPath : pluginDirs) {

@@ -2,6 +2,7 @@
 #include "../render/GLVideoWidget.h"
 #include "../render/TextRenderer.h"
 #include "../audio/AudioFilterDesc.h"
+#include "../core/SystemInfo.h"
 #include <QDebug>
 #include <algorithm>
 #include <cmath>
@@ -34,6 +35,24 @@ PlaybackController::PlaybackController(Project* project, GLVideoWidget* videoOut
     connect(&m_timer, &QTimer::timeout, this, &PlaybackController::onTick);
     connect(&m_audioTimer, &QTimer::timeout, this, &PlaybackController::feedAudio);
     initAudio();
+
+    // Size the frame/texture caches to the machine. The defaults assume a
+    // mid-range workstation; on weak/old machines they'd either pin far too
+    // much RAM (texture/image tile caches) or be starved of it. Probed once
+    // here; unknown RAM (probe returned 0) keeps the defaults.
+    const uint64_t ram = systeminfo::totalMemoryBytes();
+    if (ram > 0) {
+        if (ram <= 3ull * 1024ull * 1024ull * 1024ull) {          // <= 3 GiB
+            m_textureCache.setGpuBudgetBytes(64ull * 1024ull * 1024ull);
+            m_textureCache.setCpuBudgetBytes(48ull * 1024ull * 1024ull);
+            m_frameCache.setMaxBytes(24ull * 1024ull * 1024ull);
+        } else if (ram <= 8ull * 1024ull * 1024ull * 1024ull) {   // <= 8 GiB
+            m_textureCache.setGpuBudgetBytes(128ull * 1024ull * 1024ull);
+            m_textureCache.setCpuBudgetBytes(64ull * 1024ull * 1024ull);
+            m_frameCache.setMaxBytes(48ull * 1024ull * 1024ull);
+        }
+    }
+
     // Do not render from the constructor. MainWindow may rebuild this controller
     // before QOpenGLWidget has an initialized context (especially while opening
     // a project). The first frame is scheduled by MainWindow after the event

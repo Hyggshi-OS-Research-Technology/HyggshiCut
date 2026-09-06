@@ -4,9 +4,30 @@ All notable changes to HyggshiCut are documented in this file.
 
 ---
 
+## [Unreleased]
+
+### New Features
+- **Clip copy / paste / duplicate**: copy the selected clip (`Ctrl+C`), paste it at the playhead on a compatible track (`Ctrl+V`), or duplicate it right after itself (`Ctrl+D`) — also available from the clip's right-click menu. Pasted/duplicated clips keep their full styling, transform, effects, fades, and keyframes, and get a fresh id so undo history stays sane.
+- **Ripple delete**: remove a clip and automatically close the gap by shifting every later clip on the track left (Edit menu + clip right-click menu).
+- **Frame-accurate clip nudge**: move the selected clip one frame left/right with `,` / `.` (or the Edit menu), for precise sync adjustments.
+- **Snap toggle**: edge/playhead/keyframe snapping during drags can now be switched on/off from the View menu and is remembered across sessions.
+
+### Bug Fixes
+- **HD thumbnail color accuracy**: Media-pool/timeline thumbnails now honor each source's BT.601 vs BT.709 matrix (previously always converted as BT.601, so HD thumbnails could differ slightly from Preview/Export).
+- **Removed developer-machine paths**: dropped the hardcoded `/home/hyggshi/Downloads/...` language/plugin search entries, so bundled assets are only discovered from portable locations.
+- **Screen recorder cleanup**: a failed audio multiplex now removes the leftover raw-video temp file instead of leaking it in `/tmp`.
+- **Export low-memory log**: the "low-memory mode" message now reports the real trigger thresholds.
+
+### Performance & Memory Optimizations (weak / older machines)
+- **Adaptive decode threading**: `Decoder` now scales FFmpeg worker threads with the detected core count, and drops to slice-only threading (much lower RAM) on machines with ≤ 3 GiB.
+- **Adaptive cache budgets**: preview frame/texture caches are sized from detected physical RAM (≤ 3 GiB and ≤ 8 GiB tiers) instead of always using workstation-sized defaults.
+- **Adaptive export threads**: single-core machines render with one FFmpeg thread instead of two.
+
+---
+
 ## [1.1.0] - 2026-09-04
 
-### 🚀 New Features
+### New Features
 - **Native Screen Recording (Ghi Màn Hình)**:
   - Added dedicated Screen Recorder supporting Linux desktop environments.
   - **Wayland (Ubuntu / GNOME)**: Uses native `org.gnome.Shell.Screencast` D-Bus interface for smooth 1080p/4K 60fps hardware-accelerated capture with zero window flickering.
@@ -32,7 +53,7 @@ All notable changes to HyggshiCut are documented in this file.
   - Added quick action to Reset Dock Layout to the clean default arrangement.
   - All preferences persist across application sessions via `QSettings`.
 
-### ⚡ Performance & Memory Optimizations
+### Performance & Memory Optimizations
 - **Text RAM-Bomb Elimination**:
   - Replaced full-canvas text rasterization (1920x1080 ~7.9 MiB / 3840x2160 ~31.6 MiB per entry) with **Tight Bounding Box Cards** (`cardW x cardH`, ~100–300 KiB).
   - Reduced text CPU cache entry count from 32 to 8, slashing resident CPU RAM usage from **~253 MiB down to < 1.5 MiB** (> 98% reduction).
@@ -42,7 +63,7 @@ All notable changes to HyggshiCut are documented in this file.
   - Reuses GPU textures directly on every frame for static text layers, eliminating repeated `glTexSubImage2D` calls and dropping PCIe bandwidth from **~237 MiB/s to 0 B/s**.
   - Quad scaling via vertex shader (`uTileScale = vec2(cardW / canvasW, cardH / canvasH)`) eliminates transparent overdraw and maintains pixel-perfect alignment.
 
-### 🛠️ Packaging & CI/CD Fixes
+### Packaging & CI/CD Fixes
 - **Debian Packaging (`.deb`)**:
   - Fixed Debhelper compat level conflict (`debhelper-compat (= 13)` in `debian/control` vs redundant `debian/compat`).
   - Added executable permissions (`+x`) to `debian/rules`.

@@ -66,7 +66,7 @@ void MediaPoolWidget::setProject(Project* project) {
 void MediaPoolWidget::retranslateUi() {
     if (m_headerLabel) m_headerLabel->setText(LTR("media.pool.title"));
     if (m_importBtn) m_importBtn->setText(LTR("media.pool.import"));
-    if (m_recordBtn) m_recordBtn->setText(QString("🔴 %1").arg(LTR("screenRecord.btn")));
+    if (m_recordBtn) m_recordBtn->setText(LTR("screenRecord.btn"));
 }
 
 void MediaPoolWidget::refresh() {
@@ -77,10 +77,10 @@ void MediaPoolWidget::refresh() {
         QString proxyTag;
         if (m_proxyManager && asset->hasVideo()) {
             switch (m_proxyManager->statusForAsset(asset)) {
-                case ProxyStatus::Ready:      proxyTag = "  🟢 proxy"; break;
-                case ProxyStatus::Generating: proxyTag = "  ⏳ đang tạo proxy..."; break;
-                case ProxyStatus::Queued:     proxyTag = "  ⏳ chờ tạo proxy"; break;
-                case ProxyStatus::Failed:     proxyTag = "  ⚠ proxy lỗi"; break;
+                case ProxyStatus::Ready:      proxyTag = "  [proxy]"; break;
+                case ProxyStatus::Generating: proxyTag = "  [đang tạo proxy...]"; break;
+                case ProxyStatus::Queued:     proxyTag = "  [chờ tạo proxy]"; break;
+                case ProxyStatus::Failed:     proxyTag = "  [proxy lỗi]"; break;
                 case ProxyStatus::NotGenerated: break;
             }
         }

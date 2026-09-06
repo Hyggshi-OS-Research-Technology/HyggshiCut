@@ -134,6 +134,7 @@ private:
     QAction* m_undoAction = nullptr;
     QAction* m_redoAction = nullptr;
     QAction* m_useProxyAction = nullptr;
+    QAction* m_snapAction = nullptr;
     bool m_modified = false;
     bool m_initialLayoutDone = false;
 

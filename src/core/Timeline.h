@@ -197,6 +197,29 @@ public:
 
     void notifyClipChanged(const QString& trackId) { emit clipsChanged(trackId); }
 
+    // ── Ripple delete ───────────────────────────────────────────────
+    // Deletes `clipId` and shifts every clip on the same track that starts
+    // after it LEFT by the deleted clip's timeline duration, so the gap
+    // closes automatically instead of leaving a hole. Returns false if the
+    // clip or track doesn't exist. Clips keep their order (sorted by
+    // timelineStart) because later clips all shift by the same amount.
+    bool rippleDeleteClip(const QString& trackId, const QString& clipId) {
+        Track* track = findTrack(trackId);
+        if (!track) return false;
+        const Clip* clip = track->findClip(clipId);
+        if (!clip) return false;
+        const Ticks removedStart = clip->timelineStart;
+        const Ticks removedDur = clip->timelineDuration();
+        if (!track->removeClip(clipId)) return false;
+        for (auto& c : track->clips()) {
+            if (c.timelineStart > removedStart) {
+                c.timelineStart = std::max<Ticks>(0, c.timelineStart - removedDur);
+            }
+        }
+        emit clipsChanged(trackId);
+        return true;
+    }
+
 signals:
     void tracksChanged();
     void clipsChanged(const QString& trackId);

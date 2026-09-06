@@ -41,8 +41,8 @@ PreviewWidget::PreviewWidget(QWidget* parent) : QWidget(parent) {
     relayoutOverlays();
 
     auto* transport = new QHBoxLayout();
-    m_playBtn = new QPushButton(tr("▶"), this);
-    m_playBtn->setFixedWidth(36);
+    m_playBtn = new QPushButton(tr("Phát"), this);
+    m_playBtn->setFixedWidth(80);
     connect(m_playBtn, &QPushButton::clicked, this, &PreviewWidget::playPauseClicked);
     transport->addWidget(m_playBtn);
 
@@ -106,7 +106,7 @@ void PreviewWidget::clearTransformOverlay() {
 }
 
 void PreviewWidget::setPlaying(bool playing) {
-    m_playBtn->setText(playing ? tr("⏸") : tr("▶"));
+    m_playBtn->setText(playing ? tr("Tạm dừng") : tr("Phát"));
 }
 
 void PreviewWidget::setAudioLevels(float left, float right) {

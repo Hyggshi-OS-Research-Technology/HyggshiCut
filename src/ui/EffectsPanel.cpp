@@ -336,7 +336,7 @@ QWidget* EffectsPanel::buildGenericEditor(Effect& effect) {
     }
 
     // Reset button
-    auto* resetBtn = new QPushButton(tr("↺ Đặt lại mặc định"), container);
+    auto* resetBtn = new QPushButton(tr("Đặt lại mặc định"), container);
     resetBtn->setStyleSheet("background-color: #33333c; color: #ddd; padding: 4px 10px; border-radius: 4px;");
     connect(resetBtn, &QPushButton::clicked, this, [this, &effect, info]() {
         if (!info) return;

@@ -154,6 +154,27 @@ void MainWindow::buildMenus() {
     editMenu->addAction(LTR("menu.edit.deleteTrack"), QKeySequence(Qt::SHIFT | Qt::Key_Delete), this, &MainWindow::onDeleteSelectedTrack);
 
     editMenu->addSeparator();
+    editMenu->addAction(tr("Sao chép clip"), QKeySequence::Copy, this, [this]() {
+        if (m_timelineWidget) m_timelineWidget->copySelectedClip();
+    });
+    editMenu->addAction(tr("Dán clip"), QKeySequence::Paste, this, [this]() {
+        if (m_timelineWidget) m_timelineWidget->pasteClip();
+    });
+    editMenu->addAction(tr("Nhân đôi clip"), QKeySequence(Qt::CTRL | Qt::Key_D), this, [this]() {
+        if (m_timelineWidget) m_timelineWidget->duplicateSelectedClip();
+    });
+    editMenu->addSeparator();
+    editMenu->addAction(tr("Xóa & dồn clip sau lại (Ripple delete)"), this, [this]() {
+        if (m_timelineWidget) m_timelineWidget->rippleDeleteSelectedClip();
+    });
+    editMenu->addAction(tr("Dịch clip trái 1 khung hình (,)"), this, [this]() {
+        if (m_timelineWidget) m_timelineWidget->nudgeSelectedClip(-m_timelineWidget->frameStepTicks());
+    });
+    editMenu->addAction(tr("Dịch clip phải 1 khung hình (.)"), this, [this]() {
+        if (m_timelineWidget) m_timelineWidget->nudgeSelectedClip(m_timelineWidget->frameStepTicks());
+    });
+
+    editMenu->addSeparator();
     editMenu->addAction(tr("Chọn clip đầu tiên"), QKeySequence(Qt::CTRL | Qt::Key_A), this, &MainWindow::onSelectFirstClip);
     editMenu->addAction(tr("Bỏ chọn tất cả"), QKeySequence(Qt::Key_Escape), this, &MainWindow::onDeselectAll);
 
@@ -177,6 +198,23 @@ void MainWindow::buildMenus() {
     m_viewMenu = menuBar()->addMenu(LTR("menu.view"));
     m_viewMenu->addAction(LTR("menu.view.zoomin"), QKeySequence::ZoomIn, this, &MainWindow::onZoomIn);
     m_viewMenu->addAction(LTR("menu.view.zoomout"), QKeySequence::ZoomOut, this, &MainWindow::onZoomOut);
+    m_viewMenu->addSeparator();
+
+    // Snap toggle: when on (default), clip edges/keyframes/playhead magnetize
+    // to each other during drags. Persisted and re-applied to every newly
+    // created TimelineWidget (see rebuildProjectDependentUi).
+    {
+        QSettings snapPrefs("HyggshiCut", "Preferences");
+        m_snapAction = m_viewMenu->addAction(tr("Bắt dính vào mép clip / playhead (Snap)"));
+        m_snapAction->setCheckable(true);
+        m_snapAction->setChecked(snapPrefs.value("timeline/snapEnabled", true).toBool());
+        connect(m_snapAction, &QAction::toggled, this, [this](bool on) {
+            QSettings p("HyggshiCut", "Preferences");
+            p.setValue("timeline/snapEnabled", on);
+            if (m_timelineWidget) m_timelineWidget->setSnapEnabled(on);
+        });
+    }
+
     m_viewMenu->addSeparator();
 
     auto* meterAct = m_viewMenu->addAction(tr("Đồng hồ đo âm lượng (VU Meter)"));
@@ -307,7 +345,7 @@ void MainWindow::buildToolbar() {
     const bool wasCutChecked = m_cutToolAction ? m_cutToolAction->isChecked() : false;
 
     m_cutToolAction = new QAction(LTR("menu.edit.cutTool"), this);
-    m_cutToolAction->setText("✂ " + LTR("menu.edit.cutTool"));
+    m_cutToolAction->setText(LTR("menu.edit.cutTool"));
     m_cutToolAction->setCheckable(true);
     m_cutToolAction->setChecked(wasCutChecked);
     connect(m_cutToolAction, &QAction::toggled, this, &MainWindow::onToggleCutTool);
@@ -428,6 +466,7 @@ void MainWindow::rebuildProjectDependentUi() {
 
     m_timelineWidget = new TimelineWidget(m_project.get(), this);
     m_timelineWidget->setCutToolActive(m_cutToolAction && m_cutToolAction->isChecked());
+    if (m_snapAction) m_timelineWidget->setSnapEnabled(m_snapAction->isChecked());
     auto* scrollArea = new TimelineScrollArea(m_timelineWidget, this);
     scrollArea->setWidget(m_timelineWidget);
     scrollArea->setWidgetResizable(false);

@@ -218,6 +218,10 @@ HyggshiCut -r -p podcast.hcproj -o podcast_audio.mp3 --preset audio-mp3
 | `S` | Split clip at playhead |
 | `Delete` / `Backspace` | Delete the selected clip |
 | `Shift + Delete` | Delete the selected layer/track |
+| `Ctrl + C` | Copy the selected clip |
+| `Ctrl + V` | Paste the copied clip at the playhead |
+| `Ctrl + D` | Duplicate the selected clip |
+| `,` / `.` | Nudge the selected clip left / right by one frame |
 | `←` / `→` | Move back / forward 1 frame |
 | `↑` / `↓` | Move back / forward 5 seconds |
 | `Ctrl + Z` | Undo |
@@ -229,6 +233,8 @@ HyggshiCut -r -p podcast.hcproj -o podcast_audio.mp3 --preset audio-mp3
 | `Ctrl + S` | Save project |
 | `Ctrl + Shift + S` | Save project as (Save As) |
 | `+` / `-` (or `Ctrl + Scroll`) | Zoom In / Zoom Out on the Timeline |
+
+> **Ripple delete** (remove a clip and close the gap) is available from the clip's right-click menu and the Edit menu.
 
 ---
 

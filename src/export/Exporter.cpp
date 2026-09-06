@@ -1,6 +1,7 @@
 #include "Exporter.h"
 #include "../audio/AudioFilterDesc.h"
 #include "../render/TextRenderer.h"
+#include "../core/SystemInfo.h"
 #include <QElapsedTimer>
 #include <QMap>
 #include <QRegularExpression>
@@ -360,39 +361,19 @@ static QString buildVideoEffectsFilterChain(const std::vector<Effect>& effects, 
 }
 
 bool lowMemoryExportMode() {
-#ifdef Q_OS_LINUX
-    // Read /proc/meminfo once and capture both MemAvailable and MemTotal.
-    QFile f(QStringLiteral("/proc/meminfo"));
-    if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        qulonglong availKb = 0, totalKb = 0;
-        while (!f.atEnd() && (availKb == 0 || totalKb == 0)) {
-            const QByteArray line = f.readLine();
-            const bool isAvail = line.startsWith("MemAvailable:");
-            const bool isTotal = line.startsWith("MemTotal:");
-            if (!isAvail && !isTotal) continue;
-            // Parse the first numeric token after the field name.
-            const int colon = line.indexOf(':');
-            if (colon < 0) continue;
-            const QByteArray rest = line.mid(colon + 1).trimmed();
-            const int sp = rest.indexOf(' ');
-            const QByteArray numPart = (sp > 0) ? rest.left(sp) : rest;
-            bool ok = false;
-            const qulonglong v = numPart.toULongLong(&ok);
-            if (ok && v > 0) {
-                if (isAvail) availKb = v;
-                else          totalKb = v;
-            }
-        }
-        const qulonglong avail = availKb * 1024ULL;
-        const qulonglong total = totalKb * 1024ULL;
-        // Conservative: trigger low-RAM mode when available < 12 GiB OR
-        // the machine has <= 16 GiB total (page-cache can hide real pressure).
-        if (avail > 0) {
-            return avail < (12ULL << 30)
-                || (total > 0 && total <= (16ULL << 30));
-        }
+    // Read /proc/meminfo once (via systeminfo) and capture both
+    // MemAvailable and MemTotal. This is the same signal the exporter uses
+    // to decide whether to drop to a single encode thread and cap
+    // allocations; it's reused here so the threshold lives in one place.
+    const uint64_t avail = systeminfo::availableMemoryBytes();
+    const uint64_t total = systeminfo::totalMemoryBytes();
+    // Conservative: trigger low-RAM mode when available < 12 GiB OR the
+    // machine has <= 16 GiB total (page-cache can hide real pressure).
+    if (avail > 0) {
+        return avail < (12ull << 30) || (total > 0 && total <= (16ull << 30));
     }
-#endif
+    // Non-Linux (or unreadable): fall back to total-RAM-only detection.
+    if (total > 0) return total <= (16ull << 30);
     return false;
 }
 
@@ -413,7 +394,8 @@ QStringList Exporter::buildFfmpegArgs(const Settings& s, QString* filterGraphDeb
     const int outH = std::max(s.height, 2);
     const bool lowMem = lowMemoryExportMode();
     if (lowMem) {
-        qWarning() << "[Exporter] Low-memory mode enabled automatically (MemAvailable < 6 GiB)";
+        qWarning() << "[Exporter] Low-memory mode enabled automatically"
+                   << "(available < 12 GiB or total <= 16 GiB)";
     }
 
     // --- collect unique input files, in first-seen order ---
@@ -852,10 +834,13 @@ QStringList Exporter::buildFfmpegArgs(const Settings& s, QString* filterGraphDeb
         // into a controlled FFmpeg allocation failure instead.
         args << "-max_alloc" << "134217728"; // 128 MiB
     } else {
-        // 2 global threads: one for demux/decode, one for encode.
-        // More than 2 creates large reference-frame pools inside libx264
-        // (one full 1080p YUV buffer per thread × 16 ref frames).
-        args << "-threads" << "2";
+        // 2 global threads on multi-core machines: one for demux/decode,
+        // one for encode. More than 2 creates large reference-frame pools
+        // inside libx264 (one full 1080p YUV buffer per thread × 16 ref
+        // frames). On single-core machines a single thread avoids pointless
+        // context-switch overhead between the decode and encode stages.
+        const int cores = std::max(1, systeminfo::cpuCoreCount());
+        args << "-threads" << (cores >= 2 ? "2" : "1");
     }
 
     // Video encoding flags

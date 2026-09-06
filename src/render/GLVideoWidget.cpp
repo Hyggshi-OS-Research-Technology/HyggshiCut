@@ -1061,7 +1061,7 @@ void GLVideoWidget::paintCpuFallback() {
 
     // Informational overlay badge
     p.save();
-    const QString badgeText = QStringLiteral("⚠️ CPU Fallback Mode (OpenGL 3.3 Unavailable)");
+    const QString badgeText = QStringLiteral("CPU Fallback Mode (OpenGL 3.3 Unavailable)");
     QFont badgeFont("Segoe UI", 9, QFont::Bold);
     p.setFont(badgeFont);
     QFontMetrics fm(badgeFont);

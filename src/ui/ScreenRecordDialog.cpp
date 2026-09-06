@@ -184,7 +184,7 @@ void ScreenRecordDialog::setupConfigPage() {
     connect(m_cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
     btnLayout->addWidget(m_cancelBtn);
 
-    m_startBtn = new QPushButton(QString("🔴 %1").arg(LTR("screenRecord.start")), m_configPage);
+    m_startBtn = new QPushButton(LTR("screenRecord.start"), m_configPage);
     m_startBtn->setStyleSheet(
         "QPushButton { background-color: #d32f2f; color: white; border-radius: 4px; padding: 8px 24px; font-weight: bold; font-size: 13px; }"
         "QPushButton:hover { background-color: #f44336; }"
@@ -212,7 +212,7 @@ void ScreenRecordDialog::setupRecordingPage() {
     m_timerLabel->setStyleSheet("font-size: 32px; font-weight: bold; font-family: monospace; color: #ffffff;");
     pageLayout->addWidget(m_timerLabel);
 
-    m_stopBtn = new QPushButton(QString("⏹ %1").arg(LTR("screenRecord.stop")), m_recordingPage);
+    m_stopBtn = new QPushButton(LTR("screenRecord.stop"), m_recordingPage);
     m_stopBtn->setMinimumWidth(180);
     m_stopBtn->setStyleSheet(
         "QPushButton { background-color: #e53935; color: white; border-radius: 6px; padding: 10px 24px; font-weight: bold; font-size: 14px; }"
@@ -228,7 +228,7 @@ void ScreenRecordDialog::setupSummaryPage() {
     pageLayout->setContentsMargins(20, 20, 20, 20);
     pageLayout->setSpacing(14);
 
-    m_summaryTitleLabel = new QLabel(QString("✅ %1").arg(LTR("screenRecord.successTitle")), m_summaryPage);
+    m_summaryTitleLabel = new QLabel(LTR("screenRecord.successTitle"), m_summaryPage);
     m_summaryTitleLabel->setStyleSheet("font-size: 16px; font-weight: bold; color: #4caf50;");
     pageLayout->addWidget(m_summaryTitleLabel);
 
@@ -298,7 +298,7 @@ void ScreenRecordDialog::onStartClicked() {
 
     m_stackedWidget->setCurrentIndex(1);
     if (settings.countdownSeconds > 0) {
-        m_recordingStatusLabel->setText(QString("⏱ %1...").arg(settings.countdownSeconds));
+        m_recordingStatusLabel->setText(QString("%1...").arg(settings.countdownSeconds));
         m_timerLabel->setText(QString::number(settings.countdownSeconds));
     } else {
         m_recordingStatusLabel->setText(LTR("screenRecord.recording"));
@@ -308,7 +308,7 @@ void ScreenRecordDialog::onStartClicked() {
 
 void ScreenRecordDialog::onCountdownTick(int remaining) {
     if (remaining > 0) {
-        m_recordingStatusLabel->setText(QString("⏱ %1...").arg(remaining));
+        m_recordingStatusLabel->setText(QString("%1...").arg(remaining));
         m_timerLabel->setText(QString::number(remaining));
     } else {
         m_recordingStatusLabel->setText(LTR("screenRecord.recording"));
