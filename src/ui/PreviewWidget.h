@@ -53,9 +53,12 @@ signals:
     // position the cursor crosses mid-drag) and resumes on scrubFinished.
     void scrubStarted();
     void scrubFinished();
+    // Emitted when the user first grabs a bounding-box handle/box (start of a
+    // drag gesture) — MainWindow pushes the undo snapshot here.
+    void previewTransformDragStarted();
     // Emitted while user drags a bounding-box handle (real-time).
     void previewTransformChanged(hc::Transform transform);
-    // Emitted when user releases (undo boundary).
+    // Emitted when user releases (final re-render).
     void previewTransformCommitted(hc::Transform transform);
 
 protected:

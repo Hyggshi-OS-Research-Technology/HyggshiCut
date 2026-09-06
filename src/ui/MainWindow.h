@@ -1,5 +1,6 @@
 #pragma once
 #include <QMainWindow>
+#include <QElapsedTimer>
 #include <memory>
 #include "../core/Project.h"
 #include "../cache/ProxyManager.h"
@@ -93,6 +94,7 @@ private slots:
     void updateUiTexts();
 
     // Bounding-box overlay signals from PreviewWidget.
+    void onPreviewTransformDragStarted();
     void onPreviewTransformChanged(hc::Transform transform);
     void onPreviewTransformCommitted(hc::Transform transform);
 
@@ -166,6 +168,13 @@ private:
     // PreviewWidget::scrubStarted/scrubFinished wiring in
     // rebuildProjectDependentUi).
     bool m_scrubWasPlaying = false;
+
+    // Throttles the preview re-render while the user drags the transform
+    // bounding box, so a fast drag doesn't fire one synchronous seek/decode
+    // per mouse-move and make the image lag behind (or "run away" from) the
+    // cursor. The overlay box still tracks the mouse 1:1; only the GL
+    // re-composite is rate-limited. Invalidated on drag start / release.
+    QElapsedTimer m_transformSeekThrottle;
 
 protected:
     void showEvent(QShowEvent* event) override;

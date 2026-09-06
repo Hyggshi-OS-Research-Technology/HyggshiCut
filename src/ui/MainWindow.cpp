@@ -517,6 +517,7 @@ void MainWindow::rebuildProjectDependentUi() {
         if (m_scrubWasPlaying && m_playback) m_playback->play();
         m_scrubWasPlaying = false;
     });
+    connect(m_preview, &PreviewWidget::previewTransformDragStarted, this, &MainWindow::onPreviewTransformDragStarted);
     connect(m_preview, &PreviewWidget::previewTransformChanged, this, &MainWindow::onPreviewTransformChanged);
     connect(m_preview, &PreviewWidget::previewTransformCommitted, this, &MainWindow::onPreviewTransformCommitted);
 
@@ -1316,6 +1317,17 @@ void MainWindow::onTransformEdited() {
     updateWindowTitle();
 }
 
+void MainWindow::onPreviewTransformDragStarted() {
+    // Snapshot the undo state once per drag gesture, BEFORE any transform is
+    // applied, so Undo restores the pre-drag position instead of the
+    // post-drag one.
+    if (m_project) {
+        m_project->pushUndoSnapshot();
+        updateUndoRedoActions();
+    }
+    m_transformSeekThrottle.invalidate(); // first move re-renders immediately
+}
+
 void MainWindow::onPreviewTransformChanged(hc::Transform transform) {
     if (!m_project || m_selectedTrackId.isEmpty() || m_selectedClipId.isEmpty()) return;
     Track* track = m_project->timeline().findTrack(m_selectedTrackId);
@@ -1335,16 +1347,27 @@ void MainWindow::onPreviewTransformChanged(hc::Transform transform) {
         m_transformPanel->setTransformExternal(transform);
     }
     m_modified = true;
-    if (m_playback) m_playback->seek(m_playback->currentTime());
+
+    // Throttle the preview re-composite during a bounding-box drag: the
+    // overlay box tracks the mouse instantly, but re-rendering the GL frame
+    // (and, for video, re-decoding) on every mouse-move used to stall the UI
+    // thread and make the image visibly lag behind — then lurch forward to
+    // catch up, looking like it "moved on its own". ~40 re-renders/s is enough
+    // to stay smooth without the stall.
+    if (m_playback &&
+        (!m_transformSeekThrottle.isValid() || m_transformSeekThrottle.elapsed() >= 25)) {
+        m_transformSeekThrottle.restart();
+        m_playback->seek(m_playback->currentTime());
+    }
     updateWindowTitle();
 }
 
 void MainWindow::onPreviewTransformCommitted(hc::Transform transform) {
     onPreviewTransformChanged(transform);
-    if (m_project) {
-        m_project->pushUndoSnapshot();
-        updateUndoRedoActions();
-    }
+    // Final, un-throttled re-render so the image lands exactly where the box
+    // is. (The undo snapshot was already pushed on drag start.)
+    m_transformSeekThrottle.invalidate();
+    if (m_playback) m_playback->seek(m_playback->currentTime());
 }
 
 void MainWindow::onTextEdited() {

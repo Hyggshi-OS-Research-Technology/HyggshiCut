@@ -335,6 +335,7 @@ void TransformOverlay::mousePressEvent(QMouseEvent* event) {
     m_startTransform  = m_transform;
     // Cache corner positions at drag start for corner-scale calcs.
     for (int i = 0; i < 4; ++i) m_startDragCorners[i] = m_corners[i];
+    emit dragStarted();
     event->accept();
 }
 

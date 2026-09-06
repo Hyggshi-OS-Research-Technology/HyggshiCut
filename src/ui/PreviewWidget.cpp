@@ -33,6 +33,8 @@ PreviewWidget::PreviewWidget(QWidget* parent) : QWidget(parent) {
 
     // Transform bounding-box overlay (on top of GL surface).
     m_transformOverlay = new TransformOverlay(m_gl);
+    connect(m_transformOverlay, &TransformOverlay::dragStarted,
+            this, &PreviewWidget::previewTransformDragStarted);
     connect(m_transformOverlay, &TransformOverlay::transformChanged,
             this, &PreviewWidget::previewTransformChanged);
     connect(m_transformOverlay, &TransformOverlay::transformCommitted,

@@ -38,9 +38,14 @@ public:
     bool hasSelection() const { return m_active; }
 
 signals:
+    // Emitted on the first mouse press that grabs a handle/box. Caller uses
+    // it as the undo-snapshot boundary for the whole drag gesture (pushing the
+    // snapshot here, rather than on release, so Undo restores the pre-drag
+    // state instead of the post-drag state).
+    void dragStarted();
     // Emitted while dragging — caller should write to clip + seek to re-render.
     void transformChanged(hc::Transform transform);
-    // Emitted on mouse release — caller should push an undo snapshot.
+    // Emitted on mouse release — caller should do a final re-render.
     void transformCommitted(hc::Transform transform);
 
 protected:
