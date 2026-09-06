@@ -799,6 +799,20 @@ bool MainWindow::openProjectFromFile(const QString& path, QString* errorOut) {
     if (!newProject->loadFromFile(path, errorOut)) {
         return false;
     }
+
+    // Thumbnails and audio waveforms are derived in-memory data produced at
+    // import time and are deliberately NOT stored in the .hcproj file (they
+    // would bloat it and go stale). loadFromFile() re-probes each asset's
+    // metadata but not its preview image, so without this pass the media
+    // pool would reopen with every image/video row blank. Regenerate them
+    // now so reopening a project looks exactly like the session it was
+    // saved in. Missing/unlinkable media is handled inside each helper
+    // (the decoder simply fails to open and we skip it).
+    for (const auto& asset : newProject->assets()) {
+        generateThumbnail(asset);
+        generateWaveform(asset);
+    }
+
     m_project = std::move(newProject);
     m_modified = false;
     rebuildProjectDependentUi();

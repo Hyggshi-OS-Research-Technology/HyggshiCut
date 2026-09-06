@@ -16,6 +16,7 @@ All notable changes to HyggshiCut are documented in this file.
 
 ### Bug Fixes
 - **HD thumbnail color accuracy**: Media-pool/timeline thumbnails now honor each source's BT.601 vs BT.709 matrix (previously always converted as BT.601, so HD thumbnails could differ slightly from Preview/Export).
+- **Media pool thumbnails after reopening a project**: image/video thumbnails (and audio waveforms) are derived in-memory at import time and are not stored in the `.hcproj`, so reopening a saved project used to show every media row with a blank preview. They are now regenerated when a project is opened, so the media pool looks exactly as it did when it was saved.
 - **Removed developer-machine paths**: dropped the hardcoded `/home/hyggshi/Downloads/...` language/plugin search entries, so bundled assets are only discovered from portable locations.
 - **Screen recorder cleanup**: a failed audio multiplex now removes the leftover raw-video temp file instead of leaking it in `/tmp`.
 - **Export low-memory log**: the "low-memory mode" message now reports the real trigger thresholds.
