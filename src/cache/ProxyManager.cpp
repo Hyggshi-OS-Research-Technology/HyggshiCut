@@ -27,8 +27,8 @@ ProxyManager::ProxyManager(QObject* parent) : QObject(parent) {
         m_cacheDir = (base.isEmpty() ? QDir::tempPath() : base) + "/HyggshiCut/proxies";
         QDir().mkpath(m_cacheDir);
     }
-    m_maxProxyWidth = pref.value("proxy/maxProxyWidth", 960).toInt();
-    if (m_maxProxyWidth < 160) m_maxProxyWidth = 960;
+    m_maxProxyWidth = pref.value("proxy/maxProxyWidth", 0).toInt(); // 0 = auto tiering
+    if (m_maxProxyWidth < 0) m_maxProxyWidth = 0;
     loadIndex();
 }
 
@@ -177,6 +177,22 @@ void ProxyManager::cancelAll() {
     }
 }
 
+int ProxyManager::effectiveProxyWidth(const MediaAssetPtr& asset) const {
+    const int srcW = asset ? std::max(0, asset->width) : 0;
+    if (m_maxProxyWidth > 0) {
+        // Explicit preset — the scale filter's min(width, iw) still prevents
+        // upscaling a source that is smaller than the preset.
+        return m_maxProxyWidth;
+    }
+    // AUTO tiering, keyed to source resolution so 4K/8K footage is edited
+    // through a light 720p proxy while HD footage uses a 480p proxy — both
+    // tiny in RAM/VRAM, which is the point on weak machines.
+    if (srcW <= 0) return 960;        // unknown resolution → balanced default
+    if (srcW >= 3840) return 1280;    // 4K / 8K → 720p
+    if (srcW >= 1920) return 854;     // 1080p / 1440p → 480p
+    return std::min(srcW, 854);       // SD / 720p → cap at 480p, never upscale
+}
+
 void ProxyManager::startNextInQueue() {
     if (m_queue.isEmpty()) {
         m_hasCurrentJob = false;
@@ -197,9 +213,10 @@ void ProxyManager::startNextInQueue() {
     // scrub lag on the original file comes from. -an drops audio entirely:
     // PlaybackController always pulls audio from the original file (see
     // audioDecoderFor), so the proxy never needs it.
+    const int targetWidth = effectiveProxyWidth(asset);
     QStringList args;
     args << "-y" << "-i" << asset->filePath
-         << "-vf" << QString("scale='min(%1,iw)':-2").arg(m_maxProxyWidth)
+         << "-vf" << QString("scale='min(%1,iw)':-2").arg(targetWidth)
          << "-c:v" << "libx264" << "-preset" << "ultrafast" << "-crf" << "20" << "-threads" << "1"
          << "-g" << "1" << "-sc_threshold" << "0" << "-pix_fmt" << "yuv420p"
          << "-an"

@@ -23,6 +23,7 @@ All notable changes to HyggshiCut are documented in this file.
 - **Adaptive decode threading**: `Decoder` now scales FFmpeg worker threads with the detected core count, and drops to slice-only threading (much lower RAM) on machines with ≤ 3 GiB.
 - **Adaptive cache budgets**: preview frame/texture caches are sized from detected physical RAM (≤ 3 GiB and ≤ 8 GiB tiers) instead of always using workstation-sized defaults.
 - **Adaptive export threads**: single-core machines render with one FFmpeg thread instead of two.
+- **Smart proxy resolution**: proxy transcoding now tiers by source size — 4K/8K footage gets a 720p proxy, HD gets a 480p proxy, and smaller sources are never upscaled (AUTO mode, the new default). Explicit 360p/480p/540p/720p presets remain available in Settings.
 
 ---
 

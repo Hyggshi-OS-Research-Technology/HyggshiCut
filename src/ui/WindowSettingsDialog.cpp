@@ -308,9 +308,11 @@ QWidget* WindowSettingsDialog::createProxyTab() {
     proxyForm->addRow(m_useProxyCheck);
 
     m_proxyResolutionCombo = new QComboBox(proxyGroup);
-    m_proxyResolutionCombo->addItem("360p (640x360) - Siêu nhanh", 640);
-    m_proxyResolutionCombo->addItem("540p (960x540) - Cân bằng (Mặc định)", 960);
+    m_proxyResolutionCombo->addItem("Tự động (4K/8K → 720p, HD → 480p) (Mặc định)", 0);
+    m_proxyResolutionCombo->addItem("480p (854x480) - Tiết kiệm RAM/VRAM", 854);
+    m_proxyResolutionCombo->addItem("540p (960x540) - Cân bằng", 960);
     m_proxyResolutionCombo->addItem("720p (1280x720) - Chất lượng cao", 1280);
+    m_proxyResolutionCombo->addItem("360p (640x360) - Siêu nhanh", 640);
     proxyForm->addRow(LTR("settings.proxy.resolution"), m_proxyResolutionCombo);
 
     auto* dirLayout = new QHBoxLayout();
@@ -440,7 +442,7 @@ void WindowSettingsDialog::loadValues() {
 
     // 5. Proxy
     m_useProxyCheck->setChecked(pref.value("proxy/useProxy", true).toBool());
-    const int width = pref.value("proxy/maxProxyWidth", 960).toInt();
+    const int width = pref.value("proxy/maxProxyWidth", 0).toInt();
     int wIdx = m_proxyResolutionCombo->findData(width);
     if (wIdx >= 0) m_proxyResolutionCombo->setCurrentIndex(wIdx);
     m_autoGenProxyCheck->setChecked(pref.value("proxy/autoGenerate", false).toBool());
