@@ -7,6 +7,7 @@
 #include "TextPanel.h"
 #include "AudioFilterPanel.h"
 #include "EffectsPanel.h"
+#include "PresetLibrary.h"
 #include "ProjectSettingsDialog.h"
 #include "ExportDialog.h"
 #include "SourcePreviewDialog.h"
@@ -36,6 +37,8 @@
 #include <QCloseEvent>
 #include <QFileInfo>
 #include <QTimer>
+#include <QDir>
+#include <QStandardPaths>
 #include <cmath>
 
 namespace hc {
@@ -475,6 +478,10 @@ void MainWindow::rebuildProjectDependentUi() {
     connect(m_mediaPool, &MediaPoolWidget::recordScreenRequested, this, &MainWindow::onScreenRecord);
     connect(m_project.get(), &Project::assetsChanged, m_mediaPool, &MediaPoolWidget::refresh);
     connect(m_mediaPool, &MediaPoolWidget::assetSelected, this, &MainWindow::onMediaAssetSelected);
+    connect(m_mediaPool, &MediaPoolWidget::textPresetRequested, this, &MainWindow::onTextPresetRequested);
+    connect(m_mediaPool, &MediaPoolWidget::effectPresetRequested, this, &MainWindow::onEffectPresetRequested);
+    connect(m_mediaPool, &MediaPoolWidget::transitionPresetRequested, this, &MainWindow::onTransitionPresetRequested);
+    connect(m_mediaPool, &MediaPoolWidget::soundPresetRequested, this, &MainWindow::onSoundPresetRequested);
     connect(m_mediaPool, &MediaPoolWidget::assetActivated, this, [this](QString assetId) {
         auto asset = m_project->findAsset(assetId);
         if (!asset) return;
@@ -543,7 +550,7 @@ void MainWindow::rebuildProjectDependentUi() {
     });
 
     // Proportional initial sizing for docks
-    resizeDocks({m_mediaDock, m_propertiesDock}, {260, 320}, Qt::Horizontal);
+    resizeDocks({m_mediaDock, m_propertiesDock}, {340, 320}, Qt::Horizontal);
     const int initTimelineH = std::clamp(height() * 35 / 100, 240, 420);
     resizeDocks({m_timelineDock}, {initTimelineH}, Qt::Vertical);
 
@@ -582,7 +589,7 @@ void MainWindow::showEvent(QShowEvent* event) {
                 resizeDocks({m_timelineDock}, {timelineH}, Qt::Vertical);
             }
             if (m_mediaDock && m_propertiesDock) {
-                resizeDocks({m_mediaDock, m_propertiesDock}, {260, 320}, Qt::Horizontal);
+                resizeDocks({m_mediaDock, m_propertiesDock}, {340, 320}, Qt::Horizontal);
             }
         });
     }
@@ -1026,6 +1033,210 @@ void MainWindow::onMediaAssetSelected(QString assetId) {
     }
 }
 
+// Places a clip referencing `asset` on a compatible (new or existing) track
+// at the current playhead, nudging forward past any overlapping clips.
+Clip* MainWindow::placeAssetClip(const MediaAssetPtr& asset, ClipType type) {
+    if (!m_project || !asset) return nullptr;
+
+    auto& tl = m_project->timeline();
+    const TrackType wantType = (type == ClipType::Audio) ? TrackType::Audio : TrackType::Visual;
+
+    Track* target = nullptr;
+    for (auto& track : tl.tracks()) {
+        if (track.type == wantType && !track.locked) {
+            target = &track;
+            break;
+        }
+    }
+    if (!target) {
+        const QString name = QString("%1 %2")
+            .arg(wantType == TrackType::Audio ? tr("Audio") : tr("Video"))
+            .arg(tl.tracks().size() + 1);
+        target = &tl.addTrack(wantType, name);
+    }
+
+    Clip clip;
+    clip.assetId = asset->id;
+    clip.type = type;
+    clip.sourceIn = 0;
+    clip.sourceOut = asset->duration > 0 ? asset->duration : secondsToTicks(5.0);
+
+    Ticks placedStart = std::max<Ticks>(0, m_playback ? m_playback->currentTime() : 0);
+    const Ticks duration = clip.timelineDuration();
+    const auto& existing = target->clips();
+    for (size_t guard = 0; guard < existing.size() + 1; ++guard) {
+        bool collided = false;
+        for (const auto& other : existing) {
+            if (placedStart < other.timelineEnd() && placedStart + duration > other.timelineStart) {
+                placedStart = other.timelineEnd();
+                collided = true;
+                break;
+            }
+        }
+        if (!collided) break;
+    }
+    clip.timelineStart = placedStart;
+    return target->addClip(std::move(clip));
+}
+
+void MainWindow::onTextPresetRequested(QString presetId) {
+    if (!m_project) return;
+    const TextPreset* preset = findTextPreset(presetId);
+    if (!preset) return;
+
+    m_project->pushUndoSnapshot();
+    auto& tl = m_project->timeline();
+    Track& textTrack = tl.addTrack(TrackType::Visual,
+        tr("Văn bản %1").arg(tl.tracks().size() + 1));
+
+    Clip clip;
+    clip.type = ClipType::Text;
+    clip.displayLabel = preset->sample;
+    clip.textFontSize = preset->fontSize;
+    clip.textFontColor = preset->fontColor;
+    clip.textBold = preset->bold;
+    clip.textAlignment = preset->alignment;
+    clip.textOutlineEnabled = preset->outlineEnabled;
+    clip.textOutlineColor = preset->outlineColor;
+    clip.textOutlineWidth = preset->outlineWidth;
+    clip.textBackgroundEnabled = preset->backgroundEnabled;
+    clip.textBackgroundColor = preset->backgroundColor;
+    clip.textPadding = preset->padding;
+    clip.sourceIn = 0;
+    clip.sourceOut = secondsToTicks(5.0);
+    clip.timelineStart = std::max<Ticks>(0, m_playback ? m_playback->currentTime() : 0);
+
+    Clip* added = textTrack.addClip(std::move(clip));
+
+    onTimelineEdited();
+    if (added && m_timelineWidget) {
+        m_timelineWidget->selectClip(textTrack.id, added->id);
+    }
+    if (m_playback) m_playback->seek(added ? added->timelineStart : 0);
+    statusBar()->showMessage(tr("Đã thêm văn bản: %1").arg(LTR(preset->nameKey)), 2500);
+}
+
+void MainWindow::onEffectPresetRequested(QString effectTypeId) {
+    if (!m_project) return;
+
+    Track* track = m_project->timeline().findTrack(m_selectedTrackId);
+    Clip* clip = track ? track->findClip(m_selectedClipId) : nullptr;
+    if (!clip || (clip->type != ClipType::Video && clip->type != ClipType::Image && clip->type != ClipType::Text)) {
+        statusBar()->showMessage(tr("Chọn một clip video/ảnh/chữ trên timeline trước."), 3000);
+        return;
+    }
+
+    m_project->pushUndoSnapshot();
+    clip->effects.push_back(EffectsPanel::buildEffect(effectTypeId));
+    m_project->timeline().notifyClipChanged(m_selectedTrackId);
+
+    // Show the newly added effect in the Inspector's Effects tab.
+    if (m_effectsPanel) m_effectsPanel->setClip(clip);
+    if (m_propertiesPanel) m_propertiesPanel->showEffectsEditor();
+
+    onEffectsEdited();
+    statusBar()->showMessage(tr("Đã thêm hiệu ứng: %1").arg(EffectsPanel::effectTypeName(effectTypeId)), 2500);
+}
+
+void MainWindow::onTransitionPresetRequested(QString transitionId) {
+    if (!m_project) return;
+    const TransitionPreset* preset = findTransitionPreset(transitionId);
+    if (!preset) return;
+
+    Track* track = m_project->timeline().findTrack(m_selectedTrackId);
+    if (!track || track->type != TrackType::Visual) {
+        statusBar()->showMessage(tr("Chọn clip video/ảnh trên track hình trước."), 3000);
+        return;
+    }
+    Clip* cur = track->findClip(m_selectedClipId);
+    if (!cur) {
+        statusBar()->showMessage(tr("Chọn clip trên timeline để thêm transition trước clip đó."), 3000);
+        return;
+    }
+
+    // Previous clip on the same track (in time order).
+    const Clip* prev = nullptr;
+    for (const auto& other : track->clips()) {
+        if (other.id == cur->id) continue;
+        if (other.timelineEnd() <= cur->timelineStart) {
+            if (!prev || other.timelineEnd() > prev->timelineEnd()) prev = &other;
+        }
+    }
+
+    if (cur->transitionInDuration > 0) {
+        // Already has a transition: keep its overlap/duration, just restyle.
+        m_project->pushUndoSnapshot();
+        cur->transitionType = preset->type;
+        cur->transitionDirection = preset->direction;
+        cur->transitionColor = preset->color;
+    } else if (prev) {
+        m_project->pushUndoSnapshot();
+        constexpr Ticks kDefaultTransitionTicks = 500'000; // 0.5s
+        const Ticks maxByPrev = prev->timelineDuration() / 2;
+        const Ticks maxByCur = cur->timelineDuration() / 2;
+        const Ticks duration = std::clamp<Ticks>(kDefaultTransitionTicks, 1,
+            std::max<Ticks>(1, std::min(maxByPrev, maxByCur)));
+        cur->transitionInDuration = duration;
+        cur->timelineStart -= duration;
+        cur->transitionType = preset->type;
+        cur->transitionDirection = preset->direction;
+        cur->transitionColor = preset->color;
+    } else {
+        statusBar()->showMessage(tr("Transition cần một clip liền trước trên cùng track."), 3000);
+        return;
+    }
+
+    m_project->timeline().notifyClipChanged(m_selectedTrackId);
+    onTimelineEdited();
+    statusBar()->showMessage(tr("Đã áp dụng transition: %1").arg(LTR(preset->nameKey)), 2500);
+}
+
+void MainWindow::onSoundPresetRequested(QString sfxId) {
+    if (!m_project) return;
+    const SfxPreset* sfx = findSfxPreset(sfxId);
+    if (!sfx) return;
+
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation)
+        + QStringLiteral("/hyggshicut/sfx");
+    const QString path = ensureSfxFile(*sfx, dir);
+    if (path.isEmpty()) {
+        statusBar()->showMessage(tr("Không tạo được file âm thanh mẫu."), 3000);
+        return;
+    }
+
+    // Reuse an already-imported copy if we generated it before.
+    MediaAssetPtr asset;
+    for (const auto& a : m_project->assets()) {
+        if (a->filePath == path) { asset = a; break; }
+    }
+    if (!asset) {
+        QString err;
+        asset = m_project->importMedia(path, &err);
+        if (!asset) {
+            statusBar()->showMessage(tr("Không nhập được âm thanh: %1").arg(err), 4000);
+            return;
+        }
+        generateThumbnail(asset);   // no-op for audio
+        generateWaveform(asset);
+        m_mediaPool->refresh();
+        m_modified = true;
+        updateWindowTitle();
+    }
+
+    m_project->pushUndoSnapshot();
+    Clip* added = placeAssetClip(asset, ClipType::Audio);
+    if (added && m_timelineWidget) {
+        QString trackId;
+        for (auto& track : m_project->timeline().tracks()) {
+            if (track.findClip(added->id)) { trackId = track.id; break; }
+        }
+        if (!trackId.isEmpty()) m_timelineWidget->selectClip(trackId, added->id);
+    }
+    onTimelineEdited();
+    if (m_playback) m_playback->seek(added ? added->timelineStart : 0);
+    statusBar()->showMessage(tr("Đã thêm âm thanh: %1").arg(LTR(sfx->nameKey)), 2500);
+}
+
 void MainWindow::onTimelineEdited() {
     m_modified = true;
     m_timelineWidget->refresh();
@@ -1412,7 +1623,7 @@ void MainWindow::resetDockLayout() {
 
     const int timelineH = std::clamp(height() * 35 / 100, 240, 450);
     resizeDocks({m_timelineDock}, {timelineH}, Qt::Vertical);
-    resizeDocks({m_mediaDock, m_propertiesDock}, {260, 320}, Qt::Horizontal);
+    resizeDocks({m_mediaDock, m_propertiesDock}, {340, 320}, Qt::Horizontal);
 }
 
 void MainWindow::closeEvent(QCloseEvent* event) {

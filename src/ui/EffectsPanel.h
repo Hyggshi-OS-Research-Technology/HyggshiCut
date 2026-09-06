@@ -1,5 +1,6 @@
 #pragma once
 #include <QWidget>
+#include <QStringList>
 #include <QScrollArea>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -26,6 +27,13 @@ public:
     // Load the effects from a clip into the UI.
     // Pass nullptr to clear/disable the panel.
     void setClip(Clip* clip);
+
+    // --- Static preset helpers (shared with the Explorer's Effects page
+    // and MainWindow so there is exactly ONE list of effect types and ONE
+    // way to build an effect with its default parameters). ---
+    static QStringList effectTypeIds();
+    static QString effectTypeName(const QString& typeId);
+    static Effect buildEffect(const QString& typeId);
 
 public slots:
     void retranslateUi();

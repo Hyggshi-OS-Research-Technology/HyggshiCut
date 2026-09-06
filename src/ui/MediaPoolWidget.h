@@ -4,6 +4,8 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QLineEdit>
+#include <QStackedWidget>
+#include <QVector>
 #include "../core/Project.h"
 #include "../cache/ProxyManager.h"
 
@@ -21,11 +23,16 @@ protected:
     QMimeData* mimeData(const QList<QListWidgetItem*>& items) const override;
 };
 
-// Left-dock "Explorer" panel: shows every imported MediaAsset as a thumbnail
-// grid card (with name + type + metadata), offers a live search filter, lets
-// the user trigger Import (file dialog handled by MainWindow), and acts as a
-// drag source for adding clips to the timeline. Selecting a card also reports
-// the asset id via assetSelected() so the Inspector can show its properties.
+// Left-dock "Explorer" panel, laid out CapCut-style: a vertical category rail
+// (Media / Sounds / Text / Effects / Transitions) next to a stacked content
+// area. Media shows the imported assets as a searchable thumbnail grid; the
+// other categories are preset libraries:
+//   - Sounds: synthesized sound effects + already-imported audio assets.
+//   - Text:    styled text presets (double-click adds a Text clip).
+//   - Effects: visual effect presets (double-click applies to the selection).
+//   - Transitions: transition presets (double-click applies to the selection).
+// Selection of an asset still reports assetSelected() so the Inspector can
+// show its file properties.
 class MediaPoolWidget : public QWidget {
     Q_OBJECT
 public:
@@ -45,15 +52,45 @@ signals:
     void assetActivated(QString assetId); // double-click, e.g. to load into preview
     void assetSelected(QString assetId);  // single-click selection (empty = none)
 
+    // Preset library requests — MainWindow performs the actual edit.
+    void soundPresetRequested(QString sfxId);
+    void textPresetRequested(QString presetId);
+    void effectPresetRequested(QString effectTypeId);
+    void transitionPresetRequested(QString transitionId);
+
 private:
+    void buildCategoryRail();
+    void buildMediaPage();
+    void buildSoundsPage();
+    void populateSoundsPage();
+    void populatePresetPages();
+    QWidget* makeCardList(QListWidget** outList);
+
     Project* m_project;
     ProxyManager* m_proxyManager; // not owned, may be nullptr
-    QLabel* m_headerLabel = nullptr;
+
+    QListWidget* m_categories = nullptr;
+    QStackedWidget* m_stack = nullptr;
+
+    // Media page
+    QLabel* m_mediaHeader = nullptr;
     QLineEdit* m_searchEdit = nullptr;
     QPushButton* m_importBtn = nullptr;
     QPushButton* m_recordBtn = nullptr;
-    AssetListWidget* m_list;
-    QLabel* m_countLabel = nullptr;
+    AssetListWidget* m_mediaList = nullptr;
+    QLabel* m_mediaCount = nullptr;
+
+    // Sounds page
+    QPushButton* m_importAudioBtn = nullptr;
+    QLabel* m_soundHint = nullptr;
+    AssetListWidget* m_soundsList = nullptr;
+
+    // Preset pages
+    QVector<QLabel*> m_presetHints; // one hint label per preset page, in page order
+    QListWidget* m_textList = nullptr;
+    QListWidget* m_effectsList = nullptr;
+    QListWidget* m_transitionsList = nullptr;
+
     QString m_filter; // current search text (lowercased for matching)
 };
 

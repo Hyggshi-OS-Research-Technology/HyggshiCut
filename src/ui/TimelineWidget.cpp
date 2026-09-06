@@ -1800,6 +1800,13 @@ void TimelineWidget::clearSelection() {
     }
 }
 
+void TimelineWidget::selectClip(const QString& trackId, const QString& clipId) {
+    m_selectedTrackId = trackId;
+    m_selectedClipId = clipId;
+    emit selectionChanged(clipId, trackId);
+    update();
+}
+
 void TimelineWidget::deleteSelectedClip() {
     if (!m_project || m_selectedClipId.isEmpty()) return;
     Track* track = m_project->timeline().findTrack(m_selectedTrackId);

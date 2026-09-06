@@ -232,6 +232,10 @@ void PropertiesPanel::setCurrentTime(Ticks t) {
     m_transform->setCurrentTime(t);
 }
 
+void PropertiesPanel::showEffectsEditor() {
+    m_tabs->setCurrentIndex(m_effectsTab);
+}
+
 void PropertiesPanel::setTransformExternal(const Transform& t) {
     m_transform->setTransformExternal(t);
 }

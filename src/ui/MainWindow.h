@@ -62,6 +62,11 @@ private slots:
     void onDeselectAll();
     void onRelinkMissingMedia();
     void onMediaAssetSelected(QString assetId);
+    // Explorer preset library handlers (CapCut-style left rail).
+    void onTextPresetRequested(QString presetId);
+    void onEffectPresetRequested(QString effectTypeId);
+    void onTransitionPresetRequested(QString transitionId);
+    void onSoundPresetRequested(QString sfxId);
     void onTimelineEdited();
     void onSeekRequested(hc::Ticks t);
     void onTimelineSelectionChanged(QString clipId, QString trackId);
@@ -107,6 +112,10 @@ private:
     void generateThumbnail(const MediaAssetPtr& asset);
     void generateWaveform(const MediaAssetPtr& asset);
     void importFileAndAddToProject(const QString& filePath, bool addToTimeline = false);
+    // Places a clip for `asset` on a compatible (new or existing) track at the
+    // playhead, nudging forward past any overlapping clips. Returns the added
+    // clip, or nullptr on failure.
+    Clip* placeAssetClip(const MediaAssetPtr& asset, ClipType type);
     void applyWindowSettings(const hc::WindowSettings& settings);
     void resetDockLayout();
     bool maybeSaveUnsavedChanges();

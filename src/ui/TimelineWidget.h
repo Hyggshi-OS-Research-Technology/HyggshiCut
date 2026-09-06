@@ -77,6 +77,10 @@ public slots:
     void nudgeSelectedClip(Ticks deltaTicks);
     void setCutToolActive(bool active);
     void clearSelection();
+    // Programmatically select a clip (used when the Explorer adds a clip and
+    // we want the Inspector to bind to it right away). Emits selectionChanged
+    // and repaints, exactly like a click on the clip would.
+    void selectClip(const QString& trackId, const QString& clipId);
     Ticks pixelToTime(int x) const;
     int timeToPixel(Ticks t) const;
 

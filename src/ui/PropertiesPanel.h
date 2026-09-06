@@ -38,6 +38,10 @@ public:
     void setCurrentTime(Ticks t);
     void setTransformExternal(const Transform& t);
 
+    // Switches the tab widget to the Effects editor (used when the Explorer
+    // applies an effect to the selected clip so the change is visible).
+    void showEffectsEditor();
+
     TransformPanel* transformPanel() const { return m_transform; }
     TextPanel* textPanel() const { return m_text; }
     AudioFilterPanel* audioFilterPanel() const { return m_audio; }
