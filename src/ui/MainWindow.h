@@ -17,6 +17,7 @@ class MediaPoolWidget;
 class TimelineWidget;
 class PreviewWidget;
 class PlaybackController;
+class PropertiesPanel;
 class TransformPanel;
 class TextPanel;
 class AudioFilterPanel;
@@ -60,6 +61,7 @@ private slots:
     void onSelectFirstClip();
     void onDeselectAll();
     void onRelinkMissingMedia();
+    void onMediaAssetSelected(QString assetId);
     void onTimelineEdited();
     void onSeekRequested(hc::Ticks t);
     void onTimelineSelectionChanged(QString clipId, QString trackId);
@@ -93,11 +95,11 @@ private:
     void buildMenus();
     void buildToolbar();
     void buildDocks();
-    // Creates the six QDockWidget shells (with their tab relationships) once
-    // for the whole window session. rebuildProjectDependentUi() only swaps
-    // each dock's *content* afterwards — deleting and re-adding tabified
-    // docks on every rebuild leaves a stale tab layout that crashes inside
-    // Qt's dock layout (QWidget::setVisible -> QMainWindow::tabifyDockWidget).
+    // Creates the three QDockWidget shells (Media, Timeline, Properties)
+    // once for the whole window session. rebuildProjectDependentUi() only
+    // swaps each dock's *content* afterwards — deleting and re-adding docks
+    // on every rebuild leaves a stale tab layout that crashes inside Qt's
+    // dock layout (QWidget::setVisible -> QMainWindow::tabifyDockWidget).
     void ensureDocks();
     QMenu* buildAddLayerMenu();
     void rebuildProjectDependentUi();
@@ -121,16 +123,15 @@ private:
     MediaPoolWidget* m_mediaPool = nullptr;
     TimelineWidget* m_timelineWidget = nullptr;
     PreviewWidget* m_preview = nullptr;
+    PropertiesPanel* m_propertiesPanel = nullptr;
+    // Non-owning pointers into m_propertiesPanel (see PropertiesPanel.h).
     TransformPanel* m_transformPanel = nullptr;
     TextPanel* m_textPanel = nullptr;
     AudioFilterPanel* m_audioFilterPanel = nullptr;
     EffectsPanel* m_effectsPanel = nullptr;
     QDockWidget* m_mediaDock = nullptr;
     QDockWidget* m_timelineDock = nullptr;
-    QDockWidget* m_transformDock = nullptr;
-    QDockWidget* m_textDock = nullptr;
-    QDockWidget* m_audioFilterDock = nullptr;
-    QDockWidget* m_effectsDock = nullptr;
+    QDockWidget* m_propertiesDock = nullptr;
     QMenu* m_viewMenu = nullptr;
     QToolBar* m_mainToolbar = nullptr;
     QAction* m_cutToolAction = nullptr;
@@ -145,6 +146,11 @@ private:
     // Currently selected visual clip (kept for bounding-box overlay updates).
     QString m_selectedTrackId;
     QString m_selectedClipId;
+
+    // Last asset the Explorer reported as selected; used to ignore redundant
+    // re-selection (e.g. when proxy status changes refresh the pool) so the
+    // Inspector tab isn't yanked away while the user is editing a clip.
+    QString m_lastSelectedAssetId;
 
 protected:
     void showEvent(QShowEvent* event) override;

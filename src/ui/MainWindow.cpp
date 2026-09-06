@@ -2,6 +2,7 @@
 #include "MediaPoolWidget.h"
 #include "TimelineWidget.h"
 #include "PreviewWidget.h"
+#include "PropertiesPanel.h"
 #include "TransformPanel.h"
 #include "TextPanel.h"
 #include "AudioFilterPanel.h"
@@ -115,14 +116,8 @@ MainWindow::~MainWindow() {
     if (m_mediaPool) {
         m_mediaPool->setProject(nullptr);
     }
-    if (m_transformPanel) {
-        m_transformPanel->setSelectedClip(nullptr, {}, {});
-    }
-    if (m_textPanel) {
-        m_textPanel->setSelectedClip(nullptr, {}, {});
-    }
-    if (m_audioFilterPanel) {
-        m_audioFilterPanel->setSelectedClip(nullptr, {}, {});
+    if (m_propertiesPanel) {
+        m_propertiesPanel->clearClipSelection();
     }
 }
 
@@ -391,10 +386,9 @@ QMenu* MainWindow::buildAddLayerMenu() {
 void MainWindow::ensureDocks() {
     // Docks are created a single time for the whole window and then kept
     // alive; only their contents are swapped by rebuildProjectDependentUi().
-    // This is deliberate: deleting and re-adding *tabified* QDockWidgets on
-    // every project (re)build leaves a stale tab layout inside QMainWindow
-    // that crashes in Qt's own dock code on some setups (a hard segfault in
-    // QWidget::setVisible <- QMainWindow::tabifyDockWidget).
+    // This is deliberate: deleting and re-adding QDockWidgets on every
+    // project (re)build can leave a stale layout inside QMainWindow that
+    // crashes in Qt's own dock code on some setups.
     if (m_mediaDock) return;
 
     setCorner(Qt::BottomLeftCorner, Qt::BottomDockWidgetArea);
@@ -412,28 +406,13 @@ void MainWindow::ensureDocks() {
     m_timelineDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
     addDockWidget(Qt::BottomDockWidgetArea, m_timelineDock);
 
-    m_transformDock = new QDockWidget(LTR("dock.transform"), this);
-    m_transformDock->setObjectName("TransformDock");
-    m_transformDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
-    addDockWidget(Qt::RightDockWidgetArea, m_transformDock);
-
-    m_textDock = new QDockWidget(LTR("dock.text"), this);
-    m_textDock->setObjectName("TextDock");
-    m_textDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
-    addDockWidget(Qt::RightDockWidgetArea, m_textDock);
-    tabifyDockWidget(m_transformDock, m_textDock);
-
-    m_audioFilterDock = new QDockWidget(LTR("dock.audioFilter"), this);
-    m_audioFilterDock->setObjectName("AudioFilterDock");
-    m_audioFilterDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
-    addDockWidget(Qt::RightDockWidgetArea, m_audioFilterDock);
-    tabifyDockWidget(m_textDock, m_audioFilterDock);
-
-    m_effectsDock = new QDockWidget(LTR("dock.effects"), this);
-    m_effectsDock->setObjectName("EffectsDock");
-    m_effectsDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
-    addDockWidget(Qt::RightDockWidgetArea, m_effectsDock);
-    tabifyDockWidget(m_audioFilterDock, m_effectsDock);
+    // Single right-hand Inspector dock. Its content (PropertiesPanel) hosts
+    // the tabbed Transform / Effects / Text / Audio editors plus the Media
+    // info page, replacing the four previously tabified docks.
+    m_propertiesDock = new QDockWidget(LTR("dock.properties"), this);
+    m_propertiesDock->setObjectName("PropertiesDock");
+    m_propertiesDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
+    addDockWidget(Qt::RightDockWidgetArea, m_propertiesDock);
 }
 void MainWindow::rebuildProjectDependentUi() {
     // PlaybackController owns a raw Project* because it is tightly coupled to
@@ -453,24 +432,13 @@ void MainWindow::rebuildProjectDependentUi() {
     // newly opened project.
     m_selectedTrackId.clear();
     m_selectedClipId.clear();
+    m_lastSelectedAssetId.clear();
 
-    // The six QDockWidget shells are created once (ensureDocks) and reused
+    // The three QDockWidget shells are created once (ensureDocks) and reused
     // for the whole window session. Here we only (re)create each dock's
     // content for the (possibly new) Project and bind it into the existing
-    // dock — we do NOT remove/delete/re-add the docks, because tabbed docks
-    // torn down repeatedly crash Qt's dock layout (see ensureDocks comment).
+    // dock — we do NOT remove/delete/re-add the docks (see ensureDocks).
     ensureDocks();
-
-    auto makeScrollWrapper = [](QWidget* widget, QWidget* parent) -> QScrollArea* {
-        auto* scroll = new QScrollArea(parent);
-        scroll->setWidget(widget);
-        scroll->setWidgetResizable(true);
-        scroll->setFrameShape(QFrame::NoFrame);
-        scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-        scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-        scroll->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-        return scroll;
-    };
 
     m_mediaPool = new MediaPoolWidget(m_project.get(), m_proxyManager.get(), this);
     m_mediaDock->setWidget(m_mediaPool);
@@ -484,24 +452,19 @@ void MainWindow::rebuildProjectDependentUi() {
     scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     m_timelineDock->setWidget(scrollArea);
 
-    m_transformPanel = new TransformPanel(this);
-    m_transformDock->setWidget(makeScrollWrapper(m_transformPanel, this));
+    m_propertiesPanel = new PropertiesPanel(this);
+    m_propertiesDock->setWidget(m_propertiesPanel);
+
+    // Non-owning pointers into the Inspector's sub-panels, kept so the
+    // existing signal wiring and per-frame update calls below are unchanged.
+    m_transformPanel = m_propertiesPanel->transformPanel();
+    m_textPanel = m_propertiesPanel->textPanel();
+    m_audioFilterPanel = m_propertiesPanel->audioFilterPanel();
+    m_effectsPanel = m_propertiesPanel->effectsPanel();
 
     connect(m_transformPanel, &TransformPanel::transformEdited, this, &MainWindow::onTransformEdited);
-
-    m_textPanel = new TextPanel(this);
-    m_textDock->setWidget(makeScrollWrapper(m_textPanel, this));
-
     connect(m_textPanel, &TextPanel::textEdited, this, &MainWindow::onTextEdited);
-
-    m_audioFilterPanel = new AudioFilterPanel(this);
-    m_audioFilterDock->setWidget(makeScrollWrapper(m_audioFilterPanel, this));
-
     connect(m_audioFilterPanel, &AudioFilterPanel::audioFiltersEdited, this, &MainWindow::onAudioFiltersEdited);
-
-    m_effectsPanel = new EffectsPanel(this);
-    m_effectsDock->setWidget(makeScrollWrapper(m_effectsPanel, this));
-
     connect(m_effectsPanel, &EffectsPanel::effectsEdited, this, &MainWindow::onEffectsEdited);
 
     m_playback = std::make_unique<PlaybackController>(m_project.get(), m_preview->glWidget(),
@@ -511,6 +474,7 @@ void MainWindow::rebuildProjectDependentUi() {
     connect(m_mediaPool, &MediaPoolWidget::importRequested, this, &MainWindow::onImportRequested);
     connect(m_mediaPool, &MediaPoolWidget::recordScreenRequested, this, &MainWindow::onScreenRecord);
     connect(m_project.get(), &Project::assetsChanged, m_mediaPool, &MediaPoolWidget::refresh);
+    connect(m_mediaPool, &MediaPoolWidget::assetSelected, this, &MainWindow::onMediaAssetSelected);
     connect(m_mediaPool, &MediaPoolWidget::assetActivated, this, [this](QString assetId) {
         auto asset = m_project->findAsset(assetId);
         if (!asset) return;
@@ -566,7 +530,7 @@ void MainWindow::rebuildProjectDependentUi() {
     });
 
     // Proportional initial sizing for docks
-    resizeDocks({m_mediaDock, m_transformDock}, {260, 320}, Qt::Horizontal);
+    resizeDocks({m_mediaDock, m_propertiesDock}, {260, 320}, Qt::Horizontal);
     const int initTimelineH = std::clamp(height() * 35 / 100, 240, 420);
     resizeDocks({m_timelineDock}, {initTimelineH}, Qt::Vertical);
 
@@ -604,8 +568,8 @@ void MainWindow::showEvent(QShowEvent* event) {
                 const int timelineH = std::clamp(height() * 35 / 100, 240, 450);
                 resizeDocks({m_timelineDock}, {timelineH}, Qt::Vertical);
             }
-            if (m_mediaDock && m_transformDock) {
-                resizeDocks({m_mediaDock, m_transformDock}, {260, 320}, Qt::Horizontal);
+            if (m_mediaDock && m_propertiesDock) {
+                resizeDocks({m_mediaDock, m_propertiesDock}, {260, 320}, Qt::Horizontal);
             }
         });
     }
@@ -984,9 +948,7 @@ void MainWindow::onDeselectAll() {
     m_selectedTrackId.clear();
     m_selectedClipId.clear();
     if (m_preview) m_preview->clearTransformOverlay();
-    if (m_transformPanel) m_transformPanel->setSelectedClip(m_project.get(), {}, {});
-    if (m_textPanel) m_textPanel->setSelectedClip(m_project.get(), {}, {});
-    if (m_audioFilterPanel) m_audioFilterPanel->setSelectedClip(m_project.get(), {}, {});
+    if (m_propertiesPanel) m_propertiesPanel->clearClipSelection();
     statusBar()->showMessage(tr("Đã bỏ chọn tất cả."), 2000);
 }
 
@@ -1033,6 +995,24 @@ void MainWindow::onRelinkMissingMedia() {
     statusBar()->showMessage(tr("Đã cập nhật liên kết media."), 2500);
 }
 
+void MainWindow::onMediaAssetSelected(QString assetId) {
+    // Ignore re-selection of the same asset: proxy status changes (and other
+    // pool refreshes) restore the current item, which re-emits this signal.
+    // Without this guard the Inspector would jump back to the Media tab and
+    // steal focus while the user is mid-edit on a clip.
+    if (assetId == m_lastSelectedAssetId) return;
+    m_lastSelectedAssetId = assetId;
+
+    if (assetId.isEmpty() || !m_project) {
+        if (m_propertiesPanel) m_propertiesPanel->clearAssetInfo();
+        return;
+    }
+    auto asset = m_project->findAsset(assetId);
+    if (m_propertiesPanel) {
+        m_propertiesPanel->showAssetInfo(asset);
+    }
+}
+
 void MainWindow::onTimelineEdited() {
     m_modified = true;
     m_timelineWidget->refresh();
@@ -1065,28 +1045,14 @@ void MainWindow::onTimelineSelectionChanged(QString clipId, QString trackId) {
         if (track) clip = track->findClip(clipId);
     }
 
-    if (m_transformPanel) {
-        m_transformPanel->setSelectedClip(m_project.get(), trackId, clipId);
-        if (m_playback) m_transformPanel->setCurrentTime(m_playback->currentTime());
+    // Route the selection into the unified Inspector (which forwards it to
+    // the Transform / Effects / Text / Audio editors and switches to the tab
+    // that is relevant for the clip's type).
+    if (m_propertiesPanel) {
+        m_propertiesPanel->setSelectedClip(m_project.get(), trackId, clipId);
     }
-    if (m_audioFilterPanel) {
-        m_audioFilterPanel->setSelectedClip(m_project.get(), trackId, clipId);
-    }
-    if (m_effectsPanel) {
-        m_effectsPanel->setClip(clip);
-    }
-    if (m_textPanel) {
-        m_textPanel->setSelectedClip(m_project.get(), trackId, clipId);
-    }
-
-    if (clip) {
-        if (clip->type == ClipType::Audio && m_audioFilterDock) {
-            m_audioFilterDock->raise();
-        } else if (clip->type == ClipType::Text && m_textDock) {
-            m_textDock->raise();
-        } else if ((clip->type == ClipType::Video || clip->type == ClipType::Image) && m_transformDock) {
-            m_transformDock->raise();
-        }
+    if (m_transformPanel && m_playback) {
+        m_transformPanel->setCurrentTime(m_playback->currentTime());
     }
 
     if (m_preview) {
@@ -1346,15 +1312,9 @@ void MainWindow::updateUiTexts() {
     buildToolbar();
     if (m_mediaDock) m_mediaDock->setWindowTitle(LTR("dock.mediaPool"));
     if (m_timelineDock) m_timelineDock->setWindowTitle(LTR("dock.timeline"));
-    if (m_transformDock) m_transformDock->setWindowTitle(LTR("dock.transform"));
-    if (m_textDock) m_textDock->setWindowTitle(LTR("dock.text"));
-    if (m_audioFilterDock) m_audioFilterDock->setWindowTitle(LTR("dock.audioFilter"));
-    if (m_effectsDock) m_effectsDock->setWindowTitle(LTR("dock.effects"));
+    if (m_propertiesDock) m_propertiesDock->setWindowTitle(LTR("dock.properties"));
     if (m_mediaPool) m_mediaPool->retranslateUi();
-    if (m_transformPanel) m_transformPanel->retranslateUi();
-    if (m_textPanel) m_textPanel->retranslateUi();
-    if (m_audioFilterPanel) m_audioFilterPanel->retranslateUi();
-    if (m_effectsPanel) m_effectsPanel->retranslateUi();
+    if (m_propertiesPanel) m_propertiesPanel->retranslateUi();
     updateWindowTitle();
 }
 
@@ -1419,10 +1379,7 @@ void MainWindow::applyWindowSettings(const hc::WindowSettings& settings) {
     }
     if (m_mediaDock) m_mediaDock->setFeatures(features);
     if (m_timelineDock) m_timelineDock->setFeatures(features);
-    if (m_transformDock) m_transformDock->setFeatures(features);
-    if (m_textDock) m_textDock->setFeatures(features);
-    if (m_audioFilterDock) m_audioFilterDock->setFeatures(features);
-    if (m_effectsDock) m_effectsDock->setFeatures(features);
+    if (m_propertiesDock) m_propertiesDock->setFeatures(features);
 
     // 4. Bars visibility
     if (m_mainToolbar) m_mainToolbar->setVisible(settings.showToolbar);
@@ -1433,25 +1390,16 @@ void MainWindow::resetDockLayout() {
     ensureDocks();
     addDockWidget(Qt::LeftDockWidgetArea, m_mediaDock);
     addDockWidget(Qt::BottomDockWidgetArea, m_timelineDock);
-    addDockWidget(Qt::RightDockWidgetArea, m_transformDock);
-    addDockWidget(Qt::RightDockWidgetArea, m_textDock);
-    tabifyDockWidget(m_transformDock, m_textDock);
-    addDockWidget(Qt::RightDockWidgetArea, m_audioFilterDock);
-    tabifyDockWidget(m_textDock, m_audioFilterDock);
-    addDockWidget(Qt::RightDockWidgetArea, m_effectsDock);
-    tabifyDockWidget(m_audioFilterDock, m_effectsDock);
+    addDockWidget(Qt::RightDockWidgetArea, m_propertiesDock);
 
     m_mediaDock->show();
     m_timelineDock->show();
-    m_transformDock->show();
-    m_textDock->show();
-    m_audioFilterDock->show();
-    m_effectsDock->show();
-    m_transformDock->raise();
+    m_propertiesDock->show();
+    m_propertiesDock->raise();
 
     const int timelineH = std::clamp(height() * 35 / 100, 240, 450);
     resizeDocks({m_timelineDock}, {timelineH}, Qt::Vertical);
-    resizeDocks({m_mediaDock, m_transformDock}, {260, 320}, Qt::Horizontal);
+    resizeDocks({m_mediaDock, m_propertiesDock}, {260, 320}, Qt::Horizontal);
 }
 
 void MainWindow::closeEvent(QCloseEvent* event) {

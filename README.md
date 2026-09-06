@@ -50,6 +50,10 @@ Beyond its intuitive, modern graphical interface, HyggshiCut also ships with a b
 - **Precise cutting tools:** Split at playhead (`S`), trim both ends of a clip, duration stretching, ripple delete, smart snapping.
 - **Full history system:** Safe Undo and Redo across every action on the timeline.
 
+### 1b. Explorer & Inspector Panels
+- **Explorer (Media Pool):** a thumbnail grid of every imported asset — image, video, and audio — each card showing a preview, media type, and resolution/duration, with a live search box and a proxy-status tag. Single-click a card to inspect it; double-click to preview it; drag it onto the timeline to add it.
+- **Inspector (Properties):** one unified right-hand panel with tabbed **Media** (read-only file properties: name, type, location, duration, resolution, frame rate, bitrate, sample rate, channels, file size), **Transform**, **Effects**, **Text**, and **Audio** editors. The panel auto-switches to the relevant tab when you select a clip or a media asset.
+
 ### 2. Real-Time GPU Compositing & Effects (OpenGL 3.3 Core)
 - **19 Blend Modes:** Normal, Multiply, Screen, Overlay, Add, Subtract, Darken, Lighten, HardLight, SoftLight, Difference, Exclusion, Dodge, Burn, Saturate, HSL Hue/Saturation/Color/Luminosity.
 - **Real-time post-processing chain (GPU Shader Pipeline):**
