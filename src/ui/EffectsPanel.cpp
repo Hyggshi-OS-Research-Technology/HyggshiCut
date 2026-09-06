@@ -336,7 +336,7 @@ QWidget* EffectsPanel::buildGenericEditor(Effect& effect) {
     }
 
     // Reset button
-    auto* resetBtn = new QPushButton(tr("↺ Đặt lại mặc định"), container);
+    auto* resetBtn = new QPushButton(tr("Đặt lại mặc định"), container);
     resetBtn->setStyleSheet("background-color: #33333c; color: #ddd; padding: 4px 10px; border-radius: 4px;");
     connect(resetBtn, &QPushButton::clicked, this, [this, &effect, info]() {
         if (!info) return;
@@ -414,9 +414,20 @@ void EffectsPanel::onAddEffectMenuRequested() {
     menu.exec(m_addBtn->mapToGlobal(QPoint(0, m_addBtn->height())));
 }
 
-void EffectsPanel::onAddEffectType(const QString& typeId) {
-    if (!m_clip) return;
+QStringList EffectsPanel::effectTypeIds() {
+    QStringList ids;
+    ids.reserve(static_cast<int>(availableEffectTypes().size()));
+    for (const auto& t : availableEffectTypes()) {
+        ids << t.id;
+    }
+    return ids;
+}
 
+QString EffectsPanel::effectTypeName(const QString& typeId) {
+    return getEffectTypeName(typeId);
+}
+
+Effect EffectsPanel::buildEffect(const QString& typeId) {
     Effect eff;
     eff.type = typeId;
     eff.enabled = true;
@@ -424,12 +435,17 @@ void EffectsPanel::onAddEffectType(const QString& typeId) {
     const EffectTypeInfo* info = findEffectType(typeId);
     if (info) {
         for (size_t p = 0; p < info->params.size(); ++p) {
-            const auto [minVal, maxVal, defVal, stepVal] = info->paramRanges[p];
+            const double defVal = std::get<2>(info->paramRanges[p]);
             eff.params.push_back(EffectParameter{info->params[p].first, defVal});
         }
     }
+    return eff;
+}
 
-    m_clip->effects.push_back(eff);
+void EffectsPanel::onAddEffectType(const QString& typeId) {
+    if (!m_clip) return;
+
+    m_clip->effects.push_back(buildEffect(typeId));
     refreshFilterList(static_cast<int>(m_clip->effects.size()) - 1);
     emit effectsEdited();
 }

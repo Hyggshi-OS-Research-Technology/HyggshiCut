@@ -10,7 +10,7 @@
   "effects": [
     {
       "id": "anime_vivid",
-      "name": "🎌 Anime Vivid (Hoạt hình sống động)",
+      "name": "Anime Vivid (Hoạt hình sống động)",
       "type": "color_grade",
       "params": {
         "lift_r": -0.05,
@@ -29,7 +29,7 @@
     },
     {
       "id": "kdrama_warm",
-      "name": "🌸 K-Drama Warm (Phim Hàn ấm áp)",
+      "name": "K-Drama Warm (Phim Hàn ấm áp)",
       "type": "color_grade",
       "params": {
         "lift_r": 0.08,
@@ -48,7 +48,7 @@
     },
     {
       "id": "lofi_pastel",
-      "name": "🎵 Lo-Fi Pastel Aesthetic",
+      "name": "Lo-Fi Pastel Aesthetic",
       "type": "color_grade",
       "params": {
         "lift_r": 0.12,
@@ -67,7 +67,7 @@
     },
     {
       "id": "matte_black",
-      "name": "⬛ Matte Black Cinematic",
+      "name": "Matte Black Cinematic",
       "type": "color_grade",
       "params": {
         "lift_r": 0.05,
@@ -86,7 +86,7 @@
     },
     {
       "id": "fuji_film",
-      "name": "📷 Fuji Film Emulation (Phim Fuji cổ điển)",
+      "name": "Fuji Film Emulation (Phim Fuji cổ điển)",
       "type": "color_grade",
       "params": {
         "lift_r": 0.05,
@@ -105,7 +105,7 @@
     },
     {
       "id": "moonlight_blue",
-      "name": "🌙 Moonlight Blue (Ánh trăng xanh)",
+      "name": "Moonlight Blue (Ánh trăng xanh)",
       "type": "color_grade",
       "params": {
         "lift_r": -0.12,
@@ -124,7 +124,7 @@
     },
     {
       "id": "forest_green",
-      "name": "🌿 Forest Green (Rừng xanh)",
+      "name": "Forest Green (Rừng xanh)",
       "type": "color_grade",
       "params": {
         "lift_r": -0.08,

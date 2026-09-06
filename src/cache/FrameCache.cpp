@@ -52,6 +52,14 @@ void FrameCache::put(const QString& assetId, int64_t frameIndex, const VideoFram
     evictIfNeeded();
 }
 
+void FrameCache::setMaxBytes(size_t bytes) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    // Guard against a nonsensically small budget (a single 1080p YUV420P
+    // frame is ~3 MB; anything smaller would evict everything immediately).
+    m_maxBytes = std::max<size_t>(bytes, 8ull * 1024ull * 1024ull);
+    evictIfNeeded();
+}
+
 void FrameCache::evictIfNeeded() {
     while (m_currentBytes > m_maxBytes && !m_lru.empty()) {
         const Key victim = m_lru.back();

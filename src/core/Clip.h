@@ -1,5 +1,6 @@
 #pragma once
 #include <QString>
+#include <QColor>
 #include <QUuid>
 #include <QList>
 #include <vector>
@@ -11,6 +12,18 @@
 namespace hc {
 
 enum class ClipType { Video, Audio, Image, Text };
+
+// Type of the incoming transition a Visual clip plays against the previous
+// clip on the same track (see Clip::transitionInDuration). Dissolve is the
+// classic linear cross-fade (the pre-existing behaviour); the others are
+// described where they are rendered (Timeline::transitionVisual, the GL
+// compositor and the ffmpeg exporter keep these in lock-step).
+enum class TransitionType {
+    Dissolve,    // linear cross-fade (default)
+    Wipe,        // incoming revealed by a moving edge
+    Slide,       // incoming slides in over the outgoing clip
+    DipToColor,  // fade out through a solid colour, then in
+};
 
 // Compositing blend mode for visual clips.
 // Note: simple OpenGL-blend modes (Normal..Lighten) are handled via glBlendFunc.
@@ -134,13 +147,22 @@ public:
 
     // Crossfade transition with the PREVIOUS clip on the same Visual track.
     // Non-zero means: this clip's timelineStart has been pulled `transitionInDuration`
-    // ticks earlier so it deliberately overlaps the outgoing clip's tail —
-    // during that overlap window this clip fades in (weight 0→1) while the
-    // outgoing clip stays fully opaque underneath, giving a standard
-    // cross-dissolve. Set/cleared together with timelineStart by
-    // TimelineWidget's transition-marker double-click — see
-    // Timeline::activeVisualClipsAt() for where the weight is applied.
+    // ticks earlier so it deliberately overlaps the outgoing clip's tail.
+    // How that overlap is rendered is decided by transitionType below and
+    // evaluated by Timeline::transitionVisual() — the one place both the
+    // GL preview and the ffmpeg exporter read from, so they never diverge.
+    // Set/cleared together with timelineStart by TimelineWidget's
+    // transition-marker double-click / right-click menu.
     Ticks transitionInDuration = 0;
+
+    // How the incoming transition above is rendered (see TransitionType).
+    TransitionType transitionType = TransitionType::Dissolve;
+    // Direction of the wipe/slide edge: 0 = left→right, 1 = right→left,
+    // 2 = top→bottom, 3 = bottom→top.
+    int transitionDirection = 0;
+    // Solid colour the DipToColor transition fades through (opaque black by
+    // default — equivalent to a classic "dip to black").
+    QColor transitionColor = QColor(0, 0, 0);
 
     // Audio processing chain (EQ / noise reduction / compressor), applied to
     // this clip's own audio before volume/fades/mixing. See

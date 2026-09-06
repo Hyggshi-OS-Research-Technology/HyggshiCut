@@ -32,18 +32,26 @@ namespace {
 // This is a diagnostics aid for tracing hard-to-reproduce crashes (the
 // GUI crash at startup). It is guarded by __linux__ and does not change
 // program behaviour in the normal case.
+// Async-signal-safe write helper. ::write is marked warn_unused_result on
+// glibc, but inside a signal handler there is nothing meaningful to do with a
+// failure, so the result is deliberately discarded.
+static void signalSafeWrite(int fd, const void* buf, size_t len) {
+    const ssize_t written = ::write(fd, buf, len);
+    (void)written;
+}
+
 void crashHandler(int sig) {
     const char banner[] =
         "\n================================================================\n"
         "HyggshiCut crashed\n"
         "================================================================\n";
-    ::write(STDERR_FILENO, banner, static_cast<ssize_t>(::strlen(banner)));
+    signalSafeWrite(STDERR_FILENO, banner, static_cast<size_t>(::strlen(banner)));
 
     void* frames[64];
     const int count = ::backtrace(frames, 64);
-    ::write(STDERR_FILENO, "\nBacktrace:\n", 12);
+    signalSafeWrite(STDERR_FILENO, "\nBacktrace:\n", 12);
     ::backtrace_symbols_fd(frames, count, STDERR_FILENO);
-    ::write(STDERR_FILENO, "\n", 1);
+    signalSafeWrite(STDERR_FILENO, "\n", 1);
 
     ::signal(sig, SIG_DFL);
     ::raise(sig);
@@ -55,8 +63,7 @@ void loadBundledAssets(const QApplication& app) {
     QStringList langDirs = {
         QDir(app.applicationDirPath()).filePath("languages"),
         QDir(app.applicationDirPath()).filePath("../languages"),
-        QDir::current().filePath("languages"),
-        "/home/hyggshi/Downloads/HyggshiCut/languages"
+        QDir::current().filePath("languages")
     };
 
     for (const auto& dPath : langDirs) {
@@ -75,8 +82,7 @@ void loadBundledAssets(const QApplication& app) {
     QStringList pluginDirs = {
         QDir(app.applicationDirPath()).filePath("plugins"),
         QDir(app.applicationDirPath()).filePath("../plugins"),
-        QDir::current().filePath("plugins"),
-        "/home/hyggshi/Downloads/HyggshiCut/plugins"
+        QDir::current().filePath("plugins")
     };
 
     for (const auto& dPath : pluginDirs) {

@@ -2,10 +2,12 @@
 #include "MediaPoolWidget.h"
 #include "TimelineWidget.h"
 #include "PreviewWidget.h"
+#include "PropertiesPanel.h"
 #include "TransformPanel.h"
 #include "TextPanel.h"
 #include "AudioFilterPanel.h"
 #include "EffectsPanel.h"
+#include "PresetLibrary.h"
 #include "ProjectSettingsDialog.h"
 #include "ExportDialog.h"
 #include "SourcePreviewDialog.h"
@@ -27,6 +29,7 @@
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QStatusBar>
+#include <QLabel>
 #include <QKeySequence>
 #include <QActionGroup>
 #include <QSettings>
@@ -34,6 +37,9 @@
 #include <QCloseEvent>
 #include <QFileInfo>
 #include <QTimer>
+#include <QDir>
+#include <QStandardPaths>
+#include <cmath>
 
 namespace hc {
 
@@ -92,6 +98,13 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 
     buildMenus();
     buildToolbar();
+
+    // Permanent zoom readout in the status bar (updated live via
+    // TimelineWidget::zoomChanged). Created once here so language/UI rebuilds
+    // never accumulate duplicate labels.
+    m_zoomLabel = new QLabel(this);
+    statusBar()->addPermanentWidget(m_zoomLabel);
+
     rebuildProjectDependentUi();
     statusBar()->showMessage(tr("Sẵn sàng. Kéo media vào timeline để bắt đầu dựng."));
 }
@@ -106,14 +119,8 @@ MainWindow::~MainWindow() {
     if (m_mediaPool) {
         m_mediaPool->setProject(nullptr);
     }
-    if (m_transformPanel) {
-        m_transformPanel->setSelectedClip(nullptr, {}, {});
-    }
-    if (m_textPanel) {
-        m_textPanel->setSelectedClip(nullptr, {}, {});
-    }
-    if (m_audioFilterPanel) {
-        m_audioFilterPanel->setSelectedClip(nullptr, {}, {});
+    if (m_propertiesPanel) {
+        m_propertiesPanel->clearClipSelection();
     }
 }
 
@@ -154,6 +161,27 @@ void MainWindow::buildMenus() {
     editMenu->addAction(LTR("menu.edit.deleteTrack"), QKeySequence(Qt::SHIFT | Qt::Key_Delete), this, &MainWindow::onDeleteSelectedTrack);
 
     editMenu->addSeparator();
+    editMenu->addAction(tr("Sao chép clip"), QKeySequence::Copy, this, [this]() {
+        if (m_timelineWidget) m_timelineWidget->copySelectedClip();
+    });
+    editMenu->addAction(tr("Dán clip"), QKeySequence::Paste, this, [this]() {
+        if (m_timelineWidget) m_timelineWidget->pasteClip();
+    });
+    editMenu->addAction(tr("Nhân đôi clip"), QKeySequence(Qt::CTRL | Qt::Key_D), this, [this]() {
+        if (m_timelineWidget) m_timelineWidget->duplicateSelectedClip();
+    });
+    editMenu->addSeparator();
+    editMenu->addAction(tr("Xóa & dồn clip sau lại (Ripple delete)"), this, [this]() {
+        if (m_timelineWidget) m_timelineWidget->rippleDeleteSelectedClip();
+    });
+    editMenu->addAction(tr("Dịch clip trái 1 khung hình (,)"), this, [this]() {
+        if (m_timelineWidget) m_timelineWidget->nudgeSelectedClip(-m_timelineWidget->frameStepTicks());
+    });
+    editMenu->addAction(tr("Dịch clip phải 1 khung hình (.)"), this, [this]() {
+        if (m_timelineWidget) m_timelineWidget->nudgeSelectedClip(m_timelineWidget->frameStepTicks());
+    });
+
+    editMenu->addSeparator();
     editMenu->addAction(tr("Chọn clip đầu tiên"), QKeySequence(Qt::CTRL | Qt::Key_A), this, &MainWindow::onSelectFirstClip);
     editMenu->addAction(tr("Bỏ chọn tất cả"), QKeySequence(Qt::Key_Escape), this, &MainWindow::onDeselectAll);
 
@@ -177,6 +205,24 @@ void MainWindow::buildMenus() {
     m_viewMenu = menuBar()->addMenu(LTR("menu.view"));
     m_viewMenu->addAction(LTR("menu.view.zoomin"), QKeySequence::ZoomIn, this, &MainWindow::onZoomIn);
     m_viewMenu->addAction(LTR("menu.view.zoomout"), QKeySequence::ZoomOut, this, &MainWindow::onZoomOut);
+    m_viewMenu->addAction(tr("Vừa khớp toàn bộ timeline (Zoom to fit)"), QKeySequence(Qt::SHIFT | Qt::Key_Z), this, &MainWindow::onZoomToFit);
+    m_viewMenu->addSeparator();
+
+    // Snap toggle: when on (default), clip edges/keyframes/playhead magnetize
+    // to each other during drags. Persisted and re-applied to every newly
+    // created TimelineWidget (see rebuildProjectDependentUi).
+    {
+        QSettings snapPrefs("HyggshiCut", "Preferences");
+        m_snapAction = m_viewMenu->addAction(tr("Bắt dính vào mép clip / playhead (Snap)"));
+        m_snapAction->setCheckable(true);
+        m_snapAction->setChecked(snapPrefs.value("timeline/snapEnabled", true).toBool());
+        connect(m_snapAction, &QAction::toggled, this, [this](bool on) {
+            QSettings p("HyggshiCut", "Preferences");
+            p.setValue("timeline/snapEnabled", on);
+            if (m_timelineWidget) m_timelineWidget->setSnapEnabled(on);
+        });
+    }
+
     m_viewMenu->addSeparator();
 
     auto* meterAct = m_viewMenu->addAction(tr("Đồng hồ đo âm lượng (VU Meter)"));
@@ -307,7 +353,7 @@ void MainWindow::buildToolbar() {
     const bool wasCutChecked = m_cutToolAction ? m_cutToolAction->isChecked() : false;
 
     m_cutToolAction = new QAction(LTR("menu.edit.cutTool"), this);
-    m_cutToolAction->setText("✂ " + LTR("menu.edit.cutTool"));
+    m_cutToolAction->setText(LTR("menu.edit.cutTool"));
     m_cutToolAction->setCheckable(true);
     m_cutToolAction->setChecked(wasCutChecked);
     connect(m_cutToolAction, &QAction::toggled, this, &MainWindow::onToggleCutTool);
@@ -326,6 +372,7 @@ void MainWindow::buildToolbar() {
     m_mainToolbar->addSeparator();
     m_mainToolbar->addAction(LTR("menu.view.zoomin"), this, &MainWindow::onZoomIn);
     m_mainToolbar->addAction(LTR("menu.view.zoomout"), this, &MainWindow::onZoomOut);
+    m_mainToolbar->addAction(tr("Vừa khớp"), this, &MainWindow::onZoomToFit);
 }
 
 QMenu* MainWindow::buildAddLayerMenu() {
@@ -342,10 +389,9 @@ QMenu* MainWindow::buildAddLayerMenu() {
 void MainWindow::ensureDocks() {
     // Docks are created a single time for the whole window and then kept
     // alive; only their contents are swapped by rebuildProjectDependentUi().
-    // This is deliberate: deleting and re-adding *tabified* QDockWidgets on
-    // every project (re)build leaves a stale tab layout inside QMainWindow
-    // that crashes in Qt's own dock code on some setups (a hard segfault in
-    // QWidget::setVisible <- QMainWindow::tabifyDockWidget).
+    // This is deliberate: deleting and re-adding QDockWidgets on every
+    // project (re)build can leave a stale layout inside QMainWindow that
+    // crashes in Qt's own dock code on some setups.
     if (m_mediaDock) return;
 
     setCorner(Qt::BottomLeftCorner, Qt::BottomDockWidgetArea);
@@ -363,28 +409,13 @@ void MainWindow::ensureDocks() {
     m_timelineDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
     addDockWidget(Qt::BottomDockWidgetArea, m_timelineDock);
 
-    m_transformDock = new QDockWidget(LTR("dock.transform"), this);
-    m_transformDock->setObjectName("TransformDock");
-    m_transformDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
-    addDockWidget(Qt::RightDockWidgetArea, m_transformDock);
-
-    m_textDock = new QDockWidget(LTR("dock.text"), this);
-    m_textDock->setObjectName("TextDock");
-    m_textDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
-    addDockWidget(Qt::RightDockWidgetArea, m_textDock);
-    tabifyDockWidget(m_transformDock, m_textDock);
-
-    m_audioFilterDock = new QDockWidget(LTR("dock.audioFilter"), this);
-    m_audioFilterDock->setObjectName("AudioFilterDock");
-    m_audioFilterDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
-    addDockWidget(Qt::RightDockWidgetArea, m_audioFilterDock);
-    tabifyDockWidget(m_textDock, m_audioFilterDock);
-
-    m_effectsDock = new QDockWidget(LTR("dock.effects"), this);
-    m_effectsDock->setObjectName("EffectsDock");
-    m_effectsDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
-    addDockWidget(Qt::RightDockWidgetArea, m_effectsDock);
-    tabifyDockWidget(m_audioFilterDock, m_effectsDock);
+    // Single right-hand Inspector dock. Its content (PropertiesPanel) hosts
+    // the tabbed Transform / Effects / Text / Audio editors plus the Media
+    // info page, replacing the four previously tabified docks.
+    m_propertiesDock = new QDockWidget(LTR("dock.properties"), this);
+    m_propertiesDock->setObjectName("PropertiesDock");
+    m_propertiesDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
+    addDockWidget(Qt::RightDockWidgetArea, m_propertiesDock);
 }
 void MainWindow::rebuildProjectDependentUi() {
     // PlaybackController owns a raw Project* because it is tightly coupled to
@@ -404,54 +435,39 @@ void MainWindow::rebuildProjectDependentUi() {
     // newly opened project.
     m_selectedTrackId.clear();
     m_selectedClipId.clear();
+    m_lastSelectedAssetId.clear();
 
-    // The six QDockWidget shells are created once (ensureDocks) and reused
+    // The three QDockWidget shells are created once (ensureDocks) and reused
     // for the whole window session. Here we only (re)create each dock's
     // content for the (possibly new) Project and bind it into the existing
-    // dock — we do NOT remove/delete/re-add the docks, because tabbed docks
-    // torn down repeatedly crash Qt's dock layout (see ensureDocks comment).
+    // dock — we do NOT remove/delete/re-add the docks (see ensureDocks).
     ensureDocks();
-
-    auto makeScrollWrapper = [](QWidget* widget, QWidget* parent) -> QScrollArea* {
-        auto* scroll = new QScrollArea(parent);
-        scroll->setWidget(widget);
-        scroll->setWidgetResizable(true);
-        scroll->setFrameShape(QFrame::NoFrame);
-        scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-        scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-        scroll->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-        return scroll;
-    };
 
     m_mediaPool = new MediaPoolWidget(m_project.get(), m_proxyManager.get(), this);
     m_mediaDock->setWidget(m_mediaPool);
 
     m_timelineWidget = new TimelineWidget(m_project.get(), this);
     m_timelineWidget->setCutToolActive(m_cutToolAction && m_cutToolAction->isChecked());
+    if (m_snapAction) m_timelineWidget->setSnapEnabled(m_snapAction->isChecked());
     auto* scrollArea = new TimelineScrollArea(m_timelineWidget, this);
     scrollArea->setWidget(m_timelineWidget);
     scrollArea->setWidgetResizable(false);
     scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     m_timelineDock->setWidget(scrollArea);
 
-    m_transformPanel = new TransformPanel(this);
-    m_transformDock->setWidget(makeScrollWrapper(m_transformPanel, this));
+    m_propertiesPanel = new PropertiesPanel(this);
+    m_propertiesDock->setWidget(m_propertiesPanel);
+
+    // Non-owning pointers into the Inspector's sub-panels, kept so the
+    // existing signal wiring and per-frame update calls below are unchanged.
+    m_transformPanel = m_propertiesPanel->transformPanel();
+    m_textPanel = m_propertiesPanel->textPanel();
+    m_audioFilterPanel = m_propertiesPanel->audioFilterPanel();
+    m_effectsPanel = m_propertiesPanel->effectsPanel();
 
     connect(m_transformPanel, &TransformPanel::transformEdited, this, &MainWindow::onTransformEdited);
-
-    m_textPanel = new TextPanel(this);
-    m_textDock->setWidget(makeScrollWrapper(m_textPanel, this));
-
     connect(m_textPanel, &TextPanel::textEdited, this, &MainWindow::onTextEdited);
-
-    m_audioFilterPanel = new AudioFilterPanel(this);
-    m_audioFilterDock->setWidget(makeScrollWrapper(m_audioFilterPanel, this));
-
     connect(m_audioFilterPanel, &AudioFilterPanel::audioFiltersEdited, this, &MainWindow::onAudioFiltersEdited);
-
-    m_effectsPanel = new EffectsPanel(this);
-    m_effectsDock->setWidget(makeScrollWrapper(m_effectsPanel, this));
-
     connect(m_effectsPanel, &EffectsPanel::effectsEdited, this, &MainWindow::onEffectsEdited);
 
     m_playback = std::make_unique<PlaybackController>(m_project.get(), m_preview->glWidget(),
@@ -461,6 +477,11 @@ void MainWindow::rebuildProjectDependentUi() {
     connect(m_mediaPool, &MediaPoolWidget::importRequested, this, &MainWindow::onImportRequested);
     connect(m_mediaPool, &MediaPoolWidget::recordScreenRequested, this, &MainWindow::onScreenRecord);
     connect(m_project.get(), &Project::assetsChanged, m_mediaPool, &MediaPoolWidget::refresh);
+    connect(m_mediaPool, &MediaPoolWidget::assetSelected, this, &MainWindow::onMediaAssetSelected);
+    connect(m_mediaPool, &MediaPoolWidget::textPresetRequested, this, &MainWindow::onTextPresetRequested);
+    connect(m_mediaPool, &MediaPoolWidget::effectPresetRequested, this, &MainWindow::onEffectPresetRequested);
+    connect(m_mediaPool, &MediaPoolWidget::transitionPresetRequested, this, &MainWindow::onTransitionPresetRequested);
+    connect(m_mediaPool, &MediaPoolWidget::soundPresetRequested, this, &MainWindow::onSoundPresetRequested);
     connect(m_mediaPool, &MediaPoolWidget::assetActivated, this, [this](QString assetId) {
         auto asset = m_project->findAsset(assetId);
         if (!asset) return;
@@ -478,9 +499,25 @@ void MainWindow::rebuildProjectDependentUi() {
     connect(m_timelineWidget, &TimelineWidget::selectionChanged, this, &MainWindow::onTimelineSelectionChanged);
     connect(m_timelineWidget, &TimelineWidget::togglePlaybackRequested, m_playback.get(),
             &PlaybackController::togglePlay);
+    connect(m_timelineWidget, &TimelineWidget::zoomChanged, this, &MainWindow::updateZoomLabel);
+    updateZoomLabel(m_timelineWidget->zoom());
 
     connect(m_preview, &PreviewWidget::playPauseClicked, m_playback.get(), &PlaybackController::togglePlay);
     connect(m_preview, &PreviewWidget::seekRequested, this, &MainWindow::onSeekRequested);
+    connect(m_preview, &PreviewWidget::scrubStarted, this, [this]() {
+        // Scrubbing the preview seek bar should be silent and deterministic
+        // (CapCut-style): remember the play state and pause so the playhead
+        // and audio don't fight the cursor mid-drag. Before this, seeking
+        // while playing re-seeded audio output on every movement, producing
+        // stutter and a jittery preview.
+        m_scrubWasPlaying = m_playback && m_playback->isPlaying();
+        if (m_scrubWasPlaying) m_playback->pause();
+    });
+    connect(m_preview, &PreviewWidget::scrubFinished, this, [this]() {
+        if (m_scrubWasPlaying && m_playback) m_playback->play();
+        m_scrubWasPlaying = false;
+    });
+    connect(m_preview, &PreviewWidget::previewTransformDragStarted, this, &MainWindow::onPreviewTransformDragStarted);
     connect(m_preview, &PreviewWidget::previewTransformChanged, this, &MainWindow::onPreviewTransformChanged);
     connect(m_preview, &PreviewWidget::previewTransformCommitted, this, &MainWindow::onPreviewTransformCommitted);
 
@@ -514,7 +551,7 @@ void MainWindow::rebuildProjectDependentUi() {
     });
 
     // Proportional initial sizing for docks
-    resizeDocks({m_mediaDock, m_transformDock}, {260, 320}, Qt::Horizontal);
+    resizeDocks({m_mediaDock, m_propertiesDock}, {340, 320}, Qt::Horizontal);
     const int initTimelineH = std::clamp(height() * 35 / 100, 240, 420);
     resizeDocks({m_timelineDock}, {initTimelineH}, Qt::Vertical);
 
@@ -552,8 +589,8 @@ void MainWindow::showEvent(QShowEvent* event) {
                 const int timelineH = std::clamp(height() * 35 / 100, 240, 450);
                 resizeDocks({m_timelineDock}, {timelineH}, Qt::Vertical);
             }
-            if (m_mediaDock && m_transformDock) {
-                resizeDocks({m_mediaDock, m_transformDock}, {260, 320}, Qt::Horizontal);
+            if (m_mediaDock && m_propertiesDock) {
+                resizeDocks({m_mediaDock, m_propertiesDock}, {340, 320}, Qt::Horizontal);
             }
         });
     }
@@ -747,6 +784,20 @@ bool MainWindow::openProjectFromFile(const QString& path, QString* errorOut) {
     if (!newProject->loadFromFile(path, errorOut)) {
         return false;
     }
+
+    // Thumbnails and audio waveforms are derived in-memory data produced at
+    // import time and are deliberately NOT stored in the .hcproj file (they
+    // would bloat it and go stale). loadFromFile() re-probes each asset's
+    // metadata but not its preview image, so without this pass the media
+    // pool would reopen with every image/video row blank. Regenerate them
+    // now so reopening a project looks exactly like the session it was
+    // saved in. Missing/unlinkable media is handled inside each helper
+    // (the decoder simply fails to open and we skip it).
+    for (const auto& asset : newProject->assets()) {
+        generateThumbnail(asset);
+        generateWaveform(asset);
+    }
+
     m_project = std::move(newProject);
     m_modified = false;
     rebuildProjectDependentUi();
@@ -849,8 +900,16 @@ void MainWindow::onAddTextTrack() {
 void MainWindow::onSplitAtPlayhead() { m_timelineWidget->splitAtPlayhead(); }
 void MainWindow::onDeleteSelectedClip() { m_timelineWidget->deleteSelectedClip(); }
 void MainWindow::onDeleteSelectedTrack() { m_timelineWidget->deleteSelectedTrack(); }
-void MainWindow::onZoomIn() { m_timelineWidget->setZoom(m_timelineWidget->zoom() * 1.25); }
-void MainWindow::onZoomOut() { m_timelineWidget->setZoom(m_timelineWidget->zoom() / 1.25); }
+void MainWindow::onZoomIn() { if (m_timelineWidget) m_timelineWidget->zoomBy(1.25); }
+void MainWindow::onZoomOut() { if (m_timelineWidget) m_timelineWidget->zoomBy(1.0 / 1.25); }
+void MainWindow::onZoomToFit() { if (m_timelineWidget) m_timelineWidget->zoomToFit(); }
+
+void MainWindow::updateZoomLabel(double pixelsPerSecond) {
+    if (!m_zoomLabel) return;
+    // Report zoom relative to the default (60 px/s = 100%).
+    const int pct = static_cast<int>(std::lround(pixelsPerSecond / 60.0 * 100.0));
+    m_zoomLabel->setText(tr("Thu phóng: %1%").arg(pct));
+}
 
 void MainWindow::onToggleCutTool(bool checked) {
     if (m_timelineWidget) m_timelineWidget->setCutToolActive(checked);
@@ -910,9 +969,7 @@ void MainWindow::onDeselectAll() {
     m_selectedTrackId.clear();
     m_selectedClipId.clear();
     if (m_preview) m_preview->clearTransformOverlay();
-    if (m_transformPanel) m_transformPanel->setSelectedClip(m_project.get(), {}, {});
-    if (m_textPanel) m_textPanel->setSelectedClip(m_project.get(), {}, {});
-    if (m_audioFilterPanel) m_audioFilterPanel->setSelectedClip(m_project.get(), {}, {});
+    if (m_propertiesPanel) m_propertiesPanel->clearClipSelection();
     statusBar()->showMessage(tr("Đã bỏ chọn tất cả."), 2000);
 }
 
@@ -959,6 +1016,228 @@ void MainWindow::onRelinkMissingMedia() {
     statusBar()->showMessage(tr("Đã cập nhật liên kết media."), 2500);
 }
 
+void MainWindow::onMediaAssetSelected(QString assetId) {
+    // Ignore re-selection of the same asset: proxy status changes (and other
+    // pool refreshes) restore the current item, which re-emits this signal.
+    // Without this guard the Inspector would jump back to the Media tab and
+    // steal focus while the user is mid-edit on a clip.
+    if (assetId == m_lastSelectedAssetId) return;
+    m_lastSelectedAssetId = assetId;
+
+    if (assetId.isEmpty() || !m_project) {
+        if (m_propertiesPanel) m_propertiesPanel->clearAssetInfo();
+        return;
+    }
+    auto asset = m_project->findAsset(assetId);
+    if (m_propertiesPanel) {
+        m_propertiesPanel->showAssetInfo(asset);
+    }
+}
+
+// Places a clip referencing `asset` on a compatible (new or existing) track
+// at the current playhead, nudging forward past any overlapping clips.
+Clip* MainWindow::placeAssetClip(const MediaAssetPtr& asset, ClipType type) {
+    if (!m_project || !asset) return nullptr;
+
+    auto& tl = m_project->timeline();
+    const TrackType wantType = (type == ClipType::Audio) ? TrackType::Audio : TrackType::Visual;
+
+    Track* target = nullptr;
+    for (auto& track : tl.tracks()) {
+        if (track.type == wantType && !track.locked) {
+            target = &track;
+            break;
+        }
+    }
+    if (!target) {
+        const QString name = QString("%1 %2")
+            .arg(wantType == TrackType::Audio ? tr("Audio") : tr("Video"))
+            .arg(tl.tracks().size() + 1);
+        target = &tl.addTrack(wantType, name);
+    }
+
+    Clip clip;
+    clip.assetId = asset->id;
+    clip.type = type;
+    clip.sourceIn = 0;
+    clip.sourceOut = asset->duration > 0 ? asset->duration : secondsToTicks(5.0);
+
+    Ticks placedStart = std::max<Ticks>(0, m_playback ? m_playback->currentTime() : 0);
+    const Ticks duration = clip.timelineDuration();
+    const auto& existing = target->clips();
+    for (size_t guard = 0; guard < existing.size() + 1; ++guard) {
+        bool collided = false;
+        for (const auto& other : existing) {
+            if (placedStart < other.timelineEnd() && placedStart + duration > other.timelineStart) {
+                placedStart = other.timelineEnd();
+                collided = true;
+                break;
+            }
+        }
+        if (!collided) break;
+    }
+    clip.timelineStart = placedStart;
+    return target->addClip(std::move(clip));
+}
+
+void MainWindow::onTextPresetRequested(QString presetId) {
+    if (!m_project) return;
+    const TextPreset* preset = findTextPreset(presetId);
+    if (!preset) return;
+
+    m_project->pushUndoSnapshot();
+    auto& tl = m_project->timeline();
+    Track& textTrack = tl.addTrack(TrackType::Visual,
+        tr("Văn bản %1").arg(tl.tracks().size() + 1));
+
+    Clip clip;
+    clip.type = ClipType::Text;
+    clip.displayLabel = preset->sample;
+    clip.textFontSize = preset->fontSize;
+    clip.textFontColor = preset->fontColor;
+    clip.textBold = preset->bold;
+    clip.textAlignment = preset->alignment;
+    clip.textOutlineEnabled = preset->outlineEnabled;
+    clip.textOutlineColor = preset->outlineColor;
+    clip.textOutlineWidth = preset->outlineWidth;
+    clip.textBackgroundEnabled = preset->backgroundEnabled;
+    clip.textBackgroundColor = preset->backgroundColor;
+    clip.textPadding = preset->padding;
+    clip.sourceIn = 0;
+    clip.sourceOut = secondsToTicks(5.0);
+    clip.timelineStart = std::max<Ticks>(0, m_playback ? m_playback->currentTime() : 0);
+
+    Clip* added = textTrack.addClip(std::move(clip));
+
+    onTimelineEdited();
+    if (added && m_timelineWidget) {
+        m_timelineWidget->selectClip(textTrack.id, added->id);
+    }
+    if (m_playback) m_playback->seek(added ? added->timelineStart : 0);
+    statusBar()->showMessage(tr("Đã thêm văn bản: %1").arg(LTR(preset->nameKey)), 2500);
+}
+
+void MainWindow::onEffectPresetRequested(QString effectTypeId) {
+    if (!m_project) return;
+
+    Track* track = m_project->timeline().findTrack(m_selectedTrackId);
+    Clip* clip = track ? track->findClip(m_selectedClipId) : nullptr;
+    if (!clip || (clip->type != ClipType::Video && clip->type != ClipType::Image && clip->type != ClipType::Text)) {
+        statusBar()->showMessage(tr("Chọn một clip video/ảnh/chữ trên timeline trước."), 3000);
+        return;
+    }
+
+    m_project->pushUndoSnapshot();
+    clip->effects.push_back(EffectsPanel::buildEffect(effectTypeId));
+    m_project->timeline().notifyClipChanged(m_selectedTrackId);
+
+    // Show the newly added effect in the Inspector's Effects tab.
+    if (m_effectsPanel) m_effectsPanel->setClip(clip);
+    if (m_propertiesPanel) m_propertiesPanel->showEffectsEditor();
+
+    onEffectsEdited();
+    statusBar()->showMessage(tr("Đã thêm hiệu ứng: %1").arg(EffectsPanel::effectTypeName(effectTypeId)), 2500);
+}
+
+void MainWindow::onTransitionPresetRequested(QString transitionId) {
+    if (!m_project) return;
+    const TransitionPreset* preset = findTransitionPreset(transitionId);
+    if (!preset) return;
+
+    Track* track = m_project->timeline().findTrack(m_selectedTrackId);
+    if (!track || track->type != TrackType::Visual) {
+        statusBar()->showMessage(tr("Chọn clip video/ảnh trên track hình trước."), 3000);
+        return;
+    }
+    Clip* cur = track->findClip(m_selectedClipId);
+    if (!cur) {
+        statusBar()->showMessage(tr("Chọn clip trên timeline để thêm transition trước clip đó."), 3000);
+        return;
+    }
+
+    // Previous clip on the same track (in time order).
+    const Clip* prev = nullptr;
+    for (const auto& other : track->clips()) {
+        if (other.id == cur->id) continue;
+        if (other.timelineEnd() <= cur->timelineStart) {
+            if (!prev || other.timelineEnd() > prev->timelineEnd()) prev = &other;
+        }
+    }
+
+    if (cur->transitionInDuration > 0) {
+        // Already has a transition: keep its overlap/duration, just restyle.
+        m_project->pushUndoSnapshot();
+        cur->transitionType = preset->type;
+        cur->transitionDirection = preset->direction;
+        cur->transitionColor = preset->color;
+    } else if (prev) {
+        m_project->pushUndoSnapshot();
+        constexpr Ticks kDefaultTransitionTicks = 500'000; // 0.5s
+        const Ticks maxByPrev = prev->timelineDuration() / 2;
+        const Ticks maxByCur = cur->timelineDuration() / 2;
+        const Ticks duration = std::clamp<Ticks>(kDefaultTransitionTicks, 1,
+            std::max<Ticks>(1, std::min(maxByPrev, maxByCur)));
+        cur->transitionInDuration = duration;
+        cur->timelineStart -= duration;
+        cur->transitionType = preset->type;
+        cur->transitionDirection = preset->direction;
+        cur->transitionColor = preset->color;
+    } else {
+        statusBar()->showMessage(tr("Transition cần một clip liền trước trên cùng track."), 3000);
+        return;
+    }
+
+    m_project->timeline().notifyClipChanged(m_selectedTrackId);
+    onTimelineEdited();
+    statusBar()->showMessage(tr("Đã áp dụng transition: %1").arg(LTR(preset->nameKey)), 2500);
+}
+
+void MainWindow::onSoundPresetRequested(QString sfxId) {
+    if (!m_project) return;
+    const SfxPreset* sfx = findSfxPreset(sfxId);
+    if (!sfx) return;
+
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation)
+        + QStringLiteral("/hyggshicut/sfx");
+    const QString path = ensureSfxFile(*sfx, dir);
+    if (path.isEmpty()) {
+        statusBar()->showMessage(tr("Không tạo được file âm thanh mẫu."), 3000);
+        return;
+    }
+
+    // Reuse an already-imported copy if we generated it before.
+    MediaAssetPtr asset;
+    for (const auto& a : m_project->assets()) {
+        if (a->filePath == path) { asset = a; break; }
+    }
+    if (!asset) {
+        QString err;
+        asset = m_project->importMedia(path, &err);
+        if (!asset) {
+            statusBar()->showMessage(tr("Không nhập được âm thanh: %1").arg(err), 4000);
+            return;
+        }
+        generateThumbnail(asset);   // no-op for audio
+        generateWaveform(asset);
+        m_mediaPool->refresh();
+        m_modified = true;
+        updateWindowTitle();
+    }
+
+    m_project->pushUndoSnapshot();
+    Clip* added = placeAssetClip(asset, ClipType::Audio);
+    if (added && m_timelineWidget) {
+        QString trackId;
+        for (auto& track : m_project->timeline().tracks()) {
+            if (track.findClip(added->id)) { trackId = track.id; break; }
+        }
+        if (!trackId.isEmpty()) m_timelineWidget->selectClip(trackId, added->id);
+    }
+    onTimelineEdited();
+    if (m_playback) m_playback->seek(added ? added->timelineStart : 0);
+    statusBar()->showMessage(tr("Đã thêm âm thanh: %1").arg(LTR(sfx->nameKey)), 2500);
+}
+
 void MainWindow::onTimelineEdited() {
     m_modified = true;
     m_timelineWidget->refresh();
@@ -991,28 +1270,14 @@ void MainWindow::onTimelineSelectionChanged(QString clipId, QString trackId) {
         if (track) clip = track->findClip(clipId);
     }
 
-    if (m_transformPanel) {
-        m_transformPanel->setSelectedClip(m_project.get(), trackId, clipId);
-        if (m_playback) m_transformPanel->setCurrentTime(m_playback->currentTime());
+    // Route the selection into the unified Inspector (which forwards it to
+    // the Transform / Effects / Text / Audio editors and switches to the tab
+    // that is relevant for the clip's type).
+    if (m_propertiesPanel) {
+        m_propertiesPanel->setSelectedClip(m_project.get(), trackId, clipId);
     }
-    if (m_audioFilterPanel) {
-        m_audioFilterPanel->setSelectedClip(m_project.get(), trackId, clipId);
-    }
-    if (m_effectsPanel) {
-        m_effectsPanel->setClip(clip);
-    }
-    if (m_textPanel) {
-        m_textPanel->setSelectedClip(m_project.get(), trackId, clipId);
-    }
-
-    if (clip) {
-        if (clip->type == ClipType::Audio && m_audioFilterDock) {
-            m_audioFilterDock->raise();
-        } else if (clip->type == ClipType::Text && m_textDock) {
-            m_textDock->raise();
-        } else if ((clip->type == ClipType::Video || clip->type == ClipType::Image) && m_transformDock) {
-            m_transformDock->raise();
-        }
+    if (m_transformPanel && m_playback) {
+        m_transformPanel->setCurrentTime(m_playback->currentTime());
     }
 
     if (m_preview) {
@@ -1052,6 +1317,17 @@ void MainWindow::onTransformEdited() {
     updateWindowTitle();
 }
 
+void MainWindow::onPreviewTransformDragStarted() {
+    // Snapshot the undo state once per drag gesture, BEFORE any transform is
+    // applied, so Undo restores the pre-drag position instead of the
+    // post-drag one.
+    if (m_project) {
+        m_project->pushUndoSnapshot();
+        updateUndoRedoActions();
+    }
+    m_transformSeekThrottle.invalidate(); // first move re-renders immediately
+}
+
 void MainWindow::onPreviewTransformChanged(hc::Transform transform) {
     if (!m_project || m_selectedTrackId.isEmpty() || m_selectedClipId.isEmpty()) return;
     Track* track = m_project->timeline().findTrack(m_selectedTrackId);
@@ -1071,16 +1347,27 @@ void MainWindow::onPreviewTransformChanged(hc::Transform transform) {
         m_transformPanel->setTransformExternal(transform);
     }
     m_modified = true;
-    if (m_playback) m_playback->seek(m_playback->currentTime());
+
+    // Throttle the preview re-composite during a bounding-box drag: the
+    // overlay box tracks the mouse instantly, but re-rendering the GL frame
+    // (and, for video, re-decoding) on every mouse-move used to stall the UI
+    // thread and make the image visibly lag behind — then lurch forward to
+    // catch up, looking like it "moved on its own". ~40 re-renders/s is enough
+    // to stay smooth without the stall.
+    if (m_playback &&
+        (!m_transformSeekThrottle.isValid() || m_transformSeekThrottle.elapsed() >= 25)) {
+        m_transformSeekThrottle.restart();
+        m_playback->seek(m_playback->currentTime());
+    }
     updateWindowTitle();
 }
 
 void MainWindow::onPreviewTransformCommitted(hc::Transform transform) {
     onPreviewTransformChanged(transform);
-    if (m_project) {
-        m_project->pushUndoSnapshot();
-        updateUndoRedoActions();
-    }
+    // Final, un-throttled re-render so the image lands exactly where the box
+    // is. (The undo snapshot was already pushed on drag start.)
+    m_transformSeekThrottle.invalidate();
+    if (m_playback) m_playback->seek(m_playback->currentTime());
 }
 
 void MainWindow::onTextEdited() {
@@ -1272,15 +1559,9 @@ void MainWindow::updateUiTexts() {
     buildToolbar();
     if (m_mediaDock) m_mediaDock->setWindowTitle(LTR("dock.mediaPool"));
     if (m_timelineDock) m_timelineDock->setWindowTitle(LTR("dock.timeline"));
-    if (m_transformDock) m_transformDock->setWindowTitle(LTR("dock.transform"));
-    if (m_textDock) m_textDock->setWindowTitle(LTR("dock.text"));
-    if (m_audioFilterDock) m_audioFilterDock->setWindowTitle(LTR("dock.audioFilter"));
-    if (m_effectsDock) m_effectsDock->setWindowTitle(LTR("dock.effects"));
+    if (m_propertiesDock) m_propertiesDock->setWindowTitle(LTR("dock.properties"));
     if (m_mediaPool) m_mediaPool->retranslateUi();
-    if (m_transformPanel) m_transformPanel->retranslateUi();
-    if (m_textPanel) m_textPanel->retranslateUi();
-    if (m_audioFilterPanel) m_audioFilterPanel->retranslateUi();
-    if (m_effectsPanel) m_effectsPanel->retranslateUi();
+    if (m_propertiesPanel) m_propertiesPanel->retranslateUi();
     updateWindowTitle();
 }
 
@@ -1345,10 +1626,7 @@ void MainWindow::applyWindowSettings(const hc::WindowSettings& settings) {
     }
     if (m_mediaDock) m_mediaDock->setFeatures(features);
     if (m_timelineDock) m_timelineDock->setFeatures(features);
-    if (m_transformDock) m_transformDock->setFeatures(features);
-    if (m_textDock) m_textDock->setFeatures(features);
-    if (m_audioFilterDock) m_audioFilterDock->setFeatures(features);
-    if (m_effectsDock) m_effectsDock->setFeatures(features);
+    if (m_propertiesDock) m_propertiesDock->setFeatures(features);
 
     // 4. Bars visibility
     if (m_mainToolbar) m_mainToolbar->setVisible(settings.showToolbar);
@@ -1359,25 +1637,16 @@ void MainWindow::resetDockLayout() {
     ensureDocks();
     addDockWidget(Qt::LeftDockWidgetArea, m_mediaDock);
     addDockWidget(Qt::BottomDockWidgetArea, m_timelineDock);
-    addDockWidget(Qt::RightDockWidgetArea, m_transformDock);
-    addDockWidget(Qt::RightDockWidgetArea, m_textDock);
-    tabifyDockWidget(m_transformDock, m_textDock);
-    addDockWidget(Qt::RightDockWidgetArea, m_audioFilterDock);
-    tabifyDockWidget(m_textDock, m_audioFilterDock);
-    addDockWidget(Qt::RightDockWidgetArea, m_effectsDock);
-    tabifyDockWidget(m_audioFilterDock, m_effectsDock);
+    addDockWidget(Qt::RightDockWidgetArea, m_propertiesDock);
 
     m_mediaDock->show();
     m_timelineDock->show();
-    m_transformDock->show();
-    m_textDock->show();
-    m_audioFilterDock->show();
-    m_effectsDock->show();
-    m_transformDock->raise();
+    m_propertiesDock->show();
+    m_propertiesDock->raise();
 
     const int timelineH = std::clamp(height() * 35 / 100, 240, 450);
     resizeDocks({m_timelineDock}, {timelineH}, Qt::Vertical);
-    resizeDocks({m_mediaDock, m_transformDock}, {260, 320}, Qt::Horizontal);
+    resizeDocks({m_mediaDock, m_propertiesDock}, {340, 320}, Qt::Horizontal);
 }
 
 void MainWindow::closeEvent(QCloseEvent* event) {

@@ -73,8 +73,13 @@ public:
 
     // Maximum proxy width in pixels (height scales to preserve aspect
     // ratio, rounded to an even number as required by yuv420p). Applies to
-    // jobs started after this call. Default 960.
-    void setMaxProxyWidth(int width) { m_maxProxyWidth = std::max(160, width); }
+    // jobs started after this call.
+    //
+    // 0 (the default) enables AUTO mode: 4K/8K sources (>= 3840px wide) get
+    // a 720p proxy, 1080p–2.7K sources get a 480p proxy, and smaller sources
+    // are capped at 480p without ever being upscaled. Any explicit value
+    // (e.g. 640 / 854 / 960 / 1280) forces that fixed width instead.
+    void setMaxProxyWidth(int width) { m_maxProxyWidth = std::max(0, width); }
     int maxProxyWidth() const { return m_maxProxyWidth; }
 
     QString cacheDirectory() const { return m_cacheDir; }
@@ -107,6 +112,9 @@ private:
 
     static QString identityKeyForFile(const QString& filePath);
     QString proxyFilePathForKey(const QString& key) const;
+    // Resolution (target width) for this asset's proxy, honouring the
+    // explicit preset or the AUTO tiering scheme (see setMaxProxyWidth).
+    int effectiveProxyWidth(const MediaAssetPtr& asset) const;
 
     void loadIndex();
     void saveIndex() const;
@@ -129,7 +137,7 @@ private:
     Ticks m_currentJobDuration = 0;
     QString m_currentJobTempPath;
 
-    int m_maxProxyWidth = 960;
+    int m_maxProxyWidth = 0; // 0 = AUTO tiering (see effectiveProxyWidth)
 };
 
 } // namespace hc

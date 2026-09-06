@@ -30,6 +30,11 @@ struct GLLayer {
     int canvasW = 1920;         // original timeline canvas width
     int canvasH = 1080;         // original timeline canvas height
     bool isText = false;
+    // ── Transition support (incoming clip) ───────────────────────────
+    bool isCanvasFill = false;  // solid-colour full-canvas overlay (dip-to-color)
+    QColor overlayColor;        // colour used when isCanvasFill is true
+    double wipeProgress = 1.0;  // < 1.0 => wipe reveal fraction
+    int wipeDirection = 0;      // 0 L→R, 1 R→L, 2 T→B, 3 B→T
 };
 
 // GPU compositor for HyggshiCut preview.
@@ -77,6 +82,7 @@ private:
         unsigned int texRGBA = 0;
         bool isRGBA = false;
         bool isText = false;
+        bool isCanvasFill = false;
         bool hasFrame = false;
         bool usesCache = false;
         bool tiled = false;
@@ -90,6 +96,9 @@ private:
         double opacity = 1.0;
         BlendMode blendMode = BlendMode::Normal;
         std::vector<Effect> effects;
+        QColor overlayColor;
+        double wipeProgress = 1.0;
+        int wipeDirection = 0;
         // Which YUV->RGB matrix texY/texU/texV were encoded with — see
         // VideoFrame::colorMatrixBt709. Irrelevant for RGBA layers (text/
         // image), which are already RGB and never go through the YUV

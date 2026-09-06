@@ -74,17 +74,20 @@ TextPanel::TextPanel(QWidget* parent) : QWidget(parent) {
     styleAlignLayout->addSpacing(10);
 
     m_alignGroup = new QButtonGroup(this);
-    m_alignLeftBtn = new QPushButton(QStringLiteral("⇤"), this);
+    m_alignLeftBtn = new QPushButton(QStringLiteral("L"), this);
     m_alignLeftBtn->setCheckable(true);
     m_alignLeftBtn->setFixedWidth(32);
+    m_alignLeftBtn->setToolTip(tr("Căn trái"));
 
-    m_alignCenterBtn = new QPushButton(QStringLiteral("≡"), this);
+    m_alignCenterBtn = new QPushButton(QStringLiteral("C"), this);
     m_alignCenterBtn->setCheckable(true);
     m_alignCenterBtn->setFixedWidth(32);
+    m_alignCenterBtn->setToolTip(tr("Căn giữa"));
 
-    m_alignRightBtn = new QPushButton(QStringLiteral("⇥"), this);
+    m_alignRightBtn = new QPushButton(QStringLiteral("R"), this);
     m_alignRightBtn->setCheckable(true);
     m_alignRightBtn->setFixedWidth(32);
+    m_alignRightBtn->setToolTip(tr("Căn phải"));
 
     m_alignGroup->addButton(m_alignCenterBtn, 0);
     m_alignGroup->addButton(m_alignLeftBtn, 1);

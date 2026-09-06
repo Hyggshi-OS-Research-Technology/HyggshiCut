@@ -63,7 +63,6 @@ void LanguageManager::discoverBundledLanguages() {
         QDir(appDir).filePath("languages"),
         QDir(appDir).filePath("../languages"),
         QDir::current().filePath("languages"),
-        "/home/hyggshi/Downloads/HyggshiCut/languages",
         "/usr/share/hyggshicut/languages"
     };
 

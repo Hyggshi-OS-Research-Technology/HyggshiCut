@@ -29,6 +29,7 @@ public:
     bool locked = false;
 
     const std::vector<Clip>& clips() const { return m_clips; }
+    std::vector<Clip>& clips() { return m_clips; }
 
     Clip* addClip(Clip clip) {
         // Remember the id BEFORE sorting — sortClips() can move the clip we

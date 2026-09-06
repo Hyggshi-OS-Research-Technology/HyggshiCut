@@ -123,7 +123,7 @@ void PluginManagerDialog::refresh() {
 
     for (const auto& p : plugins) {
         auto* item = new QListWidgetItem(m_list);
-        const QString status = p.enabled ? "✅" : "⬜";
+        const QString status = p.enabled ? "[x]" : "[ ]";
         item->setText(QString("%1 %2  [%3]").arg(status, p.name, p.pluginId));
         item->setData(Qt::UserRole, p.pluginId);
     }

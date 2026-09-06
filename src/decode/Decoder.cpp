@@ -1,6 +1,7 @@
 #include "Decoder.h"
+#include "../core/SystemInfo.h"
 #include <QDebug>
-#include <QThread>
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 
@@ -85,9 +86,27 @@ bool Decoder::open(const QString& filePath, QString* errorOut) {
         m_videoCodecCtx = avcodec_alloc_context3(codec);
         avcodec_parameters_to_context(m_videoCodecCtx, stream->codecpar);
         // Multi-threaded decode: big win for 1080p/4K H.264/HEVC preview scrubbing.
-        const int idealThreads = QThread::idealThreadCount();
-        m_videoCodecCtx->thread_count = std::clamp(idealThreads / 2, 1, 4);
-        m_videoCodecCtx->thread_type = FF_THREAD_FRAME | FF_THREAD_SLICE;
+        // Scale the worker count with the machine so weak/old CPUs (and their
+        // tight RAM) aren't asked to run more decode threads than they can
+        // actually feed — every frame thread also pins a queue of decoded
+        // frames in RAM.
+        const int cores = std::max(1, systeminfo::cpuCoreCount());
+        int decodeThreads = 1;
+        if (cores >= 8)      decodeThreads = 4;
+        else if (cores >= 4) decodeThreads = 2;
+        else                 decodeThreads = 1;
+        m_videoCodecCtx->thread_count = decodeThreads;
+
+        // Frame threading keeps several reference frames buffered per thread;
+        // on a machine with little RAM that can be the difference between
+        // smooth scrubbing and swap thrash. Fall back to slice-only threading
+        // there — it uses far less memory (at the cost of some throughput on
+        // very fast CPUs, which these machines don't have anyway).
+        const uint64_t ram = systeminfo::totalMemoryBytes();
+        const bool lowRam = ram > 0 && ram <= 3ull * 1024ull * 1024ull * 1024ull; // <= 3 GiB
+        m_videoCodecCtx->thread_type = lowRam
+            ? FF_THREAD_SLICE
+            : FF_THREAD_FRAME | FF_THREAD_SLICE;
         if (avcodec_open2(m_videoCodecCtx, codec, nullptr) < 0) {
             if (errorOut) *errorOut = QStringLiteral("avcodec_open2 (video) thất bại");
             close();
@@ -334,8 +353,13 @@ QImage Decoder::grabThumbnail(Ticks t, int maxWidth, int maxHeight) {
     auto frame = decodeNextVideoFrame();
     if (!frame || !frame->isValid()) return {};
 
-    // Manual BT.601 YUV420P -> RGB888 conversion (thumbnail only; GLVideoWidget
-    // does the equivalent conversion on the GPU via shader for live playback).
+    // Manual YUV420P -> RGB888 conversion (thumbnail only; GLVideoWidget does
+    // the equivalent conversion on the GPU via shader for live playback). Use
+    // the same BT.601 / BT.709 matrix decision as the rest of the pipeline
+    // (Decoder tags each frame with colorMatrixBt709 from the source stream),
+    // otherwise HD thumbnails show slightly different colors than the preview
+    // and the exported video.
+    const bool useBt709 = frame->colorMatrixBt709;
     QImage rgb(frame->width, frame->height, QImage::Format_RGB888);
     for (int y = 0; y < frame->height; ++y) {
         const uint8_t* yRow = frame->y.data() + y * frame->strideY;
@@ -346,9 +370,16 @@ QImage Decoder::grabThumbnail(Ticks t, int maxWidth, int maxHeight) {
             const int Y = yRow[x];
             const int U = uRow[x / 2] - 128;
             const int V = vRow[x / 2] - 128;
-            const int r = qBound(0, static_cast<int>(Y + 1.402 * V), 255);
-            const int g = qBound(0, static_cast<int>(Y - 0.344136 * U - 0.714136 * V), 255);
-            const int b = qBound(0, static_cast<int>(Y + 1.772 * U), 255);
+            int r, g, b;
+            if (useBt709) {
+                r = qBound(0, static_cast<int>(Y + 1.5748 * V), 255);
+                g = qBound(0, static_cast<int>(Y - 0.1873 * U - 0.4681 * V), 255);
+                b = qBound(0, static_cast<int>(Y + 1.8556 * U), 255);
+            } else {
+                r = qBound(0, static_cast<int>(Y + 1.402 * V), 255);
+                g = qBound(0, static_cast<int>(Y - 0.344136 * U - 0.714136 * V), 255);
+                b = qBound(0, static_cast<int>(Y + 1.772 * U), 255);
+            }
             dst[x * 3 + 0] = static_cast<uchar>(r);
             dst[x * 3 + 1] = static_cast<uchar>(g);
             dst[x * 3 + 2] = static_cast<uchar>(b);

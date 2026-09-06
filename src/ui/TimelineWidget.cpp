@@ -1,4 +1,5 @@
 #include "TimelineWidget.h"
+#include "EffectsPanel.h"
 #include <QPainter>
 #include <QPainterPath>
 #include <QMouseEvent>
@@ -13,13 +14,19 @@
 #include <QDragMoveEvent>
 #include <QDropEvent>
 #include <QMimeData>
+#include <QWheelEvent>
+#include <QScrollArea>
+#include <QScrollBar>
+#include <QColorDialog>
 #include <algorithm>
+#include <cmath>
 
 namespace hc {
 
 namespace {
 constexpr Ticks kMinClipDuration = 33'333; // ~1 frame at 30fps, floor for trims
 constexpr int kEdgeGrabPx = 6;
+constexpr Ticks kDefaultTransitionTicks = 500'000; // 0.5s
 
 // --- Sleek vector button rendering for the per-track control cards ---
 void drawControlButton(QPainter& p, const QRect& r, int ctrlIndex, bool active, bool hovered) {
@@ -385,13 +392,99 @@ void TimelineWidget::setPlayheadTime(Ticks t) {
         const int newPx = timeToPixel(m_playheadTime);
         update(QRect(oldPx - 12, 0, 24, height()));
         update(QRect(newPx - 12, 0, 24, height()));
+        // Follow the playhead: when it moves off the visible area (during
+        // playback or edge scrubbing), scroll the minimum amount to reveal it.
+        ensurePlayheadVisible();
     }
 }
 
 void TimelineWidget::setZoom(double pixelsPerSecond) {
-    m_pixelsPerSecond = std::clamp(pixelsPerSecond, 5.0, 2000.0);
+    const double clamped = std::clamp(pixelsPerSecond, kMinZoomPxPerSec, kMaxZoomPxPerSec);
+    if (qFuzzyCompare(clamped, m_pixelsPerSecond)) return;
+    m_pixelsPerSecond = clamped;
+    recomputeTrackHeight(); // resize the widget so the scrollbar range follows the zoom
     updateGeometry();
     update();
+    emit zoomChanged(m_pixelsPerSecond);
+}
+
+QScrollArea* TimelineWidget::outerScrollArea() const {
+    // After QScrollArea::setWidget() the timeline is reparented to the
+    // scroll area's viewport, so walk up until we hit the QScrollArea.
+    for (QWidget* w = parentWidget(); w; w = w->parentWidget()) {
+        if (auto* sa = qobject_cast<QScrollArea*>(w)) return sa;
+    }
+    return nullptr;
+}
+
+void TimelineWidget::zoomAt(Ticks anchorTime, double factor, int cursorWidgetX) {
+    const double newZoom = std::clamp(m_pixelsPerSecond * factor, kMinZoomPxPerSec, kMaxZoomPxPerSec);
+    if (qFuzzyCompare(newZoom, m_pixelsPerSecond)) return;
+
+    QScrollArea* sa = outerScrollArea();
+    const int oldScroll = sa ? sa->horizontalScrollBar()->value() : 0;
+
+    m_pixelsPerSecond = newZoom;
+    recomputeTrackHeight(); // resize the widget so the scrollbar range follows the zoom
+    updateGeometry();
+
+    if (sa) {
+        QScrollBar* hbar = sa->horizontalScrollBar();
+        if (cursorWidgetX >= 0) {
+            // Keep the timeline *time* under the cursor fixed on screen:
+            // newScroll = newWidgetX - cursorWidgetX + oldScroll.
+            hbar->setValue(timeToPixel(anchorTime) - cursorWidgetX + oldScroll);
+        } else {
+            hbar->setValue(oldScroll); // left-anchored (menu zoom)
+        }
+    }
+    update();
+    emit zoomChanged(m_pixelsPerSecond);
+}
+
+void TimelineWidget::zoomBy(double factor) {
+    QScrollArea* sa = outerScrollArea();
+    if (!sa) {
+        zoomAt(m_playheadTime, factor, -1);
+        return;
+    }
+    const int scroll = sa->horizontalScrollBar()->value();
+    const int vw = sa->viewport()->width();
+    const int centerX = scroll + std::max(0, vw / 2);
+    const Ticks centerTime = pixelToTime(centerX);
+    zoomAt(centerTime, factor, centerX);
+}
+
+void TimelineWidget::zoomToFit() {
+    if (!m_project) return;
+    QScrollArea* sa = outerScrollArea();
+    const int viewW = sa ? sa->viewport()->width() : width();
+    const int usable = std::max(100, viewW - m_headerWidth);
+    const Ticks dur = std::max<Ticks>(m_project->timeline().totalDuration(), secondsToTicks(1));
+    const double seconds = std::max(0.001, ticksToSeconds(dur));
+    const double newZoom = std::clamp(static_cast<double>(usable) / seconds,
+                                      kMinZoomPxPerSec, kMaxZoomPxPerSec);
+    m_pixelsPerSecond = newZoom;
+    recomputeTrackHeight();
+    updateGeometry();
+    if (sa) sa->horizontalScrollBar()->setValue(0);
+    update();
+    emit zoomChanged(m_pixelsPerSecond);
+}
+
+void TimelineWidget::ensurePlayheadVisible() {
+    QScrollArea* sa = outerScrollArea();
+    if (!sa) return;
+    QScrollBar* hbar = sa->horizontalScrollBar();
+    const int scroll = hbar->value();
+    const int vw = sa->viewport()->width();
+    const int px = timeToPixel(m_playheadTime);
+    constexpr int margin = 12;
+    if (px < scroll + margin) {
+        hbar->setValue(std::max(0, px - margin));
+    } else if (px > scroll + vw - margin) {
+        hbar->setValue(px - vw + margin);
+    }
 }
 
 Ticks TimelineWidget::pixelToTime(int x) const {
@@ -539,6 +632,29 @@ void TimelineWidget::hitTest(const QPoint& pos, QString* outTrackId, QString* ou
     *outMode = DragMode::ScrubPlayhead;
 }
 
+bool TimelineWidget::clipAtPoint(const QPoint& pos, QString* outTrackId, QString* outClipId) const {
+    *outTrackId = QString();
+    *outClipId = QString();
+    if (!m_project) return false;
+
+    const int row = trackRowAtY(pos.y());
+    if (row < 0) return false;
+    const int idx = trackVectorIndexForRow(row);
+    const auto& tracks = m_project->timeline().tracks();
+    if (idx < 0 || idx >= static_cast<int>(tracks.size())) return false;
+    const Track& track = tracks[idx];
+    if (track.locked) return false;
+
+    for (const auto& clip : track.clips()) {
+        if (clipRect(idx, clip).contains(pos)) {
+            *outTrackId = track.id;
+            *outClipId = clip.id;
+            return true;
+        }
+    }
+    return false;
+}
+
 bool TimelineWidget::transitionMarkerAt(const QPoint& pos, QString* outTrackId,
                                          QString* outPrevClipId, QString* outCurClipId) const {
     *outTrackId = QString();
@@ -594,15 +710,119 @@ void TimelineWidget::toggleTransitionAt(Track* track, Clip* prevClip, Clip* curC
         // Create: a default 0.5s crossfade, clamped so it never eats more
         // than half of either clip's own on-screen duration (keeps a
         // sliver of each clip visible on its own either side of the fade).
-        constexpr Ticks kDefaultTransition = 500'000; // 0.5s, in ticks (µs)
         const Ticks maxByPrev = prevClip->timelineDuration() / 2;
         const Ticks maxByCur = curClip->timelineDuration() / 2;
-        const Ticks duration = std::clamp<Ticks>(kDefaultTransition, 1, std::max<Ticks>(1, std::min(maxByPrev, maxByCur)));
+        const Ticks duration = std::clamp<Ticks>(kDefaultTransitionTicks, 1, std::max<Ticks>(1, std::min(maxByPrev, maxByCur)));
         curClip->transitionInDuration = duration;
         curClip->timelineStart -= duration;
     }
     emit timelineEdited();
     update();
+}
+
+void TimelineWidget::buildTransitionMenu(QMenu* menu, Track* track,
+                                         const QString& prevClipId, const QString& incomingClipId) {
+    if (!menu || !track || track->locked) return;
+    Clip* prev = track->findClip(prevClipId);
+    Clip* cur = track->findClip(incomingClipId);
+    if (!cur) return;
+
+    const TransitionType types[4] = { TransitionType::Dissolve, TransitionType::Wipe,
+                                      TransitionType::Slide, TransitionType::DipToColor };
+    const QString typeNames[4] = { tr("Cross Dissolve"), tr("Wipe"), tr("Slide"), tr("Dip to Color") };
+    const QString dirNames[4] = { tr("Left → Right"), tr("Right → Left"),
+                                  tr("Top → Bottom"), tr("Bottom → Top") };
+
+    menu->addSection(tr("Transition"));
+
+    if (cur->transitionInDuration <= 0) {
+        // No transition yet: offer to add one of the chosen type.
+        for (int i = 0; i < 4; ++i) {
+            QAction* a = menu->addAction(tr("Add %1").arg(typeNames[i]));
+            connect(a, &QAction::triggered, this, [this, track, prev, cur, t = types[i]]() {
+                const Ticks maxByPrev = prev ? prev->timelineDuration() / 2 : kDefaultTransitionTicks;
+                const Ticks maxByCur = cur->timelineDuration() / 2;
+                const Ticks duration = std::clamp<Ticks>(kDefaultTransitionTicks, 1,
+                    std::max<Ticks>(1, std::min(maxByPrev, maxByCur)));
+                pushUndo();
+                cur->transitionInDuration = duration;
+                cur->transitionType = t;
+                cur->timelineStart -= duration;
+                emit timelineEdited();
+                update();
+            });
+        }
+        return;
+    }
+
+    QMenu* typeMenu = menu->addMenu(tr("Type"));
+    for (int i = 0; i < 4; ++i) {
+        QAction* a = typeMenu->addAction(typeNames[i]);
+        a->setCheckable(true);
+        a->setChecked(cur->transitionType == types[i]);
+        connect(a, &QAction::triggered, this, [this, cur, t = types[i]]() {
+            if (cur->transitionType == t) return;
+            pushUndo();
+            cur->transitionType = t;
+            emit timelineEdited();
+            update();
+        });
+    }
+
+    QMenu* dirMenu = menu->addMenu(tr("Direction"));
+    for (int d = 0; d < 4; ++d) {
+        QAction* a = dirMenu->addAction(dirNames[d]);
+        a->setCheckable(true);
+        a->setChecked(cur->transitionDirection == d);
+        connect(a, &QAction::triggered, this, [this, cur, d]() {
+            if (cur->transitionDirection == d) return;
+            pushUndo();
+            cur->transitionDirection = d;
+            emit timelineEdited();
+            update();
+        });
+    }
+
+    if (cur->transitionType == TransitionType::DipToColor) {
+        QAction* colorAction = menu->addAction(tr("Dip Color…"));
+        connect(colorAction, &QAction::triggered, this, [this, cur]() {
+            const QColor chosen = QColorDialog::getColor(
+                cur->transitionColor.isValid() ? cur->transitionColor : QColor(0, 0, 0),
+                this, tr("Dip to Color"));
+            if (!chosen.isValid()) return;
+            pushUndo();
+            cur->transitionColor = chosen;
+            emit timelineEdited();
+            update();
+        });
+    }
+
+    QMenu* durMenu = menu->addMenu(tr("Duration"));
+    const Ticks options[3] = { 250'000, 500'000, 1'000'000 }; // 0.25s / 0.5s / 1s
+    const QString optionNames[3] = { tr("0.25 s"), tr("0.5 s"), tr("1.0 s") };
+    for (int i = 0; i < 3; ++i) {
+        QAction* a = durMenu->addAction(optionNames[i]);
+        a->setCheckable(true);
+        a->setChecked(cur->transitionInDuration == options[i]);
+        connect(a, &QAction::triggered, this, [this, cur, newDur = options[i]]() {
+            if (cur->transitionInDuration == newDur) return;
+            pushUndo();
+            cur->timelineStart += cur->transitionInDuration - newDur;
+            cur->transitionInDuration = newDur;
+            emit timelineEdited();
+            update();
+        });
+    }
+
+    menu->addSeparator();
+    QAction* remove = menu->addAction(tr("Remove Transition"));
+    connect(remove, &QAction::triggered, this, [this, cur]() {
+        pushUndo();
+        cur->timelineStart += cur->transitionInDuration;
+        cur->transitionInDuration = 0;
+        emit timelineEdited();
+        update();
+    });
 }
 
 void TimelineWidget::paintEvent(QPaintEvent* event) {
@@ -971,8 +1191,7 @@ void TimelineWidget::paintEvent(QPaintEvent* event) {
                     label = tr("(media bị mất)");
                 }
             }
-            const QString iconPrefix = (clip.type == ClipType::Audio) ? "🎵 " : (clip.type == ClipType::Text ? "🔤 " : "🎬 ");
-            const QString fullLabel = iconPrefix + label;
+            const QString fullLabel = label;
 
             QFont clipFont = p.font();
             clipFont.setPointSize(8);
@@ -984,6 +1203,26 @@ void TimelineWidget::paintEvent(QPaintEvent* event) {
             p.setPen(Qt::white);
             p.drawText(r.adjusted(6, 0, -6, 0), Qt::AlignVCenter | Qt::AlignLeft,
                        p.fontMetrics().elidedText(fullLabel, Qt::ElideRight, r.width() - 12));
+
+            // Effect badge: a small "Fx N" pill in the top-right corner shows
+            // that this clip carries visual effects (added from the Explorer's
+            // Effects page, either by double-click or by drag & drop).
+            if (!clip.effects.empty() && r.width() > 40) {
+                QFont badgeFont = p.font();
+                badgeFont.setPointSize(6);
+                badgeFont.setBold(true);
+                p.setFont(badgeFont);
+                const QString badgeText = QStringLiteral("Fx %1").arg(clip.effects.size());
+                const int bw = p.fontMetrics().horizontalAdvance(badgeText) + 10;
+                const int bh = 13;
+                const QRect badge(r.right() - bw - 4, r.top() + 3, bw, bh);
+                p.setPen(Qt::NoPen);
+                p.setBrush(QColor(249, 115, 22, 235)); // amber-orange
+                p.drawRoundedRect(badge, 3.0, 3.0);
+                p.setPen(Qt::white);
+                p.drawText(badge, Qt::AlignCenter, badgeText);
+                p.setFont(clipFont);
+            }
 
             // Keyframes
             if (clip.hasTransformKeyframes()) {
@@ -1043,8 +1282,17 @@ void TimelineWidget::paintEvent(QPaintEvent* event) {
                 const int mx = timeToPixel(markerTime);
                 if (mx < dirty.left() - 8 || mx > dirty.right() + 8) continue;
                 const int my = y + m_trackHeight / 2;
+                QColor markerColor(255, 190, 80); // dissolve: amber
+                if (hasTransition) {
+                    switch (curClip.transitionType) {
+                        case TransitionType::Dissolve:   markerColor = QColor(255, 190, 80); break;
+                        case TransitionType::Wipe:       markerColor = QColor(90, 190, 255); break;
+                        case TransitionType::Slide:      markerColor = QColor(120, 220, 140); break;
+                        case TransitionType::DipToColor: markerColor = QColor(215, 130, 245); break;
+                    }
+                }
                 p.setPen(QColor(20, 20, 24));
-                p.setBrush(hasTransition ? QColor(255, 190, 80) : QColor(150, 150, 158, 160));
+                p.setBrush(hasTransition ? markerColor : QColor(150, 150, 158, 160));
                 p.drawEllipse(QPoint(mx, my), 7, 7);
                 p.setPen(Qt::white);
                 p.drawText(QRect(mx - 8, my - 8, 16, 16), Qt::AlignCenter, hasTransition ? tr("×") : tr("+"));
@@ -1316,8 +1564,8 @@ void TimelineWidget::mouseMoveEvent(QMouseEvent* event) {
 
     const Ticks now = pixelToTime(event->pos().x());
     const Ticks delta = now - m_dragAnchorTime;
-    // Alt disables snapping
-    const bool snapEnabled = !(event->modifiers() & Qt::AltModifier);
+    // Alt disables snapping (in addition to the global snap toggle)
+    const bool snapEnabled = m_snapEnabled && !(event->modifiers() & Qt::AltModifier);
     // Use the snap-point cache computed once at drag-start (mousePressEvent).
     // Avoids an O(N) timeline traversal on every mouse move event.
     const QList<Ticks>& snapPts = m_dragSnapPoints;
@@ -1462,6 +1710,53 @@ void TimelineWidget::mouseReleaseEvent(QMouseEvent*) {
     update();
 }
 
+void TimelineWidget::wheelEvent(QWheelEvent* event) {
+    if (!m_project) {
+        QWidget::wheelEvent(event);
+        return;
+    }
+
+    const Qt::KeyboardModifiers mods = event->modifiers();
+    // Ctrl/Alt + wheel zooms around the cursor (the standard NLE gesture).
+    if (mods & (Qt::ControlModifier | Qt::AltModifier)) {
+        const int deltaY = event->angleDelta().y();
+        if (deltaY == 0) return;
+        // Accumulate across high-resolution trackpads: one notch ≈ 1.25×.
+        const double factor = std::pow(1.25, static_cast<double>(deltaY) / 120.0);
+        zoomAt(pixelToTime(event->position().x()), factor,
+               static_cast<int>(event->position().x()));
+        event->accept();
+        return;
+    }
+
+    QScrollArea* sa = outerScrollArea();
+    if (!sa) {
+        QWidget::wheelEvent(event);
+        return;
+    }
+
+    int dy = event->angleDelta().y();
+    int dx = event->angleDelta().x();
+    // Prefer pixel deltas (high-res trackpads) when available.
+    const QPoint pixelDelta = event->pixelDelta();
+    if (!pixelDelta.isNull()) {
+        dx = pixelDelta.x();
+        dy = pixelDelta.y();
+    }
+
+    if (mods & Qt::ShiftModifier) {
+        // Shift + wheel = vertical scroll (pass through).
+        QScrollBar* vbar = sa->verticalScrollBar();
+        vbar->setValue(vbar->value() - (dy != 0 ? dy : dx));
+    } else {
+        // Plain wheel = horizontal pan of the timeline (the standard NLE
+        // convention where vertical wheel scrolls the timeline sideways).
+        QScrollBar* hbar = sa->horizontalScrollBar();
+        hbar->setValue(hbar->value() - (dy != 0 ? dy : dx));
+    }
+    event->accept();
+}
+
 void TimelineWidget::leaveEvent(QEvent* event) {
     QWidget::leaveEvent(event);
     if (m_hoverTrackRow != -1 || m_hoverControl != TrackControl::None) {
@@ -1522,6 +1817,19 @@ void TimelineWidget::keyPressEvent(QKeyEvent* event) {
                                  ? m_playheadTime - step : m_playheadTime + step;
         setPlayheadTime(std::clamp<Ticks>(target, 0, m_project->timeline().totalDuration()));
         emit seekRequested(m_playheadTime);
+    } else if (event->key() == Qt::Key_Comma || event->key() == Qt::Key_Period) {
+        // Nudge the selected clip by one frame (comma = left, period = right).
+        const Ticks frame = frameStepTicks();
+        nudgeSelectedClip(event->key() == Qt::Key_Comma ? -frame : frame);
+    } else if (event->key() == Qt::Key_Home) {
+        // Jump to the start of the timeline (standard NLE navigation).
+        setPlayheadTime(0);
+        emit seekRequested(m_playheadTime);
+    } else if (event->key() == Qt::Key_End) {
+        // Jump to the end of the timeline.
+        const Ticks end = m_project ? m_project->timeline().totalDuration() : 0;
+        setPlayheadTime(end);
+        emit seekRequested(m_playheadTime);
     } else {
         QWidget::keyPressEvent(event);
     }
@@ -1536,6 +1844,13 @@ void TimelineWidget::clearSelection() {
     }
 }
 
+void TimelineWidget::selectClip(const QString& trackId, const QString& clipId) {
+    m_selectedTrackId = trackId;
+    m_selectedClipId = clipId;
+    emit selectionChanged(clipId, trackId);
+    update();
+}
+
 void TimelineWidget::deleteSelectedClip() {
     if (!m_project || m_selectedClipId.isEmpty()) return;
     Track* track = m_project->timeline().findTrack(m_selectedTrackId);
@@ -1548,6 +1863,162 @@ void TimelineWidget::deleteSelectedClip() {
         emit timelineEdited();
         update();
     }
+}
+
+Ticks TimelineWidget::frameStepTicks() const {
+    const double fps = (m_project && m_project->timeline().frameRate > 0)
+                           ? m_project->timeline().frameRate : 30.0;
+    return secondsToTicks(1.0 / fps);
+}
+
+void TimelineWidget::setSnapEnabled(bool enabled) {
+    if (m_snapEnabled == enabled) return;
+    m_snapEnabled = enabled;
+    update();
+}
+
+// ── Clipboard: copy / paste / duplicate ─────────────────────────────
+// Copies are deep (Clip is plain data), placed at the playhead on the first
+// compatible unlocked track, nudged past any overlap exactly like a media
+// drop, and always get a fresh id so undo history and selection stay sane.
+
+void TimelineWidget::copySelectedClip() {
+    if (!m_project || m_selectedClipId.isEmpty()) return;
+    Track* track = m_project->timeline().findTrack(m_selectedTrackId);
+    if (!track) return;
+    Clip* clip = track->findClip(m_selectedClipId);
+    if (!clip) return;
+    m_clipboard = *clip;
+}
+
+void TimelineWidget::pasteClip() {
+    if (!m_project || !m_clipboard) return;
+    Clip copy = *m_clipboard;
+    copy.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+
+    const bool wantsAudio = (copy.type == ClipType::Audio);
+    auto compatible = [&](const Track& t) {
+        return !t.locked && (wantsAudio ? (t.type == TrackType::Audio)
+                                        : (t.type == TrackType::Visual));
+    };
+
+    // Prefer the currently selected track when it's compatible and unlocked,
+    // otherwise the first compatible unlocked track in the timeline.
+    Track* target = m_project->timeline().findTrack(m_selectedTrackId);
+    if (!target || !compatible(*target)) {
+        target = nullptr;
+        for (auto& t : m_project->timeline().tracks()) {
+            if (compatible(t)) { target = &t; break; }
+        }
+    }
+
+    pushUndo();
+    if (!target) {
+        const TrackType wantType = wantsAudio ? TrackType::Audio : TrackType::Visual;
+        const QString name = QString("%1 %2")
+            .arg(wantType == TrackType::Audio ? "Audio" : "Visual")
+            .arg(m_project->timeline().tracks().size() + 1);
+        target = &m_project->timeline().addTrack(wantType, name);
+    }
+
+    // Place at the playhead, pushing forward past any overlap on the target
+    // track (bounded by clip count so a dense track can't loop forever).
+    Ticks placedStart = std::max<Ticks>(0, m_playheadTime);
+    const Ticks duration = copy.timelineDuration();
+    const auto& existing = target->clips();
+    for (size_t guard = 0; guard < existing.size() + 1; ++guard) {
+        const Clip* blocker = nullptr;
+        for (const auto& other : existing) {
+            if (placedStart < other.timelineEnd() && placedStart + duration > other.timelineStart) {
+                blocker = &other;
+                break;
+            }
+        }
+        if (!blocker) break;
+        placedStart = blocker->timelineEnd();
+    }
+    copy.timelineStart = placedStart;
+
+    Clip* added = target->addClip(std::move(copy));
+    if (added) {
+        m_selectedClipId = added->id;
+        m_selectedTrackId = target->id;
+        emit selectionChanged(m_selectedClipId, m_selectedTrackId);
+    }
+    emit timelineEdited();
+    emit seekRequested(m_playheadTime); // re-render the frame under the playhead
+    update();
+}
+
+void TimelineWidget::duplicateSelectedClip() {
+    if (!m_project || m_selectedClipId.isEmpty()) return;
+    Track* track = m_project->timeline().findTrack(m_selectedTrackId);
+    if (!track || track->locked) return;
+    Clip* clip = track->findClip(m_selectedClipId);
+    if (!clip) return;
+
+    Clip copy = *clip;
+    copy.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
+
+    pushUndo();
+
+    // Place immediately after the source clip, nudged past any overlap.
+    Ticks placedStart = clip->timelineEnd();
+    const Ticks duration = copy.timelineDuration();
+    const auto& existing = track->clips();
+    for (size_t guard = 0; guard < existing.size() + 1; ++guard) {
+        const Clip* blocker = nullptr;
+        for (const auto& other : existing) {
+            if (other.id == clip->id) continue;
+            if (placedStart < other.timelineEnd() && placedStart + duration > other.timelineStart) {
+                blocker = &other;
+                break;
+            }
+        }
+        if (!blocker) break;
+        placedStart = blocker->timelineEnd();
+    }
+    copy.timelineStart = placedStart;
+
+    Clip* added = track->addClip(std::move(copy));
+    if (added) {
+        m_selectedClipId = added->id;
+        m_selectedTrackId = track->id;
+        emit selectionChanged(m_selectedClipId, m_selectedTrackId);
+    }
+    emit timelineEdited();
+    emit seekRequested(m_playheadTime); // re-render the frame under the playhead
+    update();
+}
+
+void TimelineWidget::rippleDeleteSelectedClip() {
+    if (!m_project || m_selectedClipId.isEmpty()) return;
+    Track* track = m_project->timeline().findTrack(m_selectedTrackId);
+    if (track && track->locked) return; // locked tracks can not be edited
+    pushUndo(); // snapshot BEFORE the destructive change
+    if (m_project->timeline().rippleDeleteClip(m_selectedTrackId, m_selectedClipId)) {
+        m_selectedClipId.clear();
+        m_selectedTrackId.clear();
+        emit selectionChanged(QString(), QString());
+        emit timelineEdited();
+        emit seekRequested(m_playheadTime); // re-render the frame under the playhead
+        update();
+    }
+}
+
+void TimelineWidget::nudgeSelectedClip(Ticks deltaTicks) {
+    if (!m_project || m_selectedClipId.isEmpty() || deltaTicks == 0) return;
+    Track* track = m_project->timeline().findTrack(m_selectedTrackId);
+    if (!track || track->locked) return;
+    Clip* clip = track->findClip(m_selectedClipId);
+    if (!clip) return;
+    const Ticks newStart = std::max<Ticks>(0, clip->timelineStart + deltaTicks);
+    if (newStart == clip->timelineStart) return;
+    pushUndo();
+    clip->timelineStart = newStart;
+    emit timelineEdited();
+    emit seekRequested(m_playheadTime); // re-render the frame under the playhead
+    update();
 }
 
 void TimelineWidget::deleteTrack(const QString& trackId) {
@@ -1599,6 +2070,20 @@ void TimelineWidget::deleteSelectedTrack() {
 
 void TimelineWidget::contextMenuEvent(QContextMenuEvent* event) {
     const QPoint pos = event->pos();
+
+    // Right-clicking a transition marker opens the transition editor
+    // (type / direction / dip colour / duration / remove).
+    {
+        QString txTrackId, prevClipId, curClipId;
+        if (transitionMarkerAt(pos, &txTrackId, &prevClipId, &curClipId)) {
+            Track* txTrack = m_project->timeline().findTrack(txTrackId);
+            QMenu menu(this);
+            buildTransitionMenu(&menu, txTrack, prevClipId, curClipId);
+            menu.exec(event->globalPos());
+            return;
+        }
+    }
+
     const int row = trackRowAtY(pos.y());
     const int count = static_cast<int>(m_project->timeline().tracks().size());
 
@@ -1610,18 +2095,18 @@ void TimelineWidget::contextMenuEvent(QContextMenuEvent* event) {
 
         // Right-clicked in the header (layer controls) area
         if (pos.x() < m_headerWidth) {
-            auto* titleAct = menu.addAction(QString("📁 %1").arg(track.name));
+            auto* titleAct = menu.addAction(track.name);
             QFont font = titleAct->font();
             font.setBold(true);
             titleAct->setFont(font);
             titleAct->setEnabled(false);
             menu.addSeparator();
 
-            menu.addAction(tr("🗑 Xóa layer \"%1\"").arg(track.name), [this, trackId = track.id]() {
+            menu.addAction(tr("Xóa layer \"%1\"").arg(track.name), [this, trackId = track.id]() {
                 deleteTrack(trackId);
             });
 
-            menu.addAction(tr("✏ Đổi tên layer..."), [this, trackId = track.id, curName = track.name]() {
+            menu.addAction(tr("Đổi tên layer..."), [this, trackId = track.id, curName = track.name]() {
                 bool ok = false;
                 QString newName = QInputDialog::getText(this, tr("Đổi tên layer"), tr("Tên layer mới:"), QLineEdit::Normal, curName, &ok);
                 if (ok && !newName.trimmed().isEmpty()) {
@@ -1637,26 +2122,26 @@ void TimelineWidget::contextMenuEvent(QContextMenuEvent* event) {
 
             menu.addSeparator();
 
-            menu.addAction(track.locked ? tr("🔓 Mở khóa layer") : tr("🔒 Khóa layer"), [this, row]() {
+            menu.addAction(track.locked ? tr("Mở khóa layer") : tr("Khóa layer"), [this, row]() {
                 toggleTrackControl(row, TrackControl::Lock);
             });
 
-            menu.addAction(track.hidden ? tr("👁 Hiện layer") : tr("🚫 Ẩn layer"), [this, row]() {
+            menu.addAction(track.hidden ? tr("Hiện layer") : tr("Ẩn layer"), [this, row]() {
                 toggleTrackControl(row, TrackControl::Hidden);
             });
 
-            menu.addAction(track.muted ? tr("🔊 Bật tiếng layer") : tr("🔇 Tắt tiếng layer"), [this, row]() {
+            menu.addAction(track.muted ? tr("Bật tiếng layer") : tr("Tắt tiếng layer"), [this, row]() {
                 toggleTrackControl(row, TrackControl::Mute);
             });
 
             menu.addSeparator();
-            menu.addAction(tr("➕ Thêm layer video/ảnh"), [this]() {
+            menu.addAction(tr("Thêm layer video/ảnh"), [this]() {
                 pushUndo();
                 m_project->timeline().addTrack(TrackType::Visual, QString("Visual %1").arg(m_project->timeline().tracks().size() + 1));
                 refresh();
                 emit timelineEdited();
             });
-            menu.addAction(tr("➕ Thêm layer audio"), [this]() {
+            menu.addAction(tr("Thêm layer audio"), [this]() {
                 pushUndo();
                 m_project->timeline().addTrack(TrackType::Audio, QString("Audio %1").arg(m_project->timeline().tracks().size() + 1));
                 refresh();
@@ -1678,17 +2163,29 @@ void TimelineWidget::contextMenuEvent(QContextMenuEvent* event) {
             update();
 
             Clip* clip = track.findClip(clipId);
-            auto* titleAct = menu.addAction(clip ? QString("🎬 %1").arg(clip->displayLabel) : tr("Clip"));
+            auto* titleAct = menu.addAction(clip ? (clip->displayLabel.isEmpty() ? tr("Clip") : clip->displayLabel) : tr("Clip"));
             QFont font = titleAct->font();
             font.setBold(true);
             titleAct->setFont(font);
             titleAct->setEnabled(false);
             menu.addSeparator();
 
-            menu.addAction(tr("✂ Cắt tại playhead (S)"), this, &TimelineWidget::splitAtPlayhead);
-            menu.addAction(tr("🗑 Xóa clip này (Delete)"), this, &TimelineWidget::deleteSelectedClip);
+            menu.addAction(tr("Cắt tại playhead (S)"), this, &TimelineWidget::splitAtPlayhead);
+            menu.addAction(tr("Xóa clip này (Delete)"), this, &TimelineWidget::deleteSelectedClip);
+            menu.addAction(tr("Xóa & dồn clip sau lại (Ripple delete)"), this, &TimelineWidget::rippleDeleteSelectedClip);
             menu.addSeparator();
-            menu.addAction(tr("🗑 Xóa layer chứa clip này"), [this, trackId]() {
+            menu.addAction(tr("Sao chép clip (Ctrl+C)"), this, &TimelineWidget::copySelectedClip);
+            menu.addAction(tr("Dán clip (Ctrl+V)"), this, &TimelineWidget::pasteClip);
+            menu.addAction(tr("Nhân đôi clip (Ctrl+D)"), this, &TimelineWidget::duplicateSelectedClip);
+            menu.addSeparator();
+            menu.addAction(tr("Dịch clip trái 1 khung hình (,)"), this, [this]() {
+                nudgeSelectedClip(-frameStepTicks());
+            });
+            menu.addAction(tr("Dịch clip phải 1 khung hình (.)"), this, [this]() {
+                nudgeSelectedClip(frameStepTicks());
+            });
+            menu.addSeparator();
+            menu.addAction(tr("Xóa layer chứa clip này"), [this, trackId]() {
                 deleteTrack(trackId);
             });
 
@@ -1698,13 +2195,13 @@ void TimelineWidget::contextMenuEvent(QContextMenuEvent* event) {
     }
 
     // Default right-click menu for empty timeline area
-    menu.addAction(tr("➕ Thêm layer video/ảnh"), [this]() {
+    menu.addAction(tr("Thêm layer video/ảnh"), [this]() {
         pushUndo();
         m_project->timeline().addTrack(TrackType::Visual, QString("Visual %1").arg(m_project->timeline().tracks().size() + 1));
         refresh();
         emit timelineEdited();
     });
-    menu.addAction(tr("➕ Thêm layer audio"), [this]() {
+    menu.addAction(tr("Thêm layer audio"), [this]() {
         pushUndo();
         m_project->timeline().addTrack(TrackType::Audio, QString("Audio %1").arg(m_project->timeline().tracks().size() + 1));
         refresh();
@@ -1712,7 +2209,7 @@ void TimelineWidget::contextMenuEvent(QContextMenuEvent* event) {
     });
     if (!m_selectedTrackId.isEmpty()) {
         menu.addSeparator();
-        menu.addAction(tr("🗑 Xóa layer đang chọn"), this, &TimelineWidget::deleteSelectedTrack);
+        menu.addAction(tr("Xóa layer đang chọn"), this, &TimelineWidget::deleteSelectedTrack);
     }
     menu.exec(event->globalPos());
 }
@@ -1729,19 +2226,68 @@ void TimelineWidget::splitAtPlayhead() {
 }
 
 void TimelineWidget::dragEnterEvent(QDragEnterEvent* event) {
-    if (event->mimeData()->hasFormat("application/x-hyggshicut-asset")) event->acceptProposedAction();
+    if (event->mimeData()->hasFormat("application/x-hyggshicut-asset") ||
+        event->mimeData()->hasFormat("application/x-hyggshicut-effect")) {
+        event->acceptProposedAction();
+    }
 }
 void TimelineWidget::dragMoveEvent(QDragMoveEvent* event) {
-    if (event->mimeData()->hasFormat("application/x-hyggshicut-asset")) event->acceptProposedAction();
+    if (event->mimeData()->hasFormat("application/x-hyggshicut-asset")) {
+        event->acceptProposedAction();
+        return;
+    }
+    if (event->mimeData()->hasFormat("application/x-hyggshicut-effect")) {
+        // Only accept while hovering a clip the effect can actually apply to,
+        // so the drag cursor reflects where the drop will land.
+        QString trackId, clipId;
+        if (m_project && clipAtPoint(event->position().toPoint(), &trackId, &clipId)) {
+            Track* track = m_project->timeline().findTrack(trackId);
+            Clip* clip = track ? track->findClip(clipId) : nullptr;
+            if (clip && (clip->type == ClipType::Video || clip->type == ClipType::Image ||
+                         clip->type == ClipType::Text)) {
+                event->acceptProposedAction();
+            }
+        }
+    }
 }
 
 void TimelineWidget::dropEvent(QDropEvent* event) {
     if (!m_project) return;
+    const QPoint pos = event->position().toPoint();
+
+    // --- Effect card drop: apply the effect to the clip under the cursor. ---
+    if (event->mimeData()->hasFormat("application/x-hyggshicut-effect")) {
+        const QString effectTypeId = QString::fromUtf8(
+            event->mimeData()->data("application/x-hyggshicut-effect"));
+
+        QString trackId, clipId;
+        if (!clipAtPoint(pos, &trackId, &clipId)) return;
+        Track* track = m_project->timeline().findTrack(trackId);
+        Clip* clip = track ? track->findClip(clipId) : nullptr;
+        if (!clip || (clip->type != ClipType::Video && clip->type != ClipType::Image &&
+                      clip->type != ClipType::Text)) {
+            return; // visual effects only apply to visual/text clips
+        }
+
+        pushUndo();
+        clip->effects.push_back(EffectsPanel::buildEffect(effectTypeId));
+        m_project->timeline().notifyClipChanged(trackId);
+
+        m_selectedClipId = clip->id;
+        m_selectedTrackId = trackId;
+        emit selectionChanged(m_selectedClipId, m_selectedTrackId);
+        emit timelineEdited();
+        // Re-render the current frame so the new effect is visible immediately.
+        emit seekRequested(m_playheadTime);
+        update();
+        event->acceptProposedAction();
+        return;
+    }
+
     const QString assetId = QString::fromUtf8(event->mimeData()->data("application/x-hyggshicut-asset"));
     auto asset = m_project->findAsset(assetId);
     if (!asset) return;
 
-    const QPoint pos = event->position().toPoint();
     const Ticks dropTime = pixelToTime(pos.x());
 
     Track* targetTrack = nullptr;

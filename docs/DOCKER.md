@@ -6,10 +6,10 @@ HyggshiCut cung cấp môi trường Docker hoàn chỉnh cho **100% reproducibl
 
 ## Tính năng nổi bật
 
-- 🚀 **Chạy GUI trực tiếp từ Docker**: Hỗ trợ hiển thị mượt mà trên cả **Wayland** và **X11** với tăng tốc phần cứng GPU (`/dev/dri`) và âm thanh thời gian thực (PulseAudio / PipeWire / ALSA).
-- 📦 **Đóng gói `.deb` sạch sẽ**: Không phụ thuộc vào môi trường hay thư viện máy chủ (host), tránh xung đột phiên bản hoặc thiếu thư viện.
-- 🎬 **Render Headless CLI**: Hỗ trợ render dự án video tự động trong Docker container không cần màn hình đồ họa (dành cho CI/CD hoặc server).
-- 💾 **Lưu trữ dữ liệu liên tục**: Tự động mount thư mục cấu hình `~/.config/HyggshiCut`, video `~/Videos`, và thư mục làm việc hiện tại vào container.
+- **Chạy GUI trực tiếp từ Docker**: Hỗ trợ hiển thị mượt mà trên cả **Wayland** và **X11** với tăng tốc phần cứng GPU (`/dev/dri`) và âm thanh thời gian thực (PulseAudio / PipeWire / ALSA).
+- **Đóng gói `.deb` sạch sẽ**: Không phụ thuộc vào môi trường hay thư viện máy chủ (host), tránh xung đột phiên bản hoặc thiếu thư viện.
+- **Render Headless CLI**: Hỗ trợ render dự án video tự động trong Docker container không cần màn hình đồ họa (dành cho CI/CD hoặc server).
+- **Lưu trữ dữ liệu liên tục**: Tự động mount thư mục cấu hình `~/.config/HyggshiCut`, video `~/Videos`, và thư mục làm việc hiện tại vào container.
 
 ---
 

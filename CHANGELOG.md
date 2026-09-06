@@ -4,9 +4,38 @@ All notable changes to HyggshiCut are documented in this file.
 
 ---
 
+## [Unreleased]
+
+### New Features
+- **Clip copy / paste / duplicate**: copy the selected clip (`Ctrl+C`), paste it at the playhead on a compatible track (`Ctrl+V`), or duplicate it right after itself (`Ctrl+D`) — also available from the clip's right-click menu. Pasted/duplicated clips keep their full styling, transform, effects, fades, and keyframes, and get a fresh id so undo history stays sane.
+- **Ripple delete**: remove a clip and automatically close the gap by shifting every later clip on the track left (Edit menu + clip right-click menu).
+- **Frame-accurate clip nudge**: move the selected clip one frame left/right with `,` / `.` (or the Edit menu), for precise sync adjustments.
+- **Snap toggle**: edge/playhead/keyframe snapping during drags can now be switched on/off from the View menu and is remembered across sessions.
+- **Standard timeline navigation**: `Ctrl`/`Alt` + mouse wheel now zooms the timeline around the cursor, plain mouse wheel pans horizontally (`Shift` + wheel scrolls vertically), `Home`/`End` jump to the start/end, and a **Zoom to fit** action (`Shift+Z`) fits the whole timeline into the window. The playhead auto-scrolls into view during playback and edge scrubbing, with a live zoom readout in the status bar.
+- **Transition types (Wipe, Slide, Dip to Color)**: transitions between adjacent clips on a Visual track now go beyond the classic cross-dissolve. Right-click the transition marker to pick the type — **Cross Dissolve**, **Wipe**, **Slide**, or **Dip to Color** — plus its direction, duration, and (for dip) the colour it fades through. The timeline marker is colour-coded by type, and every transition renders identically in the GL preview, the CPU fallback preview, and the ffmpeg export.
+- **Unified Inspector panel**: the four separate right-hand docks (Transform, Video Effects, Text, Audio Filters) are now a single tabbed **Properties** dock that switches to the relevant tab when you select a clip, and includes a read-only **Media** tab showing the selected asset's name, type, location, duration, resolution, frame rate, bitrate, sample rate, channels, and on-disk file size.
+- **Explorer grid & search**: the Media Pool is now a thumbnail **grid** (bigger previews, name + type + resolution/duration card labels) with a live **search box** that filters by file name or media type, an item counter, and click-to-inspect — single-clicking a card shows its properties in the Inspector without stealing focus during playback.
+
+### Bug Fixes
+- **Transform bounding-box drag lag ("image moves on its own")**: dragging the white transform frame over an image/video used to fire one synchronous seek + re-composite per mouse-move, so the GL image lagged behind the overlay box and then lurched forward to catch up. The clip transform still updates on every move (and the box tracks the cursor 1:1), but the preview re-render is now throttled to ~40/s during the drag, with a final un-throttled re-render on release. Undo now snapshots at drag *start* rather than release, so Undo restores the pre-drag position.
+- **Preview seek bar scrub glitch & audio sputter**: dragging the preview seek bar ("lever") while playing used to (a) fire one synchronous seek per pixel of movement, stalling the UI thread, and (b) re-seed audio output on every movement, so sound sputtered and the playhead fought the cursor. Scrubbing now pauses playback (silent, CapCut-style), throttles seeks to ~40/s, keeps the timecode readout live under the cursor, and resumes playback when the lever is released if it was playing before.
+- **HD thumbnail color accuracy**: Media-pool/timeline thumbnails now honor each source's BT.601 vs BT.709 matrix (previously always converted as BT.601, so HD thumbnails could differ slightly from Preview/Export).
+- **Media pool thumbnails after reopening a project**: image/video thumbnails (and audio waveforms) are derived in-memory at import time and are not stored in the `.hcproj`, so reopening a saved project used to show every media row with a blank preview. They are now regenerated when a project is opened, so the media pool looks exactly as it did when it was saved.
+- **Removed developer-machine paths**: dropped the hardcoded `/home/hyggshi/Downloads/...` language/plugin search entries, so bundled assets are only discovered from portable locations.
+- **Screen recorder cleanup**: a failed audio multiplex now removes the leftover raw-video temp file instead of leaking it in `/tmp`.
+- **Export low-memory log**: the "low-memory mode" message now reports the real trigger thresholds.
+
+### Performance & Memory Optimizations (weak / older machines)
+- **Adaptive decode threading**: `Decoder` now scales FFmpeg worker threads with the detected core count, and drops to slice-only threading (much lower RAM) on machines with ≤ 3 GiB.
+- **Adaptive cache budgets**: preview frame/texture caches are sized from detected physical RAM (≤ 3 GiB and ≤ 8 GiB tiers) instead of always using workstation-sized defaults.
+- **Adaptive export threads**: single-core machines render with one FFmpeg thread instead of two.
+- **Smart proxy resolution**: proxy transcoding now tiers by source size — 4K/8K footage gets a 720p proxy, HD gets a 480p proxy, and smaller sources are never upscaled (AUTO mode, the new default). Explicit 360p/480p/540p/720p presets remain available in Settings.
+
+---
+
 ## [1.1.0] - 2026-09-04
 
-### 🚀 New Features
+### New Features
 - **Native Screen Recording (Ghi Màn Hình)**:
   - Added dedicated Screen Recorder supporting Linux desktop environments.
   - **Wayland (Ubuntu / GNOME)**: Uses native `org.gnome.Shell.Screencast` D-Bus interface for smooth 1080p/4K 60fps hardware-accelerated capture with zero window flickering.
@@ -32,7 +61,7 @@ All notable changes to HyggshiCut are documented in this file.
   - Added quick action to Reset Dock Layout to the clean default arrangement.
   - All preferences persist across application sessions via `QSettings`.
 
-### ⚡ Performance & Memory Optimizations
+### Performance & Memory Optimizations
 - **Text RAM-Bomb Elimination**:
   - Replaced full-canvas text rasterization (1920x1080 ~7.9 MiB / 3840x2160 ~31.6 MiB per entry) with **Tight Bounding Box Cards** (`cardW x cardH`, ~100–300 KiB).
   - Reduced text CPU cache entry count from 32 to 8, slashing resident CPU RAM usage from **~253 MiB down to < 1.5 MiB** (> 98% reduction).
@@ -42,7 +71,7 @@ All notable changes to HyggshiCut are documented in this file.
   - Reuses GPU textures directly on every frame for static text layers, eliminating repeated `glTexSubImage2D` calls and dropping PCIe bandwidth from **~237 MiB/s to 0 B/s**.
   - Quad scaling via vertex shader (`uTileScale = vec2(cardW / canvasW, cardH / canvasH)`) eliminates transparent overdraw and maintains pixel-perfect alignment.
 
-### 🛠️ Packaging & CI/CD Fixes
+### Packaging & CI/CD Fixes
 - **Debian Packaging (`.deb`)**:
   - Fixed Debhelper compat level conflict (`debhelper-compat (= 13)` in `debian/control` vs redundant `debian/compat`).
   - Added executable permissions (`+x`) to `debian/rules`.

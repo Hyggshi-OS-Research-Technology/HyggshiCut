@@ -2,6 +2,7 @@
 #include "../render/GLVideoWidget.h"
 #include "../render/TextRenderer.h"
 #include "../audio/AudioFilterDesc.h"
+#include "../core/SystemInfo.h"
 #include <QDebug>
 #include <algorithm>
 #include <cmath>
@@ -34,6 +35,24 @@ PlaybackController::PlaybackController(Project* project, GLVideoWidget* videoOut
     connect(&m_timer, &QTimer::timeout, this, &PlaybackController::onTick);
     connect(&m_audioTimer, &QTimer::timeout, this, &PlaybackController::feedAudio);
     initAudio();
+
+    // Size the frame/texture caches to the machine. The defaults assume a
+    // mid-range workstation; on weak/old machines they'd either pin far too
+    // much RAM (texture/image tile caches) or be starved of it. Probed once
+    // here; unknown RAM (probe returned 0) keeps the defaults.
+    const uint64_t ram = systeminfo::totalMemoryBytes();
+    if (ram > 0) {
+        if (ram <= 3ull * 1024ull * 1024ull * 1024ull) {          // <= 3 GiB
+            m_textureCache.setGpuBudgetBytes(64ull * 1024ull * 1024ull);
+            m_textureCache.setCpuBudgetBytes(48ull * 1024ull * 1024ull);
+            m_frameCache.setMaxBytes(24ull * 1024ull * 1024ull);
+        } else if (ram <= 8ull * 1024ull * 1024ull * 1024ull) {   // <= 8 GiB
+            m_textureCache.setGpuBudgetBytes(128ull * 1024ull * 1024ull);
+            m_textureCache.setCpuBudgetBytes(64ull * 1024ull * 1024ull);
+            m_frameCache.setMaxBytes(48ull * 1024ull * 1024ull);
+        }
+    }
+
     // Do not render from the constructor. MainWindow may rebuild this controller
     // before QOpenGLWidget has an initialized context (especially while opening
     // a project). The first frame is scheduled by MainWindow after the event
@@ -348,6 +367,16 @@ void PlaybackController::renderFrameAt(Ticks t) {
             layer.blendMode = activeClip->blendMode;
             layer.effects = activeClip->effects;
 
+            // ── Incoming transition (wipe / slide / dip-to-color) ──
+            // The same math drives the ffmpeg exporter (see
+            // Timeline::transitionVisual) so preview and export stay in sync.
+            const auto tv = Timeline::transitionVisual(*activeClip, t);
+            layer.opacity *= tv.opacity;
+            layer.transform.x += tv.offsetX;
+            layer.transform.y += tv.offsetY;
+            layer.wipeProgress = tv.wipeProgress;
+            layer.wipeDirection = tv.wipeDirection;
+
             if (activeClip->type == ClipType::Text) {
                 // ━━━ TEXT CLIP: rasterize styled text with font, color, outline, etc. ━━━
                 const int cw = m_project->timeline().videoWidth > 0 ? m_project->timeline().videoWidth : 1920;
@@ -442,6 +471,22 @@ void PlaybackController::renderFrameAt(Ticks t) {
             } else {
                 // Audio-only clip on visual track (shouldn't happen but guard).
                 continue;
+            }
+
+            // Dip-to-color: insert a full-canvas solid colour overlay directly
+            // beneath the incoming clip (i.e. after the outgoing clip, which
+            // was pushed on a previous iteration) so it sits between the two.
+            if (tv.colorAlpha > 0.0) {
+                GLLayer colorLayer;
+                colorLayer.isCanvasFill = true;
+                colorLayer.canvasW = m_project->timeline().videoWidth > 0 ? m_project->timeline().videoWidth : 1920;
+                colorLayer.canvasH = m_project->timeline().videoHeight > 0 ? m_project->timeline().videoHeight : 1080;
+                colorLayer.overlayColor = activeClip->transitionColor.isValid()
+                    ? activeClip->transitionColor : QColor(0, 0, 0);
+                colorLayer.opacity = tv.colorAlpha;
+                colorLayer.rgbaImage = QImage(1, 1, QImage::Format_RGBA8888);
+                colorLayer.rgbaImage.fill(colorLayer.overlayColor.rgba());
+                layers.push_back(std::move(colorLayer));
             }
 
             layers.push_back(std::move(layer));

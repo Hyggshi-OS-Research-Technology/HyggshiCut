@@ -1,6 +1,7 @@
 #include "Exporter.h"
 #include "../audio/AudioFilterDesc.h"
 #include "../render/TextRenderer.h"
+#include "../core/SystemInfo.h"
 #include <QElapsedTimer>
 #include <QMap>
 #include <QRegularExpression>
@@ -360,39 +361,19 @@ static QString buildVideoEffectsFilterChain(const std::vector<Effect>& effects, 
 }
 
 bool lowMemoryExportMode() {
-#ifdef Q_OS_LINUX
-    // Read /proc/meminfo once and capture both MemAvailable and MemTotal.
-    QFile f(QStringLiteral("/proc/meminfo"));
-    if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        qulonglong availKb = 0, totalKb = 0;
-        while (!f.atEnd() && (availKb == 0 || totalKb == 0)) {
-            const QByteArray line = f.readLine();
-            const bool isAvail = line.startsWith("MemAvailable:");
-            const bool isTotal = line.startsWith("MemTotal:");
-            if (!isAvail && !isTotal) continue;
-            // Parse the first numeric token after the field name.
-            const int colon = line.indexOf(':');
-            if (colon < 0) continue;
-            const QByteArray rest = line.mid(colon + 1).trimmed();
-            const int sp = rest.indexOf(' ');
-            const QByteArray numPart = (sp > 0) ? rest.left(sp) : rest;
-            bool ok = false;
-            const qulonglong v = numPart.toULongLong(&ok);
-            if (ok && v > 0) {
-                if (isAvail) availKb = v;
-                else          totalKb = v;
-            }
-        }
-        const qulonglong avail = availKb * 1024ULL;
-        const qulonglong total = totalKb * 1024ULL;
-        // Conservative: trigger low-RAM mode when available < 12 GiB OR
-        // the machine has <= 16 GiB total (page-cache can hide real pressure).
-        if (avail > 0) {
-            return avail < (12ULL << 30)
-                || (total > 0 && total <= (16ULL << 30));
-        }
+    // Read /proc/meminfo once (via systeminfo) and capture both
+    // MemAvailable and MemTotal. This is the same signal the exporter uses
+    // to decide whether to drop to a single encode thread and cap
+    // allocations; it's reused here so the threshold lives in one place.
+    const uint64_t avail = systeminfo::availableMemoryBytes();
+    const uint64_t total = systeminfo::totalMemoryBytes();
+    // Conservative: trigger low-RAM mode when available < 12 GiB OR the
+    // machine has <= 16 GiB total (page-cache can hide real pressure).
+    if (avail > 0) {
+        return avail < (12ull << 30) || (total > 0 && total <= (16ull << 30));
     }
-#endif
+    // Non-Linux (or unreadable): fall back to total-RAM-only detection.
+    if (total > 0) return total <= (16ull << 30);
     return false;
 }
 
@@ -413,7 +394,8 @@ QStringList Exporter::buildFfmpegArgs(const Settings& s, QString* filterGraphDeb
     const int outH = std::max(s.height, 2);
     const bool lowMem = lowMemoryExportMode();
     if (lowMem) {
-        qWarning() << "[Exporter] Low-memory mode enabled automatically (MemAvailable < 6 GiB)";
+        qWarning() << "[Exporter] Low-memory mode enabled automatically"
+                   << "(available < 12 GiB or total <= 16 GiB)";
     }
 
     // --- collect unique input files, in first-seen order ---
@@ -609,12 +591,49 @@ QStringList Exporter::buildFfmpegArgs(const Settings& s, QString* filterGraphDeb
                     .arg(buildPiecewiseLinearExpr("t", scaleYPoints));
             }
 
-            if (clip.transitionInDuration > 0) {
-                const double transSec = std::max(0.0, ticksToSeconds(clip.transitionInDuration));
-                if (transSec > 0.000001) {
+            const double transSec = clip.transitionInDuration > 0
+                ? std::max(0.0, ticksToSeconds(clip.transitionInDuration)) : 0.0;
+            if (clip.transitionInDuration > 0 && transSec > 0.000001) {
+                switch (clip.transitionType) {
+                case TransitionType::Dissolve:
                     chain += QString(",fade=t=in:st=%1:d=%2:alpha=1")
                         .arg(startSec, 0, 'f', 6)
                         .arg(transSec, 0, 'f', 6);
+                    break;
+                case TransitionType::DipToColor:
+                    // Incoming stays hidden until the solid colour has covered
+                    // the outgoing clip, then fades in (mirrors
+                    // Timeline::transitionVisual: opacity = clip(2p-1, 0, 1)).
+                    chain += QString(",geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='alpha(X,Y)*clip(2*(T-%1)/%2-1,0,1)'")
+                        .arg(startSec, 0, 'f', 6)
+                        .arg(transSec, 0, 'f', 6);
+                    break;
+                case TransitionType::Wipe: {
+                    // Reveal the incoming clip by masking its alpha per-pixel,
+                    // exactly mirroring the GL preview's discard-based wipe:
+                    // the reveal fraction is relative to the clip's own fit
+                    // box (W/H after scale), so pillarboxed/letterboxed clips
+                    // and user transforms stay consistent between the two.
+                    const QString pr = QString("clip((T-%1)/%2,0,1)").arg(startSec, 0, 'f', 6).arg(transSec, 0, 'f', 6);
+                    switch (clip.transitionDirection) {
+                        case 0: // left → right
+                            chain += QString(",geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='alpha(X,Y)*if(lt(X,W*(%1)),1,0)'").arg(pr);
+                            break;
+                        case 1: // right → left
+                            chain += QString(",geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='alpha(X,Y)*if(gte(X,W*(1-(%1))),1,0)'").arg(pr);
+                            break;
+                        case 2: // top → bottom
+                            chain += QString(",geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='alpha(X,Y)*if(lt(Y,H*(%1)),1,0)'").arg(pr);
+                            break;
+                        case 3: // bottom → top
+                            chain += QString(",geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='alpha(X,Y)*if(gte(Y,H*(1-(%1))),1,0)'").arg(pr);
+                            break;
+                        default: break;
+                    }
+                    break;
+                }
+                case TransitionType::Slide:
+                    break; // handled via the animated overlay position below
                 }
             }
 
@@ -687,6 +706,48 @@ QStringList Exporter::buildFfmpegArgs(const Settings& s, QString* filterGraphDeb
                 const int offY = qRound(baseY * outH / 2.0);
                 posXExpr = QString("(main_w-overlay_w)/2+%1").arg(offX);
                 posYExpr = QString("(main_h-overlay_h)/2+%1").arg(offY);
+            }
+
+            // Slide transition: add the animated offset to the overlay position
+            // (transform units ±2 × half-canvas = ± full canvas width/height).
+            if (clip.transitionInDuration > 0 && transSec > 0.000001 &&
+                clip.transitionType == TransitionType::Slide) {
+                const QString k = QString("(1-clip((t-%1)/%2,0,1))").arg(startSec, 0, 'f', 6).arg(transSec, 0, 'f', 6);
+                switch (clip.transitionDirection) {
+                    case 0: posXExpr += QString("-(%1)*%2").arg(k).arg(outW); break; // enters from left
+                    case 1: posXExpr += QString("+(%1)*%2").arg(k).arg(outW); break; // enters from right
+                    case 2: posYExpr += QString("-(%1)*%2").arg(k).arg(outH); break; // enters from top
+                    case 3: posYExpr += QString("+(%1)*%2").arg(k).arg(outH); break; // enters from bottom
+                    default: break;
+                }
+            }
+
+            // Dip-to-color: overlay the solid colour beneath the incoming clip
+            // (i.e. over whatever was composited so far, which ends with the
+            // outgoing clip) for the duration of the transition.
+            if (clip.transitionInDuration > 0 && transSec > 0.000001 &&
+                clip.transitionType == TransitionType::DipToColor) {
+                const QString dipLabel = QString("dipcolor%1").arg(layerCounter);
+                const QString dipComp = QString("dipcomp%1").arg(layerCounter);
+                // ffmpeg's color filter wants 0xRRGGBB, not #RRGGBB.
+                const QString dipRgb = QStringLiteral("0x%1")
+                    .arg(clip.transitionColor.name(QColor::HexRgb).mid(1));
+                videoFilterParts << QString(
+                    "color=c=%1:s=%2x%3:d=%4:r=%5,format=rgba,"
+                    "geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='clip(2*(T-%6)/%7,0,1)'[%8]")
+                    .arg(dipRgb)
+                    .arg(outW).arg(outH)
+                    .arg(totalSec, 0, 'f', 6)
+                    .arg(s.frameRate, 0, 'f', 6)
+                    .arg(startSec, 0, 'f', 6)
+                    .arg(transSec, 0, 'f', 6)
+                    .arg(dipLabel);
+                videoFilterParts << QString("[%1][%2]overlay=x=0:y=0:format=auto:enable='between(t,%3,%4)'[%5]")
+                    .arg(current, dipLabel)
+                    .arg(startSec, 0, 'f', 6)
+                    .arg(startSec + transSec, 0, 'f', 6)
+                    .arg(dipComp);
+                current = dipComp;
             }
 
             const QString next = QString("singleComp%1").arg(layerCounter);
@@ -852,10 +913,13 @@ QStringList Exporter::buildFfmpegArgs(const Settings& s, QString* filterGraphDeb
         // into a controlled FFmpeg allocation failure instead.
         args << "-max_alloc" << "134217728"; // 128 MiB
     } else {
-        // 2 global threads: one for demux/decode, one for encode.
-        // More than 2 creates large reference-frame pools inside libx264
-        // (one full 1080p YUV buffer per thread × 16 ref frames).
-        args << "-threads" << "2";
+        // 2 global threads on multi-core machines: one for demux/decode,
+        // one for encode. More than 2 creates large reference-frame pools
+        // inside libx264 (one full 1080p YUV buffer per thread × 16 ref
+        // frames). On single-core machines a single thread avoids pointless
+        // context-switch overhead between the decode and encode stages.
+        const int cores = std::max(1, systeminfo::cpuCoreCount());
+        args << "-threads" << (cores >= 2 ? "2" : "1");
     }
 
     // Video encoding flags

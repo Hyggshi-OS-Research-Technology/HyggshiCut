@@ -50,6 +50,10 @@ Beyond its intuitive, modern graphical interface, HyggshiCut also ships with a b
 - **Precise cutting tools:** Split at playhead (`S`), trim both ends of a clip, duration stretching, ripple delete, smart snapping.
 - **Full history system:** Safe Undo and Redo across every action on the timeline.
 
+### 1b. Explorer & Inspector Panels
+- **Explorer (Media Pool):** a thumbnail grid of every imported asset — image, video, and audio — each card showing a preview, media type, and resolution/duration, with a live search box and a proxy-status tag. Single-click a card to inspect it; double-click to preview it; drag it onto the timeline to add it.
+- **Inspector (Properties):** one unified right-hand panel with tabbed **Media** (read-only file properties: name, type, location, duration, resolution, frame rate, bitrate, sample rate, channels, file size), **Transform**, **Effects**, **Text**, and **Audio** editors. The panel auto-switches to the relevant tab when you select a clip or a media asset.
+
 ### 2. Real-Time GPU Compositing & Effects (OpenGL 3.3 Core)
 - **19 Blend Modes:** Normal, Multiply, Screen, Overlay, Add, Subtract, Darken, Lighten, HardLight, SoftLight, Difference, Exclusion, Dodge, Burn, Saturate, HSL Hue/Saturation/Color/Luminosity.
 - **Real-time post-processing chain (GPU Shader Pipeline):**
@@ -65,6 +69,7 @@ Beyond its intuitive, modern graphical interface, HyggshiCut also ships with a b
 - **Smart keyframe system:** Set keyframes on the timeline (shown as diamonds `◆`) to create smooth motion (PIP, zoom, layer slide, fade).
 
 ### 4. Smooth Transitions & Fades
+- **Transitions between clips:** Click the marker between two adjacent clips on a Visual track to create a transition, then right-click it to choose the type — **Cross Dissolve**, **Wipe**, **Slide**, or **Dip to Color** — along with its direction, duration, and (for dip) the colour it fades through. Transitions render identically in the OpenGL preview, the CPU-fallback preview, and the ffmpeg export.
 - **Crossfade transitions:** Smooth cross-dissolve using a RAM-efficient single-pass algorithm.
 - **Fade handles:** Drag directly on a clip to create fade-in / fade-out for both video and audio.
 
@@ -218,8 +223,13 @@ HyggshiCut -r -p podcast.hcproj -o podcast_audio.mp3 --preset audio-mp3
 | `S` | Split clip at playhead |
 | `Delete` / `Backspace` | Delete the selected clip |
 | `Shift + Delete` | Delete the selected layer/track |
+| `Ctrl + C` | Copy the selected clip |
+| `Ctrl + V` | Paste the copied clip at the playhead |
+| `Ctrl + D` | Duplicate the selected clip |
+| `,` / `.` | Nudge the selected clip left / right by one frame |
 | `←` / `→` | Move back / forward 1 frame |
 | `↑` / `↓` | Move back / forward 5 seconds |
+| `Home` / `End` | Jump to the start / end of the timeline |
 | `Ctrl + Z` | Undo |
 | `Ctrl + Y` / `Ctrl + Shift + Z` | Redo |
 | `Ctrl + I` | Open the Import Media dialog |
@@ -229,6 +239,10 @@ HyggshiCut -r -p podcast.hcproj -o podcast_audio.mp3 --preset audio-mp3
 | `Ctrl + S` | Save project |
 | `Ctrl + Shift + S` | Save project as (Save As) |
 | `+` / `-` (or `Ctrl + Scroll`) | Zoom In / Zoom Out on the Timeline |
+| `Shift + Z` | Fit the whole timeline to the window (Zoom to fit) |
+| `Mouse Wheel` | Pan the timeline horizontally (`Shift + Wheel` scrolls vertically) |
+
+> **Ripple delete** (remove a clip and close the gap) is available from the clip's right-click menu and the Edit menu.
 
 ---
 

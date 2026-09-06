@@ -147,7 +147,7 @@ void ThreeWayColorGradeWidget::populatePresets() {
     QSettings settings("HyggshiCut", "ColorGradePresets");
     const QStringList keys = settings.childKeys();
     for (const QString& k : keys) {
-        m_presetCombo->addItem("⭐ " + k, k);
+        m_presetCombo->addItem(k, k);
     }
 
     m_presetCombo->blockSignals(false);

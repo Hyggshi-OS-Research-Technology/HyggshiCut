@@ -45,7 +45,7 @@ const std::vector<ExportPresetItem>& exportPresets() {
         { "Chỉ xuất Âm thanh MP3 (320 kbps High Quality)","mp3", 0,    0,    0.0,  "none",    "bitrate", 0,     0,  "",       "libmp3lame", 320, 48000, 2 },
         { "Chỉ xuất Âm thanh WAV (Lossless PCM 16-bit)",  "wav", 0,    0,    0.0,  "none",    "bitrate", 0,     0,  "",       "pcm_s16le", 0, 48000, 2 },
         // Low-spec PC preset: ultrafast encode + low bitrate for stability on weak machines
-        { "⚡ Máy yếu / Nhanh (H.264 Ultrafast, 4 Mbps, 720p)", "mp4", 1280, 720, 30.0, "libx264", "bitrate", 4000, 28, "ultrafast", "aac", 128, 48000, 2 },
+        { "Máy yếu / Nhanh (H.264 Ultrafast, 4 Mbps, 720p)", "mp4", 1280, 720, 30.0, "libx264", "bitrate", 4000, 28, "ultrafast", "aac", 128, 48000, 2 },
         { "Tùy chỉnh (Custom)",                           "mp4", 1920, 1080, 30.0, "libx264", "bitrate", 8000,  21, "medium", "aac", 192, 48000, 2 }
     };
     return presets;

@@ -51,6 +51,11 @@ public:
     // Inserts (or refreshes) a decoded frame into the cache.
     void put(const QString& assetId, int64_t frameIndex, const VideoFrame& frame);
 
+    // Adjusts the resident-byte budget at runtime (e.g. after probing how
+    // much RAM the machine actually has). Evicts immediately if the cache is
+    // already over the new budget.
+    void setMaxBytes(size_t bytes);
+
     // Drops every cached frame for one asset — call when that asset's
     // decode source changes (proxy generated/toggled, media relinked) so
     // stale-resolution frames can't be served.
