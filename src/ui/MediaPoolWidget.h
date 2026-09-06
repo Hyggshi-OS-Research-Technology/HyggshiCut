@@ -23,6 +23,19 @@ protected:
     QMimeData* mimeData(const QList<QListWidgetItem*>& items) const override;
 };
 
+// Same idea as AssetListWidget, but for the Effects category: a dragged
+// effect card carries the effect *type id* (e.g. "blur") under its own MIME
+// type. TimelineWidget::dropEvent uses it to apply the effect to the clip the
+// card is dropped on.
+class EffectListWidget : public QListWidget {
+    Q_OBJECT
+public:
+    explicit EffectListWidget(QWidget* parent = nullptr) : QListWidget(parent) {}
+
+protected:
+    QMimeData* mimeData(const QList<QListWidgetItem*>& items) const override;
+};
+
 // Left-dock "Explorer" panel, laid out CapCut-style: a vertical category rail
 // (Media / Sounds / Text / Effects / Transitions) next to a stacked content
 // area. Media shows the imported assets as a searchable thumbnail grid; the
@@ -64,7 +77,7 @@ private:
     void buildSoundsPage();
     void populateSoundsPage();
     void populatePresetPages();
-    QWidget* makeCardList(QListWidget** outList);
+    QWidget* makeCardList(QListWidget** outList, bool effectPage = false);
 
     Project* m_project;
     ProxyManager* m_proxyManager; // not owned, may be nullptr

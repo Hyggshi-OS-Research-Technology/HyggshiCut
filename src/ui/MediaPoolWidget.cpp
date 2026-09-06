@@ -124,6 +124,14 @@ QMimeData* AssetListWidget::mimeData(const QList<QListWidgetItem*>& items) const
     return mime;
 }
 
+QMimeData* EffectListWidget::mimeData(const QList<QListWidgetItem*>& items) const {
+    if (items.isEmpty()) return nullptr;
+    auto* mime = new QMimeData();
+    const QString effectTypeId = items.first()->data(Qt::UserRole).toString();
+    mime->setData("application/x-hyggshicut-effect", effectTypeId.toUtf8());
+    return mime;
+}
+
 MediaPoolWidget::MediaPoolWidget(Project* project, ProxyManager* proxyManager, QWidget* parent)
     : QWidget(parent), m_project(project), m_proxyManager(proxyManager) {
     auto* layout = new QHBoxLayout(this);
@@ -136,9 +144,9 @@ MediaPoolWidget::MediaPoolWidget(Project* project, ProxyManager* proxyManager, Q
     m_stack = new QStackedWidget(this);
     buildMediaPage();   // index 0
     buildSoundsPage();  // index 1
-    m_stack->addWidget(makeCardList(&m_textList));        // index 2
-    m_stack->addWidget(makeCardList(&m_effectsList));     // index 3
-    m_stack->addWidget(makeCardList(&m_transitionsList)); // index 4
+    m_stack->addWidget(makeCardList(&m_textList));            // index 2
+    m_stack->addWidget(makeCardList(&m_effectsList, true));   // index 3 (draggable)
+    m_stack->addWidget(makeCardList(&m_transitionsList));     // index 4
     layout->addWidget(m_stack, 1);
 
     // Rail drives the stacked pages.
@@ -312,8 +320,10 @@ void MediaPoolWidget::buildSoundsPage() {
 }
 
 // Creates a QListWidget configured as an icon-mode card grid, wrapped in a
-// page widget that owns a small hint label above the list.
-QWidget* MediaPoolWidget::makeCardList(QListWidget** outList) {
+// page widget that owns a small hint label above the list. When
+// `effectPage` is true the list is an EffectListWidget with drag enabled so
+// effect cards can be dropped onto the timeline (see TimelineWidget::dropEvent).
+QWidget* MediaPoolWidget::makeCardList(QListWidget** outList, bool effectPage) {
     auto* page = new QWidget(this);
     auto* layout = new QVBoxLayout(page);
     layout->setContentsMargins(6, 6, 6, 6);
@@ -325,7 +335,11 @@ QWidget* MediaPoolWidget::makeCardList(QListWidget** outList) {
     layout->addWidget(hint);
     m_presetHints.push_back(hint);
 
-    auto* list = new QListWidget(page);
+    QListWidget* list = effectPage ? new EffectListWidget(page) : new QListWidget(page);
+    if (effectPage) {
+        list->setDragEnabled(true);
+        list->setDragDropMode(QAbstractItemView::DragOnly);
+    }
     list->setViewMode(QListView::IconMode);
     list->setResizeMode(QListView::Adjust);
     list->setMovement(QListView::Static);
@@ -552,7 +566,7 @@ void MediaPoolWidget::populatePresetPages() {
             auto* item = new QListWidgetItem(EffectsPanel::effectTypeName(id));
             item->setIcon(QIcon(presetIcon(kThumbWidth, kThumbHeight, cols[ci % 3], cols[ci % 3].darker(150), QStringLiteral("Fx"))));
             item->setData(Qt::UserRole, id);
-            item->setToolTip(tr("Double-click to apply this effect to the selected clip."));
+            item->setToolTip(tr("Double-click to apply to the selected clip, or drag onto a clip on the timeline."));
             m_effectsList->addItem(item);
             ++ci;
         }

@@ -131,7 +131,7 @@
     "explorer.sounds.import": "+ Nhập âm thanh…",
     "explorer.hint.sounds": "Nhấp đúp để thêm âm thanh vào timeline.",
     "explorer.hint.text": "Nhấp đúp để thêm clip Văn bản.",
-    "explorer.hint.effects": "Nhấp đúp để áp dụng cho clip đang chọn.",
+    "explorer.hint.effects": "Nhấp đúp hoặc kéo thả lên clip để áp dụng.",
     "explorer.hint.transitions": "Nhấp đúp để áp dụng trước clip đang chọn.",
 
     "preset.text.title": "Tiêu đề",
@@ -193,7 +193,7 @@
     "transform.keyframeGroup": "Keyframe layer",
     "transform.noKeyframes": "Chưa có keyframe — layer đang tĩnh (không hoạt ảnh).",
     "transform.hasKeyframes": "Đang hoạt ảnh với %1 keyframe.",
-    "transform.addKf": "Thêm Keyframe tại Playhead",
+    "transform.addKf": "Keyframe",
     "transform.resetKf": "Xóa toàn bộ Keyframe",
 
     "text.contentGroup": "Nội dung văn bản",

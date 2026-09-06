@@ -1,4 +1,5 @@
 #include "TimelineWidget.h"
+#include "EffectsPanel.h"
 #include <QPainter>
 #include <QPainterPath>
 #include <QMouseEvent>
@@ -631,6 +632,29 @@ void TimelineWidget::hitTest(const QPoint& pos, QString* outTrackId, QString* ou
     *outMode = DragMode::ScrubPlayhead;
 }
 
+bool TimelineWidget::clipAtPoint(const QPoint& pos, QString* outTrackId, QString* outClipId) const {
+    *outTrackId = QString();
+    *outClipId = QString();
+    if (!m_project) return false;
+
+    const int row = trackRowAtY(pos.y());
+    if (row < 0) return false;
+    const int idx = trackVectorIndexForRow(row);
+    const auto& tracks = m_project->timeline().tracks();
+    if (idx < 0 || idx >= static_cast<int>(tracks.size())) return false;
+    const Track& track = tracks[idx];
+    if (track.locked) return false;
+
+    for (const auto& clip : track.clips()) {
+        if (clipRect(idx, clip).contains(pos)) {
+            *outTrackId = track.id;
+            *outClipId = clip.id;
+            return true;
+        }
+    }
+    return false;
+}
+
 bool TimelineWidget::transitionMarkerAt(const QPoint& pos, QString* outTrackId,
                                          QString* outPrevClipId, QString* outCurClipId) const {
     *outTrackId = QString();
@@ -1179,6 +1203,26 @@ void TimelineWidget::paintEvent(QPaintEvent* event) {
             p.setPen(Qt::white);
             p.drawText(r.adjusted(6, 0, -6, 0), Qt::AlignVCenter | Qt::AlignLeft,
                        p.fontMetrics().elidedText(fullLabel, Qt::ElideRight, r.width() - 12));
+
+            // Effect badge: a small "Fx N" pill in the top-right corner shows
+            // that this clip carries visual effects (added from the Explorer's
+            // Effects page, either by double-click or by drag & drop).
+            if (!clip.effects.empty() && r.width() > 40) {
+                QFont badgeFont = p.font();
+                badgeFont.setPointSize(6);
+                badgeFont.setBold(true);
+                p.setFont(badgeFont);
+                const QString badgeText = QStringLiteral("Fx %1").arg(clip.effects.size());
+                const int bw = p.fontMetrics().horizontalAdvance(badgeText) + 10;
+                const int bh = 13;
+                const QRect badge(r.right() - bw - 4, r.top() + 3, bw, bh);
+                p.setPen(Qt::NoPen);
+                p.setBrush(QColor(249, 115, 22, 235)); // amber-orange
+                p.drawRoundedRect(badge, 3.0, 3.0);
+                p.setPen(Qt::white);
+                p.drawText(badge, Qt::AlignCenter, badgeText);
+                p.setFont(clipFont);
+            }
 
             // Keyframes
             if (clip.hasTransformKeyframes()) {
@@ -2182,19 +2226,68 @@ void TimelineWidget::splitAtPlayhead() {
 }
 
 void TimelineWidget::dragEnterEvent(QDragEnterEvent* event) {
-    if (event->mimeData()->hasFormat("application/x-hyggshicut-asset")) event->acceptProposedAction();
+    if (event->mimeData()->hasFormat("application/x-hyggshicut-asset") ||
+        event->mimeData()->hasFormat("application/x-hyggshicut-effect")) {
+        event->acceptProposedAction();
+    }
 }
 void TimelineWidget::dragMoveEvent(QDragMoveEvent* event) {
-    if (event->mimeData()->hasFormat("application/x-hyggshicut-asset")) event->acceptProposedAction();
+    if (event->mimeData()->hasFormat("application/x-hyggshicut-asset")) {
+        event->acceptProposedAction();
+        return;
+    }
+    if (event->mimeData()->hasFormat("application/x-hyggshicut-effect")) {
+        // Only accept while hovering a clip the effect can actually apply to,
+        // so the drag cursor reflects where the drop will land.
+        QString trackId, clipId;
+        if (m_project && clipAtPoint(event->position().toPoint(), &trackId, &clipId)) {
+            Track* track = m_project->timeline().findTrack(trackId);
+            Clip* clip = track ? track->findClip(clipId) : nullptr;
+            if (clip && (clip->type == ClipType::Video || clip->type == ClipType::Image ||
+                         clip->type == ClipType::Text)) {
+                event->acceptProposedAction();
+            }
+        }
+    }
 }
 
 void TimelineWidget::dropEvent(QDropEvent* event) {
     if (!m_project) return;
+    const QPoint pos = event->position().toPoint();
+
+    // --- Effect card drop: apply the effect to the clip under the cursor. ---
+    if (event->mimeData()->hasFormat("application/x-hyggshicut-effect")) {
+        const QString effectTypeId = QString::fromUtf8(
+            event->mimeData()->data("application/x-hyggshicut-effect"));
+
+        QString trackId, clipId;
+        if (!clipAtPoint(pos, &trackId, &clipId)) return;
+        Track* track = m_project->timeline().findTrack(trackId);
+        Clip* clip = track ? track->findClip(clipId) : nullptr;
+        if (!clip || (clip->type != ClipType::Video && clip->type != ClipType::Image &&
+                      clip->type != ClipType::Text)) {
+            return; // visual effects only apply to visual/text clips
+        }
+
+        pushUndo();
+        clip->effects.push_back(EffectsPanel::buildEffect(effectTypeId));
+        m_project->timeline().notifyClipChanged(trackId);
+
+        m_selectedClipId = clip->id;
+        m_selectedTrackId = trackId;
+        emit selectionChanged(m_selectedClipId, m_selectedTrackId);
+        emit timelineEdited();
+        // Re-render the current frame so the new effect is visible immediately.
+        emit seekRequested(m_playheadTime);
+        update();
+        event->acceptProposedAction();
+        return;
+    }
+
     const QString assetId = QString::fromUtf8(event->mimeData()->data("application/x-hyggshicut-asset"));
     auto asset = m_project->findAsset(assetId);
     if (!asset) return;
 
-    const QPoint pos = event->position().toPoint();
     const Ticks dropTime = pixelToTime(pos.x());
 
     Track* targetTrack = nullptr;

@@ -131,7 +131,7 @@
     "explorer.sounds.import": "+ Import audio…",
     "explorer.hint.sounds": "Double-click a sound to add it to the timeline.",
     "explorer.hint.text": "Double-click a style to add a Text clip.",
-    "explorer.hint.effects": "Double-click to apply to the selected clip.",
+    "explorer.hint.effects": "Double-click, or drag onto a clip, to apply it.",
     "explorer.hint.transitions": "Double-click to apply before the selected clip.",
 
     "preset.text.title": "Title",
@@ -193,7 +193,7 @@
     "transform.keyframeGroup": "Keyframe Layer",
     "transform.noKeyframes": "No keyframes — layer is static.",
     "transform.hasKeyframes": "Animating with %1 keyframes.",
-    "transform.addKf": "Add Keyframe at Playhead",
+    "transform.addKf": "Keyframe",
     "transform.resetKf": "Reset All Keyframes",
 
     "text.contentGroup": "Text Content",

@@ -93,6 +93,13 @@ TransformPanel::TransformPanel(QWidget* parent) : QWidget(parent) {
 
     auto* kfBtnRow = new QHBoxLayout();
     m_addKeyframeBtn = new QPushButton(m_kfGroup);
+    // Make the "Keyframe" button the primary action of the group: amber
+    // accent to match the keyframe diamonds drawn on the timeline clips.
+    m_addKeyframeBtn->setStyleSheet(
+        "QPushButton { background-color: #b45309; color: #ffffff; font-weight: bold; "
+        "border-radius: 4px; padding: 6px 10px; border: none; }"
+        "QPushButton:hover { background-color: #d97706; }"
+        "QPushButton:disabled { background-color: #3a3a40; color: #707070; }");
     m_removeKeyframeBtn = new QPushButton(m_kfGroup);
     kfBtnRow->addWidget(m_addKeyframeBtn);
     kfBtnRow->addWidget(m_removeKeyframeBtn);

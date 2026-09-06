@@ -115,6 +115,10 @@ private:
     int trackVectorIndexForRow(int row) const; // maps visual row -> Track::tracks() index
     QRect clipRect(int trackVectorIndex, const Clip& clip) const;
     void hitTest(const QPoint& pos, QString* outTrackId, QString* outClipId, DragMode* outMode) const;
+    // Returns true and fills outTrackId/outClipId if `pos` lands on a clip
+    // rect (any clip type; callers check ClipType). Used by the effect-card
+    // drop path to find the target clip independently of drag handles.
+    bool clipAtPoint(const QPoint& pos, QString* outTrackId, QString* outClipId) const;
     // Hit-tests the small crossfade marker drawn at the boundary between two
     // adjacent clips on a Visual track (see paintEvent). Returns true and
     // fills the two clip ids if `pos` lands on one; `curClipId` is always
