@@ -152,6 +152,12 @@ private:
     // Inspector tab isn't yanked away while the user is editing a clip.
     QString m_lastSelectedAssetId;
 
+    // Whether playback was running when a preview-seekbar scrub began; used
+    // to resume playback when the user releases the "lever" (see the
+    // PreviewWidget::scrubStarted/scrubFinished wiring in
+    // rebuildProjectDependentUi).
+    bool m_scrubWasPlaying = false;
+
 protected:
     void showEvent(QShowEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;

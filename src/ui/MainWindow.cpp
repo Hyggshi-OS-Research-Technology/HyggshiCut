@@ -497,6 +497,19 @@ void MainWindow::rebuildProjectDependentUi() {
 
     connect(m_preview, &PreviewWidget::playPauseClicked, m_playback.get(), &PlaybackController::togglePlay);
     connect(m_preview, &PreviewWidget::seekRequested, this, &MainWindow::onSeekRequested);
+    connect(m_preview, &PreviewWidget::scrubStarted, this, [this]() {
+        // Scrubbing the preview seek bar should be silent and deterministic
+        // (CapCut-style): remember the play state and pause so the playhead
+        // and audio don't fight the cursor mid-drag. Before this, seeking
+        // while playing re-seeded audio output on every movement, producing
+        // stutter and a jittery preview.
+        m_scrubWasPlaying = m_playback && m_playback->isPlaying();
+        if (m_scrubWasPlaying) m_playback->pause();
+    });
+    connect(m_preview, &PreviewWidget::scrubFinished, this, [this]() {
+        if (m_scrubWasPlaying && m_playback) m_playback->play();
+        m_scrubWasPlaying = false;
+    });
     connect(m_preview, &PreviewWidget::previewTransformChanged, this, &MainWindow::onPreviewTransformChanged);
     connect(m_preview, &PreviewWidget::previewTransformCommitted, this, &MainWindow::onPreviewTransformCommitted);
 

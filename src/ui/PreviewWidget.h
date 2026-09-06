@@ -1,5 +1,6 @@
 #pragma once
 #include <QWidget>
+#include <QElapsedTimer>
 #include "../core/TimeTypes.h"
 #include "../core/Clip.h"
 
@@ -47,6 +48,11 @@ public slots:
 signals:
     void playPauseClicked();
     void seekRequested(hc::Ticks t);
+    // Emitted when the user grabs / releases the seek bar ("lever"). MainWindow
+    // pauses playback on scrubStarted (so audio doesn't sputter from whatever
+    // position the cursor crosses mid-drag) and resumes on scrubFinished.
+    void scrubStarted();
+    void scrubFinished();
     // Emitted while user drags a bounding-box handle (real-time).
     void previewTransformChanged(hc::Transform transform);
     // Emitted when user releases (undo boundary).
@@ -58,6 +64,7 @@ protected:
 
 private:
     void relayoutOverlays();
+    void updateTimeLabel(hc::Ticks t);
 
     GLVideoWidget*    m_gl;
     TransformOverlay* m_transformOverlay = nullptr;
@@ -69,7 +76,11 @@ private:
     QLabel*           m_textLabel = nullptr;
     Ticks             m_duration = 0;
     Ticks             m_currentTime = 0;
+    bool              m_playing = false;
     bool              m_sliderBeingDragged = false;
+    // Throttles scrub seeks to ~40/s so a fast lever drag doesn't storm the
+    // decoder with one synchronous frame per pixel and stall the UI thread.
+    QElapsedTimer     m_scrubThrottle;
 };
 
 } // namespace hc

@@ -48,18 +48,35 @@ PreviewWidget::PreviewWidget(QWidget* parent) : QWidget(parent) {
 
     m_slider = new QSlider(Qt::Horizontal, this);
     m_slider->setRange(0, 0);
-    connect(m_slider, &QSlider::sliderPressed,  this, [this]() { m_sliderBeingDragged = true; });
+    // Scrub ("lever") behaviour, matching desktop editors like CapCut: while
+    // the user drags the seek bar we PAUSE playback (so audio doesn't sputter
+    // out of whichever position the cursor happens to cross), throttle seeks
+    // to ~40/s (so a fast drag doesn't storm the decoder), and keep the
+    // timecode readout live under the cursor.
+    connect(m_slider, &QSlider::sliderPressed, this, [this]() {
+        m_sliderBeingDragged = true;
+        m_scrubThrottle.invalidate(); // ensure the first move seeks at once
+        emit scrubStarted();
+    });
+    connect(m_slider, &QSlider::sliderMoved, this, [this](int ms) {
+        const Ticks t = static_cast<Ticks>(ms) * 1000;
+        updateTimeLabel(t);
+        if (!m_scrubThrottle.isValid() || m_scrubThrottle.elapsed() >= 25) {
+            m_scrubThrottle.restart();
+            emit seekRequested(t);
+        }
+    });
     connect(m_slider, &QSlider::sliderReleased, this, [this]() {
         m_sliderBeingDragged = false;
         emit seekRequested(static_cast<Ticks>(m_slider->value()) * 1000);
-    });
-    connect(m_slider, &QSlider::sliderMoved, this, [this](int ms) {
-        emit seekRequested(static_cast<Ticks>(ms) * 1000);
+        emit scrubFinished();
     });
     transport->addWidget(m_slider, 1);
 
     m_timeLabel = new QLabel("00:00:00.000 / 00:00:00.000", this);
     m_timeLabel->setStyleSheet("color: #ccc; font-family: monospace;");
+    m_timeLabel->setMinimumWidth(210);
+    m_timeLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     transport->addWidget(m_timeLabel);
 
     m_meterToggleBtn = new QPushButton(tr("VU"), this);
@@ -106,7 +123,12 @@ void PreviewWidget::clearTransformOverlay() {
 }
 
 void PreviewWidget::setPlaying(bool playing) {
+    m_playing = playing;
     m_playBtn->setText(playing ? tr("Tạm dừng") : tr("Phát"));
+}
+
+void PreviewWidget::updateTimeLabel(Ticks t) {
+    m_timeLabel->setText(QString("%1 / %2").arg(formatTimecode(t), formatTimecode(m_duration)));
 }
 
 void PreviewWidget::setAudioLevels(float left, float right) {
@@ -123,7 +145,7 @@ void PreviewWidget::setPosition(Ticks t) {
         m_slider->setValue(static_cast<int>(t / 1000));
         m_slider->blockSignals(false);
     }
-    m_timeLabel->setText(QString("%1 / %2").arg(formatTimecode(t), formatTimecode(m_duration)));
+    updateTimeLabel(t);
 }
 
 void PreviewWidget::setDuration(Ticks d) {
