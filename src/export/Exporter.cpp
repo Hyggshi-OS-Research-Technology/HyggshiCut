@@ -591,12 +591,49 @@ QStringList Exporter::buildFfmpegArgs(const Settings& s, QString* filterGraphDeb
                     .arg(buildPiecewiseLinearExpr("t", scaleYPoints));
             }
 
-            if (clip.transitionInDuration > 0) {
-                const double transSec = std::max(0.0, ticksToSeconds(clip.transitionInDuration));
-                if (transSec > 0.000001) {
+            const double transSec = clip.transitionInDuration > 0
+                ? std::max(0.0, ticksToSeconds(clip.transitionInDuration)) : 0.0;
+            if (clip.transitionInDuration > 0 && transSec > 0.000001) {
+                switch (clip.transitionType) {
+                case TransitionType::Dissolve:
                     chain += QString(",fade=t=in:st=%1:d=%2:alpha=1")
                         .arg(startSec, 0, 'f', 6)
                         .arg(transSec, 0, 'f', 6);
+                    break;
+                case TransitionType::DipToColor:
+                    // Incoming stays hidden until the solid colour has covered
+                    // the outgoing clip, then fades in (mirrors
+                    // Timeline::transitionVisual: opacity = clip(2p-1, 0, 1)).
+                    chain += QString(",geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='alpha(X,Y)*clip(2*(T-%1)/%2-1,0,1)'")
+                        .arg(startSec, 0, 'f', 6)
+                        .arg(transSec, 0, 'f', 6);
+                    break;
+                case TransitionType::Wipe: {
+                    // Reveal the incoming clip by masking its alpha per-pixel,
+                    // exactly mirroring the GL preview's discard-based wipe:
+                    // the reveal fraction is relative to the clip's own fit
+                    // box (W/H after scale), so pillarboxed/letterboxed clips
+                    // and user transforms stay consistent between the two.
+                    const QString pr = QString("clip((T-%1)/%2,0,1)").arg(startSec, 0, 'f', 6).arg(transSec, 0, 'f', 6);
+                    switch (clip.transitionDirection) {
+                        case 0: // left → right
+                            chain += QString(",geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='alpha(X,Y)*if(lt(X,W*(%1)),1,0)'").arg(pr);
+                            break;
+                        case 1: // right → left
+                            chain += QString(",geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='alpha(X,Y)*if(gte(X,W*(1-(%1))),1,0)'").arg(pr);
+                            break;
+                        case 2: // top → bottom
+                            chain += QString(",geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='alpha(X,Y)*if(lt(Y,H*(%1)),1,0)'").arg(pr);
+                            break;
+                        case 3: // bottom → top
+                            chain += QString(",geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='alpha(X,Y)*if(gte(Y,H*(1-(%1))),1,0)'").arg(pr);
+                            break;
+                        default: break;
+                    }
+                    break;
+                }
+                case TransitionType::Slide:
+                    break; // handled via the animated overlay position below
                 }
             }
 
@@ -669,6 +706,48 @@ QStringList Exporter::buildFfmpegArgs(const Settings& s, QString* filterGraphDeb
                 const int offY = qRound(baseY * outH / 2.0);
                 posXExpr = QString("(main_w-overlay_w)/2+%1").arg(offX);
                 posYExpr = QString("(main_h-overlay_h)/2+%1").arg(offY);
+            }
+
+            // Slide transition: add the animated offset to the overlay position
+            // (transform units ±2 × half-canvas = ± full canvas width/height).
+            if (clip.transitionInDuration > 0 && transSec > 0.000001 &&
+                clip.transitionType == TransitionType::Slide) {
+                const QString k = QString("(1-clip((t-%1)/%2,0,1))").arg(startSec, 0, 'f', 6).arg(transSec, 0, 'f', 6);
+                switch (clip.transitionDirection) {
+                    case 0: posXExpr += QString("-(%1)*%2").arg(k).arg(outW); break; // enters from left
+                    case 1: posXExpr += QString("+(%1)*%2").arg(k).arg(outW); break; // enters from right
+                    case 2: posYExpr += QString("-(%1)*%2").arg(k).arg(outH); break; // enters from top
+                    case 3: posYExpr += QString("+(%1)*%2").arg(k).arg(outH); break; // enters from bottom
+                    default: break;
+                }
+            }
+
+            // Dip-to-color: overlay the solid colour beneath the incoming clip
+            // (i.e. over whatever was composited so far, which ends with the
+            // outgoing clip) for the duration of the transition.
+            if (clip.transitionInDuration > 0 && transSec > 0.000001 &&
+                clip.transitionType == TransitionType::DipToColor) {
+                const QString dipLabel = QString("dipcolor%1").arg(layerCounter);
+                const QString dipComp = QString("dipcomp%1").arg(layerCounter);
+                // ffmpeg's color filter wants 0xRRGGBB, not #RRGGBB.
+                const QString dipRgb = QStringLiteral("0x%1")
+                    .arg(clip.transitionColor.name(QColor::HexRgb).mid(1));
+                videoFilterParts << QString(
+                    "color=c=%1:s=%2x%3:d=%4:r=%5,format=rgba,"
+                    "geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='clip(2*(T-%6)/%7,0,1)'[%8]")
+                    .arg(dipRgb)
+                    .arg(outW).arg(outH)
+                    .arg(totalSec, 0, 'f', 6)
+                    .arg(s.frameRate, 0, 'f', 6)
+                    .arg(startSec, 0, 'f', 6)
+                    .arg(transSec, 0, 'f', 6)
+                    .arg(dipLabel);
+                videoFilterParts << QString("[%1][%2]overlay=x=0:y=0:format=auto:enable='between(t,%3,%4)'[%5]")
+                    .arg(current, dipLabel)
+                    .arg(startSec, 0, 'f', 6)
+                    .arg(startSec + transSec, 0, 'f', 6)
+                    .arg(dipComp);
+                current = dipComp;
             }
 
             const QString next = QString("singleComp%1").arg(layerCounter);

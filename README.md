@@ -65,6 +65,7 @@ Beyond its intuitive, modern graphical interface, HyggshiCut also ships with a b
 - **Smart keyframe system:** Set keyframes on the timeline (shown as diamonds `◆`) to create smooth motion (PIP, zoom, layer slide, fade).
 
 ### 4. Smooth Transitions & Fades
+- **Transitions between clips:** Click the marker between two adjacent clips on a Visual track to create a transition, then right-click it to choose the type — **Cross Dissolve**, **Wipe**, **Slide**, or **Dip to Color** — along with its direction, duration, and (for dip) the colour it fades through. Transitions render identically in the OpenGL preview, the CPU-fallback preview, and the ffmpeg export.
 - **Crossfade transitions:** Smooth cross-dissolve using a RAM-efficient single-pass algorithm.
 - **Fade handles:** Drag directly on a clip to create fade-in / fade-out for both video and audio.
 

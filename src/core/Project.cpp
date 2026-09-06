@@ -117,6 +117,9 @@ QJsonObject clipToJson(const Clip& c) {
     o["fadeOutDuration"] = QString::number(c.fadeOutDuration);
     if (c.transitionInDuration > 0) {
         o["transitionInDuration"] = QString::number(c.transitionInDuration);
+        o["transitionType"] = static_cast<int>(c.transitionType);
+        o["transitionDirection"] = c.transitionDirection;
+        o["transitionColor"] = c.transitionColor.name(QColor::HexRgb);
     }
     if (!c.audioFilters.isDefault()) {
         QJsonObject af;
@@ -209,6 +212,12 @@ Clip clipFromJson(const QJsonObject& o) {
     c.fadeInDuration = o["fadeInDuration"].toString().toLongLong();
     c.fadeOutDuration = o["fadeOutDuration"].toString().toLongLong();
     c.transitionInDuration = o["transitionInDuration"].toString().toLongLong();
+    c.transitionType = static_cast<TransitionType>(o["transitionType"].toInt(0));
+    c.transitionDirection = o["transitionDirection"].toInt(0);
+    if (o.contains("transitionColor")) {
+        const QColor tc(o["transitionColor"].toString());
+        if (tc.isValid()) c.transitionColor = tc;
+    }
     if (o.contains("audioFilters")) {
         const QJsonObject af = o["audioFilters"].toObject();
         c.audioFilters.eqLowDb = af["eqLowDb"].toDouble(0.0);

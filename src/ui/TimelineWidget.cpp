@@ -16,6 +16,7 @@
 #include <QWheelEvent>
 #include <QScrollArea>
 #include <QScrollBar>
+#include <QColorDialog>
 #include <algorithm>
 #include <cmath>
 
@@ -24,6 +25,7 @@ namespace hc {
 namespace {
 constexpr Ticks kMinClipDuration = 33'333; // ~1 frame at 30fps, floor for trims
 constexpr int kEdgeGrabPx = 6;
+constexpr Ticks kDefaultTransitionTicks = 500'000; // 0.5s
 
 // --- Sleek vector button rendering for the per-track control cards ---
 void drawControlButton(QPainter& p, const QRect& r, int ctrlIndex, bool active, bool hovered) {
@@ -684,15 +686,119 @@ void TimelineWidget::toggleTransitionAt(Track* track, Clip* prevClip, Clip* curC
         // Create: a default 0.5s crossfade, clamped so it never eats more
         // than half of either clip's own on-screen duration (keeps a
         // sliver of each clip visible on its own either side of the fade).
-        constexpr Ticks kDefaultTransition = 500'000; // 0.5s, in ticks (µs)
         const Ticks maxByPrev = prevClip->timelineDuration() / 2;
         const Ticks maxByCur = curClip->timelineDuration() / 2;
-        const Ticks duration = std::clamp<Ticks>(kDefaultTransition, 1, std::max<Ticks>(1, std::min(maxByPrev, maxByCur)));
+        const Ticks duration = std::clamp<Ticks>(kDefaultTransitionTicks, 1, std::max<Ticks>(1, std::min(maxByPrev, maxByCur)));
         curClip->transitionInDuration = duration;
         curClip->timelineStart -= duration;
     }
     emit timelineEdited();
     update();
+}
+
+void TimelineWidget::buildTransitionMenu(QMenu* menu, Track* track,
+                                         const QString& prevClipId, const QString& incomingClipId) {
+    if (!menu || !track || track->locked) return;
+    Clip* prev = track->findClip(prevClipId);
+    Clip* cur = track->findClip(incomingClipId);
+    if (!cur) return;
+
+    const TransitionType types[4] = { TransitionType::Dissolve, TransitionType::Wipe,
+                                      TransitionType::Slide, TransitionType::DipToColor };
+    const QString typeNames[4] = { tr("Cross Dissolve"), tr("Wipe"), tr("Slide"), tr("Dip to Color") };
+    const QString dirNames[4] = { tr("Left → Right"), tr("Right → Left"),
+                                  tr("Top → Bottom"), tr("Bottom → Top") };
+
+    menu->addSection(tr("Transition"));
+
+    if (cur->transitionInDuration <= 0) {
+        // No transition yet: offer to add one of the chosen type.
+        for (int i = 0; i < 4; ++i) {
+            QAction* a = menu->addAction(tr("Add %1").arg(typeNames[i]));
+            connect(a, &QAction::triggered, this, [this, track, prev, cur, t = types[i]]() {
+                const Ticks maxByPrev = prev ? prev->timelineDuration() / 2 : kDefaultTransitionTicks;
+                const Ticks maxByCur = cur->timelineDuration() / 2;
+                const Ticks duration = std::clamp<Ticks>(kDefaultTransitionTicks, 1,
+                    std::max<Ticks>(1, std::min(maxByPrev, maxByCur)));
+                pushUndo();
+                cur->transitionInDuration = duration;
+                cur->transitionType = t;
+                cur->timelineStart -= duration;
+                emit timelineEdited();
+                update();
+            });
+        }
+        return;
+    }
+
+    QMenu* typeMenu = menu->addMenu(tr("Type"));
+    for (int i = 0; i < 4; ++i) {
+        QAction* a = typeMenu->addAction(typeNames[i]);
+        a->setCheckable(true);
+        a->setChecked(cur->transitionType == types[i]);
+        connect(a, &QAction::triggered, this, [this, cur, t = types[i]]() {
+            if (cur->transitionType == t) return;
+            pushUndo();
+            cur->transitionType = t;
+            emit timelineEdited();
+            update();
+        });
+    }
+
+    QMenu* dirMenu = menu->addMenu(tr("Direction"));
+    for (int d = 0; d < 4; ++d) {
+        QAction* a = dirMenu->addAction(dirNames[d]);
+        a->setCheckable(true);
+        a->setChecked(cur->transitionDirection == d);
+        connect(a, &QAction::triggered, this, [this, cur, d]() {
+            if (cur->transitionDirection == d) return;
+            pushUndo();
+            cur->transitionDirection = d;
+            emit timelineEdited();
+            update();
+        });
+    }
+
+    if (cur->transitionType == TransitionType::DipToColor) {
+        QAction* colorAction = menu->addAction(tr("Dip Color…"));
+        connect(colorAction, &QAction::triggered, this, [this, cur]() {
+            const QColor chosen = QColorDialog::getColor(
+                cur->transitionColor.isValid() ? cur->transitionColor : QColor(0, 0, 0),
+                this, tr("Dip to Color"));
+            if (!chosen.isValid()) return;
+            pushUndo();
+            cur->transitionColor = chosen;
+            emit timelineEdited();
+            update();
+        });
+    }
+
+    QMenu* durMenu = menu->addMenu(tr("Duration"));
+    const Ticks options[3] = { 250'000, 500'000, 1'000'000 }; // 0.25s / 0.5s / 1s
+    const QString optionNames[3] = { tr("0.25 s"), tr("0.5 s"), tr("1.0 s") };
+    for (int i = 0; i < 3; ++i) {
+        QAction* a = durMenu->addAction(optionNames[i]);
+        a->setCheckable(true);
+        a->setChecked(cur->transitionInDuration == options[i]);
+        connect(a, &QAction::triggered, this, [this, cur, newDur = options[i]]() {
+            if (cur->transitionInDuration == newDur) return;
+            pushUndo();
+            cur->timelineStart += cur->transitionInDuration - newDur;
+            cur->transitionInDuration = newDur;
+            emit timelineEdited();
+            update();
+        });
+    }
+
+    menu->addSeparator();
+    QAction* remove = menu->addAction(tr("Remove Transition"));
+    connect(remove, &QAction::triggered, this, [this, cur]() {
+        pushUndo();
+        cur->timelineStart += cur->transitionInDuration;
+        cur->transitionInDuration = 0;
+        emit timelineEdited();
+        update();
+    });
 }
 
 void TimelineWidget::paintEvent(QPaintEvent* event) {
@@ -1132,8 +1238,17 @@ void TimelineWidget::paintEvent(QPaintEvent* event) {
                 const int mx = timeToPixel(markerTime);
                 if (mx < dirty.left() - 8 || mx > dirty.right() + 8) continue;
                 const int my = y + m_trackHeight / 2;
+                QColor markerColor(255, 190, 80); // dissolve: amber
+                if (hasTransition) {
+                    switch (curClip.transitionType) {
+                        case TransitionType::Dissolve:   markerColor = QColor(255, 190, 80); break;
+                        case TransitionType::Wipe:       markerColor = QColor(90, 190, 255); break;
+                        case TransitionType::Slide:      markerColor = QColor(120, 220, 140); break;
+                        case TransitionType::DipToColor: markerColor = QColor(215, 130, 245); break;
+                    }
+                }
                 p.setPen(QColor(20, 20, 24));
-                p.setBrush(hasTransition ? QColor(255, 190, 80) : QColor(150, 150, 158, 160));
+                p.setBrush(hasTransition ? markerColor : QColor(150, 150, 158, 160));
                 p.drawEllipse(QPoint(mx, my), 7, 7);
                 p.setPen(Qt::white);
                 p.drawText(QRect(mx - 8, my - 8, 16, 16), Qt::AlignCenter, hasTransition ? tr("×") : tr("+"));
@@ -1904,6 +2019,20 @@ void TimelineWidget::deleteSelectedTrack() {
 
 void TimelineWidget::contextMenuEvent(QContextMenuEvent* event) {
     const QPoint pos = event->pos();
+
+    // Right-clicking a transition marker opens the transition editor
+    // (type / direction / dip colour / duration / remove).
+    {
+        QString txTrackId, prevClipId, curClipId;
+        if (transitionMarkerAt(pos, &txTrackId, &prevClipId, &curClipId)) {
+            Track* txTrack = m_project->timeline().findTrack(txTrackId);
+            QMenu menu(this);
+            buildTransitionMenu(&menu, txTrack, prevClipId, curClipId);
+            menu.exec(event->globalPos());
+            return;
+        }
+    }
+
     const int row = trackRowAtY(pos.y());
     const int count = static_cast<int>(m_project->timeline().tracks().size());
 

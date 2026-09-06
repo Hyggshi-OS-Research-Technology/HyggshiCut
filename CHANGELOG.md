@@ -12,6 +12,7 @@ All notable changes to HyggshiCut are documented in this file.
 - **Frame-accurate clip nudge**: move the selected clip one frame left/right with `,` / `.` (or the Edit menu), for precise sync adjustments.
 - **Snap toggle**: edge/playhead/keyframe snapping during drags can now be switched on/off from the View menu and is remembered across sessions.
 - **Standard timeline navigation**: `Ctrl`/`Alt` + mouse wheel now zooms the timeline around the cursor, plain mouse wheel pans horizontally (`Shift` + wheel scrolls vertically), `Home`/`End` jump to the start/end, and a **Zoom to fit** action (`Shift+Z`) fits the whole timeline into the window. The playhead auto-scrolls into view during playback and edge scrubbing, with a live zoom readout in the status bar.
+- **Transition types (Wipe, Slide, Dip to Color)**: transitions between adjacent clips on a Visual track now go beyond the classic cross-dissolve. Right-click the transition marker to pick the type — **Cross Dissolve**, **Wipe**, **Slide**, or **Dip to Color** — plus its direction, duration, and (for dip) the colour it fades through. The timeline marker is colour-coded by type, and every transition renders identically in the GL preview, the CPU fallback preview, and the ffmpeg export.
 
 ### Bug Fixes
 - **HD thumbnail color accuracy**: Media-pool/timeline thumbnails now honor each source's BT.601 vs BT.709 matrix (previously always converted as BT.601, so HD thumbnails could differ slightly from Preview/Export).

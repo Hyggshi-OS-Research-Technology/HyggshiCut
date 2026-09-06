@@ -18,6 +18,7 @@ const char* kVertexShader = R"(
 layout(location = 0) in vec2 aPos;
 layout(location = 1) in vec2 aTexCoord;
 out vec2 vTexCoord;
+out vec2 vBox;
 uniform vec2 uFit;
 uniform vec2 uScale;
 uniform float uRotationDeg;
@@ -58,17 +59,26 @@ void main() {
 
     gl_Position = vec4(p, 0.0, 1.0);
     vTexCoord = aTexCoord;
+    // Fraction (0..1) across this layer's own display box, origin top-left,
+    // BEFORE fit/scale/rotation/offset are applied. Used by the wipe
+    // transition discard in the fragment shaders; matches the exporter's
+    // crop-of-fit-box reveal so preview and export stay pixel-consistent.
+    vec2 box = aPos * uTileScale + uTileCenter; // -1..1, +x/+y = right/top
+    vBox = vec2(box.x * 0.5 + 0.5, (1.0 - box.y) * 0.5);
 }
 )";
 
 const char* kFragmentShader = R"(
 #version 330 core
 in vec2 vTexCoord;
+in vec2 vBox;
 out vec4 FragColor;
 uniform sampler2D texY;
 uniform sampler2D texU;
 uniform sampler2D texV;
 uniform float uOpacity;
+uniform float uWipeProgress;
+uniform int uWipeDir;
 uniform float uUseBt709;
 
 uniform float uBrightness;
@@ -124,6 +134,12 @@ void main() {
     if (vTexCoord.x < uCrop.x || vTexCoord.y < uCrop.y || vTexCoord.x > (1.0 - uCrop.z) || vTexCoord.y > (1.0 - uCrop.w)) {
         discard;
     }
+    if (uWipeProgress < 1.0) {
+        if (uWipeDir == 0 && vBox.x > uWipeProgress) discard;          // left → right
+        else if (uWipeDir == 1 && vBox.x < 1.0 - uWipeProgress) discard; // right → left
+        else if (uWipeDir == 2 && vBox.y > uWipeProgress) discard;      // top → bottom
+        else if (uWipeDir == 3 && vBox.y < 1.0 - uWipeProgress) discard; // bottom → top
+    }
     float y = texture(texY, vTexCoord).r;
     if (uBlur > 0.5) {
         vec2 off = vec2(uBlur * 0.0008);
@@ -158,9 +174,12 @@ void main() {
 const char* kFragmentShaderRGBA = R"(
 #version 330 core
 in vec2 vTexCoord;
+in vec2 vBox;
 out vec4 FragColor;
 uniform sampler2D texRGBA;
 uniform float uOpacity;
+uniform float uWipeProgress;
+uniform int uWipeDir;
 
 uniform float uBrightness;
 uniform float uContrast;
@@ -214,6 +233,12 @@ vec3 applyEffects(vec3 rgb, vec2 uv) {
 void main() {
     if (vTexCoord.x < uCrop.x || vTexCoord.y < uCrop.y || vTexCoord.x > (1.0 - uCrop.z) || vTexCoord.y > (1.0 - uCrop.w)) {
         discard;
+    }
+    if (uWipeProgress < 1.0) {
+        if (uWipeDir == 0 && vBox.x > uWipeProgress) discard;          // left → right
+        else if (uWipeDir == 1 && vBox.x < 1.0 - uWipeProgress) discard; // right → left
+        else if (uWipeDir == 2 && vBox.y > uWipeProgress) discard;      // top → bottom
+        else if (uWipeDir == 3 && vBox.y < 1.0 - uWipeProgress) discard; // bottom → top
     }
     vec4 c = texture(texRGBA, vTexCoord);
     if (uBlur > 0.5) {
@@ -658,6 +683,10 @@ void GLVideoWidget::uploadPendingLayers() {
         gpu.blendMode = layers[i].blendMode;
         gpu.effects = layers[i].effects;
         gpu.isText = layers[i].isText;
+        gpu.isCanvasFill = layers[i].isCanvasFill;
+        gpu.overlayColor = layers[i].overlayColor;
+        gpu.wipeProgress = layers[i].wipeProgress;
+        gpu.wipeDirection = layers[i].wipeDirection;
         gpu.canvasW = layers[i].canvasW;
         gpu.canvasH = layers[i].canvasH;
 
@@ -895,6 +924,8 @@ void GLVideoWidget::renderCachedTiledLayer(const GpuLayer& layer) {
     prog->setUniformValue("uSourceRotationDeg", 0.0f);
     prog->setUniformValue("uOffset", QVector2D(static_cast<float>(layer.transform.x), static_cast<float>(-layer.transform.y)));
     prog->setUniformValue("uOpacity", static_cast<float>(std::clamp(layer.opacity, 0.0, 1.0)));
+    prog->setUniformValue("uWipeProgress", static_cast<float>(std::clamp(layer.wipeProgress, 0.0, 1.0)));
+    prog->setUniformValue("uWipeDir", layer.wipeDirection);
     prog->setUniformValue("texRGBA", 0);
     setEffectUniforms(prog, layer.effects);
 
@@ -964,7 +995,11 @@ void GLVideoWidget::renderLayer(const GpuLayer& layer) {
 
     QVector2D tileScale(1.0f, 1.0f);
     QVector2D fit;
-    if (layer.isText && layer.canvasW > 0 && layer.canvasH > 0) {
+    if (layer.isCanvasFill && layer.canvasW > 0 && layer.canvasH > 0) {
+        // Full-canvas solid colour overlay: a 1×1 texture stretched across
+        // the whole canvas (tileScale stays 1,1 — the colour is uniform).
+        fit = fitFor(layer.canvasW, layer.canvasH);
+    } else if (layer.isText && layer.canvasW > 0 && layer.canvasH > 0) {
         tileScale = QVector2D(static_cast<float>(layer.texWidth) / static_cast<float>(layer.canvasW),
                               static_cast<float>(layer.texHeight) / static_cast<float>(layer.canvasH));
         fit = fitFor(layer.canvasW, layer.canvasH);
@@ -981,6 +1016,8 @@ void GLVideoWidget::renderLayer(const GpuLayer& layer) {
     prog->setUniformValue("uTileScale", tileScale);
     prog->setUniformValue("uTileCenter", QVector2D(0.0f, 0.0f));
     prog->setUniformValue("uOpacity", static_cast<float>(std::clamp(layer.opacity, 0.0, 1.0)));
+    prog->setUniformValue("uWipeProgress", static_cast<float>(std::clamp(layer.wipeProgress, 0.0, 1.0)));
+    prog->setUniformValue("uWipeDir", layer.wipeDirection);
     setEffectUniforms(prog, layer.effects);
 
     if (layer.isRGBA) {
@@ -1020,13 +1057,15 @@ void GLVideoWidget::paintCpuFallback() {
         p.save();
         p.setOpacity(std::clamp(layer.opacity, 0.0, 1.0));
 
+        // Solid full-canvas colour overlay (dip-to-color transition).
+        if (layer.isCanvasFill) {
+            p.fillRect(rect(), layer.overlayColor.isValid() ? layer.overlayColor : QColor(0, 0, 0));
+            p.restore();
+            continue;
+        }
+
         const qreal cx = w / 2.0 + layer.transform.x * (w / 2.0);
         const qreal cy = h / 2.0 + layer.transform.y * (h / 2.0);
-
-        p.translate(cx, cy);
-        if (std::abs(layer.transform.rotationDeg) > 0.001) {
-            p.rotate(layer.transform.rotationDeg);
-        }
 
         qreal drawW = img.width();
         qreal drawH = img.height();
@@ -1052,6 +1091,28 @@ void GLVideoWidget::paintCpuFallback() {
             }
             drawW = baseW * std::abs(layer.transform.scaleX);
             drawH = baseH * std::abs(layer.transform.scaleY);
+        }
+
+        // Wipe reveal: clip the layer's own display box (unrotated, widget
+        // space) so only the revealed fraction is drawn — mirrors the GL
+        // discard-based wipe and the exporter's geq alpha mask.
+        if (layer.wipeProgress < 1.0 && layer.wipeProgress >= 0.0) {
+            const QRectF box(cx - drawW / 2.0, cy - drawH / 2.0, drawW, drawH);
+            QRectF reveal = box;
+            const double pr = layer.wipeProgress;
+            switch (layer.wipeDirection) {
+                case 0: reveal.setRight(box.left() + box.width() * pr); break;  // left → right
+                case 1: reveal.setLeft(box.right() - box.width() * pr); break;  // right → left
+                case 2: reveal.setBottom(box.top() + box.height() * pr); break; // top → bottom
+                case 3: reveal.setTop(box.bottom() - box.height() * pr); break; // bottom → top
+                default: break;
+            }
+            p.setClipRect(reveal);
+        }
+
+        p.translate(cx, cy);
+        if (std::abs(layer.transform.rotationDeg) > 0.001) {
+            p.rotate(layer.transform.rotationDeg);
         }
 
         const QRectF dstRect(-drawW / 2.0, -drawH / 2.0, drawW, drawH);

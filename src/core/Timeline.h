@@ -59,12 +59,68 @@ public:
         return maxEnd;
     }
 
+    // ── Transition rendering (shared with PlaybackController + Exporter) ─
+    // Progress (0..1) of an incoming clip's transition at time `t`.
+    // Returns 1.0 when the time is past the window or there is no transition.
+    static double transitionProgress(const Clip& c, Ticks t) {
+        if (c.transitionInDuration <= 0) return 1.0;
+        const Ticks rel = t - c.timelineStart;
+        if (rel <= 0) return 0.0;
+        if (rel >= c.transitionInDuration) return 1.0;
+        return static_cast<double>(rel) / static_cast<double>(c.transitionInDuration);
+    }
+
+    // Per-frame visual state for an incoming clip's transition. The same
+    // numbers drive the GL preview and the ffmpeg export, so the two always
+    // agree. All fields are identity/no-op when no transition is active.
+    struct TransitionVisual {
+        double progress = 1.0;     // 0..1 within the transition window
+        double opacity = 1.0;      // opacity multiplier for the incoming clip
+        double offsetX = 0.0;      // slide offset, Transform units (x: +right)
+        double offsetY = 0.0;      // slide offset, Transform units (y: +down)
+        double wipeProgress = 1.0; // < 1.0 => wipe reveal fraction
+        int wipeDirection = 0;     // 0 L→R, 1 R→L, 2 T→B, 3 B→T
+        double colorAlpha = 0.0;   // > 0 => dip-to-color overlay alpha
+    };
+
+    static TransitionVisual transitionVisual(const Clip& c, Ticks t) {
+        TransitionVisual v;
+        v.progress = transitionProgress(c, t);
+        if (c.transitionInDuration <= 0 || v.progress >= 1.0) return v;
+        const double p = v.progress;
+        switch (c.transitionType) {
+        case TransitionType::Dissolve:
+            v.opacity = p;
+            break;
+        case TransitionType::Wipe:
+            v.wipeProgress = p;
+            v.wipeDirection = c.transitionDirection;
+            break;
+        case TransitionType::Slide: {
+            const double k = (1.0 - p) * 2.0; // full canvas width, off-screen at p=0
+            switch (c.transitionDirection) {
+                case 0: v.offsetX = -k; break; // enters from the left
+                case 1: v.offsetX =  k; break; // enters from the right
+                case 2: v.offsetY = -k; break; // enters from the top
+                case 3: v.offsetY =  k; break; // enters from the bottom
+                default: break;
+            }
+            break;
+        }
+        case TransitionType::DipToColor:
+            // Incoming only starts appearing halfway through, once the solid
+            // colour has fully covered the outgoing clip.
+            v.opacity = std::clamp(2.0 * p - 1.0, 0.0, 1.0);
+            v.colorAlpha = std::clamp(2.0 * p, 0.0, 1.0);
+            break;
+        }
+        return v;
+    }
+
     // ── Visual compositing queries ──────────────────────────────────
-    // One layer to composite, paired with a blend weight for crossfade
-    // transitions (see Clip::transitionInDuration). weight == 1.0 outside
-    // any transition window — existing callers that don't care about
-    // transitions can just ignore the field and get identical behavior
-    // to before.
+    // One layer to composite, paired with a blend weight. The weight is
+    // always 1.0 today (all transition math lives in transitionVisual()
+    // above); the field is kept so callers that read it keep compiling.
     struct VisualLayer {
         const Clip* clip;
         double weight = 1.0;
@@ -73,14 +129,13 @@ public:
     // Every *visual* clip (video, image, text) active at time `t`, ordered
     // bottom-to-top (ascending track index, then ascending timelineStart
     // within a track) — the order they should be composited. Each later
-    // entry is drawn on top of the previous ones. During a crossfade, both
-    // the outgoing clip (weight 1.0) and the incoming clip (weight ramping
-    // 0→1) are returned for the same track, back to back, so a plain
-    // alpha-over of the two — done identically by PlaybackController's GL
-    // compositor and by Exporter's ffmpeg overlay chain — produces the
-    // same linear dissolve in both preview and export.
-    // This is the SINGLE query both PlaybackController and Exporter use
-    // so the exported video always matches the live preview.
+    // entry is drawn on top of the previous ones. During a transition, both
+    // the outgoing clip and the incoming clip are returned for the same
+    // track, back to back. The per-type transition look (dissolve opacity,
+    // wipe mask, slide offset, dip-to-color) is applied uniformly by
+    // transitionVisual() above so the GL compositor and the ffmpeg exporter
+    // stay pixel-consistent; this query only decides *which* clips are on
+    // screen and in what order.
     std::vector<VisualLayer> activeVisualClipsAt(Ticks t) const {
         std::vector<VisualLayer> result;
         for (const auto& track : m_tracks) {
@@ -91,13 +146,7 @@ public:
             // before the incoming one.
             for (const auto& c : track.clips()) {
                 if (!c.containsTimelineTime(t)) continue;
-                double weight = 1.0;
-                if (c.transitionInDuration > 0 && t < c.timelineStart + c.transitionInDuration) {
-                    weight = std::clamp(
-                        static_cast<double>(t - c.timelineStart) / static_cast<double>(c.transitionInDuration),
-                        0.0, 1.0);
-                }
-                result.push_back(VisualLayer{&c, weight});
+                result.push_back(VisualLayer{&c, 1.0});
             }
         }
         return result;

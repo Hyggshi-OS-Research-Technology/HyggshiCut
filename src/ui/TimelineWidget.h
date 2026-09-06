@@ -5,6 +5,8 @@
 #include <optional>
 #include "../core/Project.h"
 
+class QMenu;
+
 class QScrollArea;
 class QWheelEvent;
 
@@ -117,6 +119,11 @@ private:
     bool transitionMarkerAt(const QPoint& pos, QString* outTrackId,
                              QString* outPrevClipId, QString* outCurClipId) const;
     void toggleTransitionAt(Track* track, Clip* prevClip, Clip* curClip);
+    // Populates `menu` with the transition editor for the pair
+    // (prevClipId → incomingClipId): type, direction, dip colour, duration,
+    // and removal. Used by the right-click-on-marker context menu.
+    void buildTransitionMenu(QMenu* menu, Track* track,
+                             const QString& prevClipId, const QString& incomingClipId);
     QString formatDurationShort(Ticks t) const;
     void recomputeTrackHeight();
     TrackControl trackControlAtPosition(const QPoint& pos, int* outRow) const;
