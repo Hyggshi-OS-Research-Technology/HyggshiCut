@@ -505,9 +505,16 @@ QStringList Exporter::buildFfmpegArgs(const Settings& s, QString* filterGraphDeb
         .arg(s.frameRate, 0, 'f', 6).arg(current);
 
     int layerCounter = 0;
-    for (const auto& track : tl.tracks()) {
+    // Indexed (not range-based) because Effect Layer inheritance depends on
+    // the track's stacking position: a layer only affects the tracks BELOW it.
+    for (int trackIndex = 0; trackIndex < static_cast<int>(tl.tracks().size()); ++trackIndex) {
+        const Track& track = tl.tracks()[trackIndex];
         if (track.type != TrackType::Visual || track.hidden) continue;
         for (const auto& clip : track.clips()) {
+            // Effect Layers carry no media: they never become an ffmpeg input
+            // or an overlay branch, they only lend their effect stack to the
+            // clips underneath (handled per-clip below).
+            if (clip.isEffectLayer()) continue;
             if (clip.timelineEnd() <= clip.timelineStart) continue;
             const bool isText = (clip.type == ClipType::Text);
             bool isStillImage = isText;
@@ -639,6 +646,41 @@ QStringList Exporter::buildFfmpegArgs(const Settings& s, QString* filterGraphDeb
 
             chain += buildVideoEffectsFilterChain(clip.effects, boxW, boxH);
 
+            // ── Effect Layers (adjustment layers) inherited by this clip ──
+            // A media-less Effect Layer on a track ABOVE this one lends its
+            // effect stack to this clip for as long as the two overlap in
+            // time. A layer covering the whole clip simply extends the chain
+            // above — zero extra cost, and exactly what the GL preview does
+            // (PlaybackController uses Timeline::mergedEffects, same order:
+            // clip's own effects first, then the layers bottom-to-top).
+            // A layer that only PARTIALLY overlaps has to be time-gated, so
+            // its stack is applied through a split/overlay pair whose
+            // `enable` window is the overlap: the exported frames then switch
+            // the effect on and off at the same instants the preview does.
+            struct GatedFxStage { QString fx; QString enable; };
+            std::vector<GatedFxStage> gatedFx;
+            for (const auto& inherited : tl.effectLayerRangesFor(clip, trackIndex)) {
+                const QString fx = buildVideoEffectsFilterChain(inherited.layer->effects, boxW, boxH);
+                if (fx.isEmpty()) continue;  // every effect on that layer is disabled
+                if (inherited.coversWholeClip) {
+                    chain += fx;
+                    continue;
+                }
+                GatedFxStage stage;
+                stage.fx = fx;
+                stage.enable = QStringLiteral("between(t,%1,%2)")
+                    .arg(ticksToSeconds(inherited.rangeStart), 0, 'f', 6)
+                    .arg(ticksToSeconds(inherited.rangeEnd), 0, 'f', 6);
+                gatedFx.push_back(std::move(stage));
+            }
+
+            // Rotation and opacity are accumulated separately from the linear
+            // chain so they can be applied AFTER any gated Effect Layer stage
+            // (a gated stage has to leave the chain to become its own
+            // filtergraph lines). When there is no gated stage — the normal
+            // case — the emitted graph is exactly what it always was.
+            QString postFx;
+
             // Dynamic rotation
             bool hasAnimatedRot = false;
             double baseRot = clip.transform.rotationDeg;
@@ -658,19 +700,46 @@ QStringList Exporter::buildFfmpegArgs(const Settings& s, QString* filterGraphDeb
                     rotPoints.push_back({tSec, kf.value.rotationDeg});
                 }
                 const QString rotExpr = QString("-(%1)*PI/180.0").arg(buildPiecewiseLinearExpr("t", rotPoints));
-                chain += QString(",rotate=a='%1':ow=hypot(iw\\,ih):oh=hypot(iw\\,ih):c=black@0").arg(rotExpr);
+                postFx += QString(",rotate=a='%1':ow=hypot(iw\\,ih):oh=hypot(iw\\,ih):c=black@0").arg(rotExpr);
             } else if (std::abs(baseRot) > 0.001) {
                 const double rad = -baseRot * M_PI / 180.0;
-                chain += QString(",rotate=%1:ow=hypot(iw\\,ih):oh=hypot(iw\\,ih):c=black@0")
+                postFx += QString(",rotate=%1:ow=hypot(iw\\,ih):oh=hypot(iw\\,ih):c=black@0")
                     .arg(rad, 0, 'f', 6);
             }
 
             // Smooth opacity keyframing & static opacity
-            chain += buildOpacityFilterChain(clip, startSec);
+            postFx += buildOpacityFilterChain(clip, startSec);
 
             const QString pre = QString("singleLayer%1").arg(layerCounter);
-            chain += QString("[%1]").arg(pre);
-            videoFilterParts << chain;
+            if (gatedFx.empty()) {
+                chain += postFx;
+                chain += QString("[%1]").arg(pre);
+                videoFilterParts << chain;
+            } else {
+                // Close the linear part with a temporary label, run each gated
+                // stage as
+                //   [cur]split=2[dry][src] ; [src]<fx>[wet] ;
+                //   [dry][wet]overlay=...:enable='between(t,a,b)'[next]
+                // then finish with rotation/opacity on the gated result.
+                QString cur = QString("fxbase%1").arg(layerCounter);
+                chain += QString("[%1]").arg(cur);
+                videoFilterParts << chain;
+                for (size_t gi = 0; gi < gatedFx.size(); ++gi) {
+                    const int g = static_cast<int>(gi);
+                    const QString dry = QString("fxdry%1_%2").arg(layerCounter).arg(g);
+                    const QString src = QString("fxsrc%1_%2").arg(layerCounter).arg(g);
+                    const QString wet = QString("fxwet%1_%2").arg(layerCounter).arg(g);
+                    const QString next = QString("fxout%1_%2").arg(layerCounter).arg(g);
+                    videoFilterParts << QStringLiteral("[%1]split=2[%2][%3]").arg(cur, dry, src);
+                    videoFilterParts << QStringLiteral("[%1]%2[%3]").arg(src, gatedFx[gi].fx, wet);
+                    videoFilterParts << QStringLiteral(
+                        "[%1][%2]overlay=x=0:y=0:format=auto:eof_action=pass:repeatlast=0:enable='%3'[%4]")
+                        .arg(dry, wet, gatedFx[gi].enable, next);
+                    cur = next;
+                }
+                videoFilterParts << QStringLiteral("[%1]%2[%3]")
+                    .arg(cur, postFx.isEmpty() ? QStringLiteral(",null") : postFx, pre);
+            }
 
             // Position X / Y (animated vs static)
             bool hasAnimatedPos = false;

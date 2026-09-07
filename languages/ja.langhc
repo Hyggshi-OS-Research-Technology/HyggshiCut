@@ -30,6 +30,7 @@
     "menu.track.addImage": "画像",
     "menu.track.addAudio": "オーディオ",
     "menu.track.addText": "テキスト/タイトル",
+    "menu.track.addEffectLayer": "エフェクトレイヤー（調整レイヤー）",
     "menu.track.deleteSelected": "選択したトラックを削除",
 
     "menu.view": "表示",
@@ -63,6 +64,8 @@
     "timeline.track.image": "画像",
     "timeline.track.audio": "オーディオ",
     "timeline.track.text": "テキスト",
+    "timeline.effectLayer": "エフェクトレイヤー",
+    "timeline.effectLayerHint": "下のすべてのクリップにエフェクトを適用します",
 
     "transform.group": "トランスフォーム / 自由変形",
     "transform.posX": "位置 X",
@@ -116,6 +119,7 @@
     "audio.compRatio": "比率 (Ratio :1)",
 
     "effects.filtersLabel": "フィルター",
+    "explorer.effectLayerCard": "エフェクトレイヤー（下のクリップに適用）",
     "effects.addBtn": "+ 追加",
     "effects.removeBtn": "− 削除",
     "effects.preset": "プリセット:",

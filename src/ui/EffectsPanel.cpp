@@ -179,7 +179,12 @@ void EffectsPanel::retranslateUi() {
 
 void EffectsPanel::setClip(Clip* clip) {
     m_clip = clip;
-    const bool usable = (clip != nullptr && (clip->type == ClipType::Video || clip->type == ClipType::Image || clip->type == ClipType::Text));
+    // Effect Layers are editable here too — their stack is the whole point of
+    // the clip (it is inherited by every visual clip below the layer).
+    const bool usable = (clip != nullptr && (clip->type == ClipType::Video ||
+                                             clip->type == ClipType::Image ||
+                                             clip->type == ClipType::Text ||
+                                             clip->isEffectLayer()));
     setEnabled(usable);
     refreshFilterList(0);
 }
@@ -425,6 +430,13 @@ QStringList EffectsPanel::effectTypeIds() {
 
 QString EffectsPanel::effectTypeName(const QString& typeId) {
     return getEffectTypeName(typeId);
+}
+
+QString EffectsPanel::effectLayerCardId() {
+    // Leading '@' keeps it clearly outside the real effect-type namespace
+    // (which is used as an ffmpeg/shader key), so a stray lookup can never
+    // mistake it for an effect.
+    return QStringLiteral("@effect_layer");
 }
 
 Effect EffectsPanel::buildEffect(const QString& typeId) {

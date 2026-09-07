@@ -30,6 +30,7 @@
     "menu.track.addImage": "รูปภาพ",
     "menu.track.addAudio": "เสียง",
     "menu.track.addText": "ข้อความ/ชื่อเรื่อง",
+    "menu.track.addEffectLayer": "เลเยอร์เอฟเฟกต์ (Adjustment Layer)",
     "menu.track.deleteSelected": "ลบเลเยอร์ที่เลือก",
 
     "menu.view": "มุมมอง",
@@ -63,6 +64,8 @@
     "timeline.track.image": "รูปภาพ",
     "timeline.track.audio": "เสียง",
     "timeline.track.text": "ข้อความ",
+    "timeline.effectLayer": "เลเยอร์เอฟเฟกต์",
+    "timeline.effectLayerHint": "ใช้เอฟเฟกต์กับคลิปทั้งหมดที่อยู่ด้านล่าง",
 
     "transform.group": "แปลงรูป / ปรับอิสระ",
     "transform.posX": "ตำแหน่ง X",
@@ -116,6 +119,7 @@
     "audio.compRatio": "อัตราส่วน (Ratio :1)",
 
     "effects.filtersLabel": "ฟิลเตอร์",
+    "explorer.effectLayerCard": "เลเยอร์เอฟเฟกต์ (ใช้กับคลิปด้านล่าง)",
     "effects.addBtn": "+ เพิ่ม",
     "effects.removeBtn": "− ลบ",
     "effects.preset": "พรีเซ็ต:",

@@ -211,7 +211,22 @@ void TransformPanel::setSelectedClip(Project* project, const QString& trackId, c
         if (w) w->setEnabled(isVisual);
     }
 
-    if (clip->type == ClipType::Audio) {
+    // Speed / volume / mute are meaningless on a media-less Effect Layer.
+    if (clip->isEffectLayer()) {
+        for (auto* w : {static_cast<QWidget*>(m_speedSpin), static_cast<QWidget*>(m_volumeSpin),
+                        static_cast<QWidget*>(m_muteCheck)}) {
+            if (w) w->setEnabled(false);
+        }
+    }
+
+    if (clip->isEffectLayer()) {
+        // An Effect Layer has no media of its own, so transform/blend/speed do
+        // not apply — point the user at the Effects tab instead of showing a
+        // panel full of disabled controls with no explanation.
+        m_hintLabel->setText(tr("Đang chọn Lớp hiệu ứng (Effect Layer): lớp này không có hình ảnh riêng, "
+                                "mọi hiệu ứng trong tab \"Hiệu ứng\" sẽ áp dụng cho các clip nằm DƯỚI nó "
+                                "trong suốt khoảng thời gian của lớp."));
+    } else if (clip->type == ClipType::Audio) {
         m_hintLabel->setText(tr("Đang chọn clip âm thanh. Bạn có thể chỉnh Tốc độ phát (Speed), Âm lượng (Volume) và Tắt tiếng (Mute)."));
     } else {
         m_hintLabel->setText(tr("Chọn một clip video/ảnh/chữ trên timeline để chỉnh vị trí, kích thước, góc xoay, tốc độ và âm lượng."));

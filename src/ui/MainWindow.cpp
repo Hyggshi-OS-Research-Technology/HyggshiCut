@@ -197,6 +197,8 @@ void MainWindow::buildMenus() {
     addLayerMenu->setTitle(LTR("menu.track"));
     timelineMenu->addMenu(addLayerMenu);
     timelineMenu->addAction(LTR("menu.track.addText"), QKeySequence(Qt::CTRL | Qt::Key_T), this, &MainWindow::onAddTextTrack);
+    timelineMenu->addAction(LTR("menu.track.addEffectLayer"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_L),
+                            this, &MainWindow::onAddEffectLayer);
     timelineMenu->addSeparator();
     timelineMenu->addAction(LTR("menu.edit.splitAtPlayhead"), QKeySequence(Qt::Key_S), this, &MainWindow::onSplitAtPlayhead);
     timelineMenu->addAction(LTR("menu.edit.deleteClip"), QKeySequence::Delete, this, &MainWindow::onDeleteSelectedClip);
@@ -381,6 +383,7 @@ QMenu* MainWindow::buildAddLayerMenu() {
     menu->addAction(LTR("menu.track.addImage"), this, &MainWindow::onAddImageTrack);
     menu->addAction(LTR("menu.track.addAudio"), this, &MainWindow::onAddAudioTrack);
     menu->addAction(LTR("menu.track.addText"), this, &MainWindow::onAddTextTrack);
+    menu->addAction(LTR("menu.track.addEffectLayer"), this, &MainWindow::onAddEffectLayer);
     menu->addSeparator();
     menu->addAction(LTR("menu.track.deleteSelected"), this, &MainWindow::onDeleteSelectedTrack);
     return menu;
@@ -897,6 +900,16 @@ void MainWindow::onAddTextTrack() {
     onTimelineEdited();
 }
 
+void MainWindow::onAddEffectLayer() {
+    // The heavy lifting (track choice, undo snapshot, selection, re-render)
+    // lives in TimelineWidget so the menu action, the timeline's right-click
+    // menu and the Explorer's drag & drop all behave identically.
+    if (!m_timelineWidget) return;
+    m_timelineWidget->addEffectLayer();
+    statusBar()->showMessage(tr("Đã thêm Lớp hiệu ứng — thêm hiệu ứng trong tab Hiệu ứng; "
+                                "chúng sẽ áp dụng cho mọi clip nằm dưới lớp này."), 4000);
+}
+
 void MainWindow::onSplitAtPlayhead() { m_timelineWidget->splitAtPlayhead(); }
 void MainWindow::onDeleteSelectedClip() { m_timelineWidget->deleteSelectedClip(); }
 void MainWindow::onDeleteSelectedTrack() { m_timelineWidget->deleteSelectedTrack(); }
@@ -1120,10 +1133,21 @@ void MainWindow::onTextPresetRequested(QString presetId) {
 void MainWindow::onEffectPresetRequested(QString effectTypeId) {
     if (!m_project) return;
 
+    // The Explorer's first Effects card is not an effect type at all: it asks
+    // for a media-less Effect Layer (adjustment layer) on the timeline, whose
+    // stack every clip below inherits.
+    if (effectTypeId == EffectsPanel::effectLayerCardId()) {
+        onAddEffectLayer();
+        return;
+    }
+
     Track* track = m_project->timeline().findTrack(m_selectedTrackId);
     Clip* clip = track ? track->findClip(m_selectedClipId) : nullptr;
-    if (!clip || (clip->type != ClipType::Video && clip->type != ClipType::Image && clip->type != ClipType::Text)) {
-        statusBar()->showMessage(tr("Chọn một clip video/ảnh/chữ trên timeline trước."), 3000);
+    // Effects can go on any visual clip — and on an Effect Layer, which is
+    // exactly what it is for.
+    if (!clip || (clip->type != ClipType::Video && clip->type != ClipType::Image &&
+                  clip->type != ClipType::Text && !clip->isEffectLayer())) {
+        statusBar()->showMessage(tr("Chọn một clip video/ảnh/chữ (hoặc một Lớp hiệu ứng) trên timeline trước."), 3000);
         return;
     }
 
@@ -1405,6 +1429,10 @@ void MainWindow::onAudioFiltersEdited() {
 void MainWindow::onEffectsEdited() {
     m_modified = true;
     if (m_playback) m_playback->seek(m_playback->currentTime());
+    // Repaint the timeline so the "Fx N" badge on the edited clip (and on an
+    // Effect Layer, whose badge is the only visible trace of its stack)
+    // reflects the new effect count immediately.
+    if (m_timelineWidget) m_timelineWidget->update();
     updateWindowTitle();
 }
 

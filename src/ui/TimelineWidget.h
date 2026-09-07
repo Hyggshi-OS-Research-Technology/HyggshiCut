@@ -70,6 +70,14 @@ public slots:
     void deleteSelectedTrack();
     void deleteTrack(const QString& trackId);
     void splitAtPlayhead();
+    // Adds a media-less Effect Layer (adjustment layer) spanning the current
+    // timeline, on the selected Visual track when possible, otherwise on a new
+    // track at the top of the stack. Selects the new layer so the Inspector
+    // opens on its Effects tab.
+    void addEffectLayer();
+    // Same, but placed explicitly: `start` on the timeline and `duration` long
+    // (used when an Effect Layer card is dropped at a specific spot).
+    void addEffectLayerAt(hc::Ticks start, hc::Ticks duration);
     void copySelectedClip();
     void pasteClip();
     void duplicateSelectedClip();
@@ -132,6 +140,11 @@ private:
     // and removal. Used by the right-click-on-marker context menu.
     void buildTransitionMenu(QMenu* menu, Track* track,
                              const QString& prevClipId, const QString& incomingClipId);
+    // Returns a NEW QMenu (parented to this widget) listing the effects that
+    // can be added to an Effect Layer clip, plus clear/rename entries. Used by
+    // both the double-click popup and the right-click context menu; the caller
+    // is responsible for exec()ing and deleteLater()ing it.
+    QMenu* buildEffectLayerMenu(const QString& trackId, const QString& clipId);
     QString formatDurationShort(Ticks t) const;
     void recomputeTrackHeight();
     TrackControl trackControlAtPosition(const QPoint& pos, int* outRow) const;

@@ -62,6 +62,11 @@ Beyond its intuitive, modern graphical interface, HyggshiCut also ships with a b
 - **Cinematic 3-Way Color Grading:**
   - Three color wheels: **Lift (Shadows)**, **Gamma (Midtones)**, **Gain (Highlights)**, plus a Luma brightness slider.
   - Built-in color presets: *Teal & Orange*, *Warm Sunset*, *Cool Nordic*, *Vintage 70s*, *Cyberpunk Neon*, *Bleach Bypass*, *Golden Hour*, *Horror Green*.
+- **Effect Layers (adjustment layers):** add a media-less layer (`Ctrl + Shift + L`, *Timeline → Add Layer → Effect Layer*, the Explorer's **Effect Layer** card, or the timeline's right-click menu) and stack any of the effects above on it. Every visual clip on the tracks **below** the layer inherits its stack for as long as the layer overlaps it — one grade for a whole scene instead of copy-pasting effects clip by clip.
+  - Stacks compose in NLE order: the clip's own effects first, then each layer above it bottom-to-top.
+  - Trim or stretch a layer to grade only part of a clip; the inherited stack switches on/off on exactly the same frames in Preview and in the exported file (partial overlaps are time-gated in the ffmpeg graph).
+  - Hiding the layer's track bypasses it, and a stretched layer never lengthens the timeline (no black tail on export).
+  - Layers are drawn as hatched orange blocks with an `Fx N` badge; selecting one tints the region of the tracks below that it affects.
 
 ### 3. Free Transform & Keyframe Animation
 - **Free-form frame transforms:** Adjust position $(X, Y)$, scale $(X, Y)$, rotation angle (°), and opacity.
@@ -234,6 +239,7 @@ HyggshiCut -r -p podcast.hcproj -o podcast_audio.mp3 --preset audio-mp3
 | `Ctrl + Y` / `Ctrl + Shift + Z` | Redo |
 | `Ctrl + I` | Open the Import Media dialog |
 | `Ctrl + T` | Add a new Text layer |
+| `Ctrl + Shift + L` | Add an Effect Layer (adjustment layer for the tracks below) |
 | `Ctrl + E` | Open the Export dialog (video & audio) |
 | `Ctrl + Shift + P` | Project frame & Canvas settings |
 | `Ctrl + S` | Save project |

@@ -11,7 +11,11 @@
 
 namespace hc {
 
-enum class ClipType { Video, Audio, Image, Text };
+// ClipType::EffectLayer is a media-less "adjustment layer": it never
+// composites a frame of its own, it only lends its effect stack to every
+// visual clip on the tracks BELOW it for as long as they overlap in time
+// (see Timeline::effectLayerRangesFor / Timeline::mergedEffects).
+enum class ClipType { Video, Audio, Image, Text, EffectLayer };
 
 // Type of the incoming transition a Visual clip plays against the previous
 // clip on the same track (see Clip::transitionInDuration). Dissolve is the
@@ -138,7 +142,10 @@ public:
     // Compositing blend mode. Normal (alpha blend) by default.
     BlendMode blendMode = BlendMode::Normal;
 
-    // Visual effects chain, applied in order.
+    // Visual effects chain, applied in order. On an Effect Layer clip this
+    // stack is never rendered directly — it is inherited by every visual clip
+    // on the tracks below the layer (see Timeline::mergedEffects and
+    // Timeline::effectLayerRangesFor).
     std::vector<Effect> effects;
 
     // Simple linear fades, expressed in ticks measured from each edge of the clip.
@@ -309,8 +316,30 @@ public:
     }
 
     // Whether this clip produces a visual frame (video / image / text).
+    // Effect layers deliberately report false: they are invisible by design
+    // and only contribute their effect stack to the clips below them, so
+    // every compositing/decoding path (Timeline::activeVisualClipsAt,
+    // PlaybackController, Exporter, GLVideoWidget) skips them automatically.
     bool hasVisual() const {
         return type == ClipType::Video || type == ClipType::Image || type == ClipType::Text;
+    }
+
+    // Whether this clip is an Effect Layer (adjustment layer). Media-less:
+    // assetId is empty, so it must never be handed to the Decoder, the
+    // TextureCache or the ffmpeg input list.
+    bool isEffectLayer() const { return type == ClipType::EffectLayer; }
+
+    // Builds a media-less Effect Layer spanning [start, start + duration).
+    // Effects are added afterwards (EffectsPanel / Explorer effect cards /
+    // drag & drop onto the clip), exactly like for any other visual clip.
+    static Clip makeEffectLayer(Ticks start, Ticks duration) {
+        Clip c;
+        c.type = ClipType::EffectLayer;
+        c.assetId.clear();
+        c.sourceIn = 0;
+        c.sourceOut = std::max<Ticks>(1, duration);
+        c.timelineStart = std::max<Ticks>(0, start);
+        return c;
     }
 
     // Converts a timeline position (already known to be inside this clip)

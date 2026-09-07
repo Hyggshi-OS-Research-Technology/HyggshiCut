@@ -35,6 +35,13 @@ public:
     static QString effectTypeName(const QString& typeId);
     static Effect buildEffect(const QString& typeId);
 
+    // Id of the Explorer's "Effect Layer" card. It is NOT an effect type:
+    // instead of pushing an effect onto the selected clip, it asks the
+    // timeline to create a media-less Effect Layer (adjustment layer) whose
+    // stack is inherited by every clip below it. Kept here so the Explorer,
+    // MainWindow and TimelineWidget all agree on the one magic id.
+    static QString effectLayerCardId();
+
 public slots:
     void retranslateUi();
 

@@ -17,6 +17,7 @@ QString clipTypeToString(ClipType t) {
         case ClipType::Audio: return "audio";
         case ClipType::Image: return "image";
         case ClipType::Text:  return "text";
+        case ClipType::EffectLayer: return "effect_layer";
     }
     return "video";
 }
@@ -24,6 +25,9 @@ ClipType clipTypeFromString(const QString& s) {
     if (s == "audio") return ClipType::Audio;
     if (s == "image") return ClipType::Image;
     if (s == "text")  return ClipType::Text;
+    // "adjustment" is accepted as an alias so projects written by other tools
+    // (or by an earlier name for the same feature) still load.
+    if (s == "effect_layer" || s == "adjustment") return ClipType::EffectLayer;
     return ClipType::Video;
 }
 
