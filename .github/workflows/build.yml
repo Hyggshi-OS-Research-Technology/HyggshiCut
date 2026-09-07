@@ -49,15 +49,17 @@ jobs:
           dpkg-deb --info "${deb_file}"
           dpkg-deb --contents "${deb_file}" | head -40
 
-      - name: Build & run the offline Effect Layer test
+      - name: Build & run the offline core tests
         run: |
           # Tests are opt-in (HYGGSHICUT_BUILD_TESTS) and the .deb build above
           # does not touch them, so compile+run the offline core test here to
           # keep it from rotting. It needs no display, no real media (it
           # generates its own tiny PNG) and spawns no ffmpeg process.
           cmake -S . -B build-tests -DCMAKE_BUILD_TYPE=Release -DHYGGSHICUT_BUILD_TESTS=ON
-          cmake --build build-tests --target EffectLayerTest -j"$(nproc)"
+          cmake --build build-tests --target EffectLayerTest SegmentBoundTest ScreenRecorderTest -j"$(nproc)"
           ./build-tests/EffectLayerTest
+          ./build-tests/SegmentBoundTest
+          QT_QPA_PLATFORM=offscreen ./build-tests/ScreenRecorderTest
 
       - name: Upload .deb artifact
         uses: actions/upload-artifact@v4
@@ -72,8 +74,16 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DEB_FILE: ${{ env.deb_file }}
         run: |
+          # Build the notes with printf: an inline "\n" is not expanded by the
+          # shell, so the old one-liner published a release body containing a
+          # literal backslash-n. Failures are no longer swallowed by `|| true`.
+          notes_file="$(mktemp)"
+          printf '%s\n\n%s\n' \
+            "Automatically built from tag **${GITHUB_REF_NAME}**." \
+            '- Linux `.deb` package attached.' > "$notes_file"
+
           gh release create "${GITHUB_REF_NAME}" \
             "${DEB_FILE}" \
             --repo "${GITHUB_REPOSITORY}" \
             --title "HyggshiCut ${GITHUB_REF_NAME}" \
-            --notes "Automatically built from tag **${GITHUB_REF_NAME}**.\n\n- Linux \`.deb\` package attached." || true
+            --notes-file "$notes_file"

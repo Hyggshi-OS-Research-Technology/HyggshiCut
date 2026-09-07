@@ -1,4 +1,5 @@
 build/
+build-tests/
 .git/
 .github/
 obj-*/

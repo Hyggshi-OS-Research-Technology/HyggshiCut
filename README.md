@@ -21,15 +21,16 @@
 [![Packaging](https://hyggshi-badge.vercel.app/api/badge?message=.deb&label=debain&color=ef4444&labelColor=0f172a&icon=debian&animation=gradient-shift)](https://www.debian.org/)
 
 [![GitHub License](https://hyggshi-badge.vercel.app/api/badge?message=MIT&label=icense&color=3b82f6&labelColor=0f172a&animation=gradient-shift)](LICENSE)
-[![HOSL13](https://hyggshi-badge.vercel.app/api/badge?message=HOSL+1.3&label=icense&color=3b82f6&labelColor=0f172a&animation=gradient-shift)](license)
-[![HOSL13](https://hyggshi-badge.vercel.app/api/badge?message=protected+by+license+HOSL+1.3&label=Hyggshi+DMCA+Report+System+Team&color=6366f1&labelColor=0f172a&animation=gradient-shift)](license)
+[![HOSL13](https://hyggshi-badge.vercel.app/api/badge?message=HOSL+1.3&label=icense&color=3b82f6&labelColor=0f172a&animation=gradient-shift)](LICENSE-HOSL-1.3.md)
+[![HOSL13](https://hyggshi-badge.vercel.app/api/badge?message=protected+by+license+HOSL+1.3&label=Hyggshi+DMCA+Report+System+Team&color=6366f1&labelColor=0f172a&animation=gradient-shift)](LICENSE-HOSL-1.3.md)
 
-[**Features**](#-key-features) •
-[**Installation**](#-installation) •
-[**Build from Source**](#-building-from-source) •
-[**Headless CLI Render**](#-headless-cli-render-guide) •
-[**Keyboard Shortcuts**](#-keyboard-shortcuts) •
-[**Plugins & Languages**](#-plugin-system--multi-language-support)
+[**Features**](#key-features) •
+[**Dependencies**](#system-requirements--dependencies) •
+[**Build from Source**](#building-from-source) •
+[**Packaging**](#packaging--installing-the-deb-package-debian--ubuntu) •
+[**Headless CLI Render**](#headless-cli-render-guide) •
+[**Keyboard Shortcuts**](#keyboard-shortcuts) •
+[**Plugins & Languages**](#plugin-system--multi-language-support)
 
 </div>
 
@@ -120,7 +121,7 @@ sudo apt-get install -y \
   qt6-base-dev libqt6opengl6-dev \
   libavformat-dev libavcodec-dev libavutil-dev libswscale-dev \
   libswresample-dev libavfilter-dev \
-  libmpv-dev libasound2-dev libgl1-mesa-dev
+  libmpv-dev libasound2-dev libgl-dev
 ```
 
 ### Installing dependencies on Arch Linux:
@@ -158,10 +159,13 @@ cmake --build . -j"$(nproc)"
 cmake .. -DCMAKE_BUILD_TYPE=Debug -DHYGGSHICUT_BUILD_TESTS=ON
 cmake --build . -j"$(nproc)"
 
-# Run smoke tests
-./HyggshiCutExportSmokeTest
+# Run the offline tests (no display, no media, no ffmpeg process required)
+./EffectLayerTest
 ./SegmentBoundTest
-./UserProjectExportTest
+
+# Tests that need media and/or a (possibly offscreen) Qt platform plugin
+QT_QPA_PLATFORM=offscreen ./TextCacheAndCpuFallbackTest
+QT_QPA_PLATFORM=offscreen ./SettingsDialogTest
 ```
 
 ---
@@ -282,9 +286,13 @@ The UI supports multiple languages with instant switching — no application res
 ```
 HyggshiCut/
 ├── CMakeLists.txt              # Main CMake build configuration
+├── Dockerfile                  # Builder (+ .deb) and GUI runtime images
+├── docker-compose.yml          # `build-deb` and `app` services
 ├── debian/                     # .deb packaging configuration for Linux
+├── docs/                       # Additional documentation (Docker, core features)
 ├── languages/                  # Language packs (.langhc)
 ├── plugins/                    # Effects and color preset packs (.plhc)
+├── scripts/                    # Docker build/run helper scripts
 ├── src/
 │   ├── main.cpp                # Application entry point & Headless CLI handling
 │   ├── audio/                  # Audio filter chain processing (EQ, Denoise, Compressor)
@@ -297,7 +305,8 @@ HyggshiCut/
 │   ├── plugin/                 # PluginManager loading and management system
 │   ├── render/                 # OpenGL 3.3 Core renderer, TextRenderer, TextureCache
 │   └── ui/                     # Qt6 UI (Timeline, Transform, Effects, ColorWheel, ExportDialog...)
-└── tests/                      # Feature and export engine test suite
+├── tests/                      # Feature and export engine test suite
+└── Resources/                  # Icons and branding assets
 ```
 
 ---
@@ -307,7 +316,8 @@ HyggshiCut/
 - **Author:** Hyggshi OS Foundation / Hyggshi OS Research Technology
 - **Contact / Support:** [hyggshidev@gmail.com](mailto:hyggshidev@gmail.com)
 - **Homepage:** [https://hyggshi-os-website.pages.dev/](https://hyggshi-os-website.pages.dev/)
-- **Source code:** Released under an open-source license.
+- **Source code:** Dual-licensed — the MIT licence ([`LICENSE`](LICENSE)) and the
+  Hyggshi OS License v1.3 ([`LICENSE-HOSL-1.3.md`](LICENSE-HOSL-1.3.md)).
 
 ---
 

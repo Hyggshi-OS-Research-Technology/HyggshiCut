@@ -1,2 +1,3 @@
 debian/hyggshicut.desktop usr/share/applications/
 debian/hyggshicut.png usr/share/pixmaps/
+debian/hyggshicut.xml usr/share/mime/packages/

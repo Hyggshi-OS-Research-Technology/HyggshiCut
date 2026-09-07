@@ -22,6 +22,12 @@
 #include "plugin/PluginManager.h"
 #include "ui/ThemeManager.h"
 
+// Injected by CMake (see target_compile_definitions) so the reported version
+// always matches project(HyggshiCut VERSION ...).
+#ifndef HYGGSHICUT_VERSION
+#define HYGGSHICUT_VERSION "1.0.0"
+#endif
+
 namespace {
 
 #if defined(__linux__)
@@ -63,7 +69,10 @@ void loadBundledAssets(const QApplication& app) {
     QStringList langDirs = {
         QDir(app.applicationDirPath()).filePath("languages"),
         QDir(app.applicationDirPath()).filePath("../languages"),
-        QDir::current().filePath("languages")
+        QDir(app.applicationDirPath()).filePath("../share/hyggshicut/languages"),
+        QDir::current().filePath("languages"),
+        "/usr/local/share/hyggshicut/languages",
+        "/usr/share/hyggshicut/languages"
     };
 
     for (const auto& dPath : langDirs) {
@@ -82,7 +91,10 @@ void loadBundledAssets(const QApplication& app) {
     QStringList pluginDirs = {
         QDir(app.applicationDirPath()).filePath("plugins"),
         QDir(app.applicationDirPath()).filePath("../plugins"),
-        QDir::current().filePath("plugins")
+        QDir(app.applicationDirPath()).filePath("../share/hyggshicut/plugins"),
+        QDir::current().filePath("plugins"),
+        "/usr/local/share/hyggshicut/plugins",
+        "/usr/share/hyggshicut/plugins"
     };
 
     for (const auto& dPath : pluginDirs) {
@@ -164,7 +176,7 @@ int main(int argc, char* argv[]) {
     QApplication app(argc, argv);
     QApplication::setApplicationName("HyggshiCut");
     QApplication::setOrganizationName("Hyggshi OS Foundation");
-    QApplication::setApplicationVersion("1.0.0");
+    QApplication::setApplicationVersion(QStringLiteral(HYGGSHICUT_VERSION));
 
     loadBundledAssets(app);
     hc::ThemeManager::loadPreference();
@@ -175,6 +187,11 @@ int main(int argc, char* argv[]) {
     parser.setApplicationDescription("HyggshiCut - Video Editor & Headless Render CLI");
     parser.addHelpOption();
     parser.addVersionOption();
+
+    // Accept the project as a bare argument too, so `HyggshiCut project.hcproj`
+    // works and the .desktop launcher (Exec=HyggshiCut %F, i.e. file managers
+    // and "Open With") actually opens the file instead of a blank editor.
+    parser.addPositionalArgument("project", "Đường dẫn file dự án .hcproj (tùy chọn)", "[project.hcproj]");
 
     // -p, --project <file>
     QCommandLineOption projectOption(
@@ -260,7 +277,13 @@ int main(int argc, char* argv[]) {
     parser.process(app);
 
     const bool isRenderMode = parser.isSet(renderOption) || parser.isSet(noGuiOption);
-    const QString projectPath = parser.value(projectOption);
+
+    // --project wins; otherwise fall back to the first positional argument.
+    QString projectPath = parser.value(projectOption);
+    if (projectPath.isEmpty()) {
+        const QStringList positional = parser.positionalArguments();
+        if (!positional.isEmpty()) projectPath = positional.first();
+    }
 
     // ━━━ HEADLESS CLI RENDER MODE ━━━
     if (isRenderMode) {

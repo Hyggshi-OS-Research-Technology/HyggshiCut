@@ -62,7 +62,9 @@ void LanguageManager::discoverBundledLanguages() {
     QStringList langDirs = {
         QDir(appDir).filePath("languages"),
         QDir(appDir).filePath("../languages"),
+        QDir(appDir).filePath("../share/hyggshicut/languages"),
         QDir::current().filePath("languages"),
+        "/usr/local/share/hyggshicut/languages",
         "/usr/share/hyggshicut/languages"
     };
 

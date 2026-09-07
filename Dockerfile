@@ -37,7 +37,8 @@ ENV QT_QPA_PLATFORM=offscreen
 RUN cmake -B build -DCMAKE_BUILD_TYPE=Release -DHYGGSHICUT_BUILD_TESTS=ON \
     && cmake --build build -j$(nproc) \
     && ./build/TextCacheAndCpuFallbackTest \
-    && ./build/SegmentBoundTest
+    && ./build/SegmentBoundTest \
+    && ./build/EffectLayerTest
 
 # Default command: build debian package (.deb)
 CMD ["sh", "-c", "dpkg-buildpackage -us -uc -b -j$(nproc) && mkdir -p dist && mv ../hyggshicut_*.deb dist/ && ls -lh dist/"]
@@ -87,6 +88,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=builder /src/build/HyggshiCut /usr/local/bin/HyggshiCut
 COPY --from=builder /src/languages /usr/local/share/hyggshicut/languages
+# Effect/color-preset packs, previously missing from the runtime image, so the
+# Effects panel came up empty in the container.
+COPY --from=builder /src/plugins /usr/local/share/hyggshicut/plugins
 
 # Setup non-root desktop user matching UID 1000
 ARG UID=1000

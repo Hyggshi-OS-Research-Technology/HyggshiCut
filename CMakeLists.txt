@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(HyggshiCut VERSION 0.1.0 LANGUAGES CXX)
+project(HyggshiCut VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -66,9 +66,25 @@ target_link_libraries(HyggshiCut PRIVATE
     PkgConfig::ALSA
 )
 
+# Single source of truth for the version string reported by --version, so it
+# cannot drift away from the project() version / debian/changelog again.
+target_compile_definitions(HyggshiCut PRIVATE HYGGSHICUT_VERSION="${PROJECT_VERSION}")
+
 target_compile_options(HyggshiCut PRIVATE -Wall -Wextra -Wno-unused-parameter)
 
 install(TARGETS HyggshiCut RUNTIME DESTINATION bin)
+
+# Bundled runtime assets. LanguageManager::discoverBundledLanguages() and
+# main.cpp's loadBundledAssets() look for these next to the executable, in
+# the current directory, and finally under the system data dir — so an
+# installed build (including the .deb) has to ship them or the UI falls back
+# to raw translation keys and loads no effect presets.
+install(DIRECTORY languages/
+        DESTINATION share/hyggshicut/languages
+        FILES_MATCHING PATTERN "*.langhc")
+install(DIRECTORY plugins/
+        DESTINATION share/hyggshicut/plugins
+        FILES_MATCHING PATTERN "*.plhc")
 
 # --- Optional headless smoke test (core engine only, no GUI/OpenGL) ---
 option(HYGGSHICUT_BUILD_TESTS "Build the headless export smoke test" OFF)
