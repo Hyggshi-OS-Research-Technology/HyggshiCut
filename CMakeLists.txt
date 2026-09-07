@@ -234,6 +234,35 @@ if(HYGGSHICUT_BUILD_TESTS)
     set(APP_LIB_SOURCES ${SOURCES})
     list(FILTER APP_LIB_SOURCES EXCLUDE REGEX ".*/main\\.cpp$")
 
+    # Regression test for the keyboard shortcut table: catches two actions
+    # sharing a QKeySequence (which makes Qt fire neither) and editing
+    # shortcuts that would shadow typing in a text field. Needs a Qt platform
+    # plugin: run with QT_QPA_PLATFORM=offscreen.
+    add_executable(ShortcutTest
+        tests/shortcut_test.cpp
+        ${APP_LIB_SOURCES}
+    )
+    target_include_directories(ShortcutTest PRIVATE
+        src
+        src/core
+        src/decode
+        src/render
+        src/playback
+        src/export
+        src/ui
+        src/cache
+        src/capture
+    )
+    target_link_libraries(ShortcutTest PRIVATE
+        Qt6::Widgets
+        Qt6::OpenGLWidgets
+        Qt6::DBus
+        OpenGL::GL
+        PkgConfig::FFMPEG
+        PkgConfig::MPV
+        PkgConfig::ALSA
+    )
+
     add_executable(SettingsDialogTest
         tests/settings_dialog_test.cpp
         ${APP_LIB_SOURCES}

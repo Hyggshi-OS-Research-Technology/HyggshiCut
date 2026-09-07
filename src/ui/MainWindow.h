@@ -1,6 +1,7 @@
 #pragma once
 #include <QMainWindow>
 #include <QElapsedTimer>
+#include <QList>
 #include <memory>
 #include "../core/Project.h"
 #include "../cache/ProxyManager.h"
@@ -104,6 +105,10 @@ private slots:
 private:
     void buildMenus();
     void buildToolbar();
+    // Re-attaches the timeline-scoped shortcut actions (see buildMenus) to the
+    // current TimelineWidget. Must run after either the menus or the timeline
+    // widget are rebuilt, since each side can be recreated without the other.
+    void attachTimelineShortcuts();
     void buildDocks();
     // Creates the three QDockWidget shells (Media, Timeline, Properties)
     // once for the whole window session. rebuildProjectDependentUi() only
@@ -149,6 +154,14 @@ private:
     QMenu* m_viewMenu = nullptr;
     QToolBar* m_mainToolbar = nullptr;
     QAction* m_cutToolAction = nullptr;
+    // Actions created by buildMenus() and owned by this window (rather than by
+    // a QMenu), because they are shown in more than one menu. Destroyed and
+    // recreated on every buildMenus() run.
+    QList<QAction*> m_sharedMenuActions;
+    // Subset of the above whose shortcuts use Qt::WidgetWithChildrenShortcut
+    // and are registered on the TimelineWidget, so they only fire while the
+    // timeline has focus and cannot swallow keystrokes meant for a text field.
+    QList<QAction*> m_timelineScopedActions;
     QAction* m_undoAction = nullptr;
     QAction* m_redoAction = nullptr;
     QAction* m_useProxyAction = nullptr;

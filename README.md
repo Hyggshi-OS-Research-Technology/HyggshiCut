@@ -226,29 +226,43 @@ HyggshiCut -r -p podcast.hcproj -o podcast_audio.mp3 --preset audio-mp3
 
 ## Keyboard Shortcuts
 
+Shortcuts marked **(timeline)** only fire while the timeline has keyboard
+focus — click the timeline first. This is deliberate: it keeps single-key and
+clipboard shortcuts from being swallowed while you are typing in the Explorer
+search box or the Text panel.
+
 | Shortcut | Action |
 |---|---|
-| `Space` | Play / Pause |
-| `S` | Split clip at playhead |
-| `Delete` / `Backspace` | Delete the selected clip |
-| `Shift + Delete` | Delete the selected layer/track |
-| `Ctrl + C` | Copy the selected clip |
-| `Ctrl + V` | Paste the copied clip at the playhead |
-| `Ctrl + D` | Duplicate the selected clip |
-| `,` / `.` | Nudge the selected clip left / right by one frame |
-| `←` / `→` | Move back / forward 1 frame |
-| `↑` / `↓` | Move back / forward 5 seconds |
-| `Home` / `End` | Jump to the start / end of the timeline |
+| `Space` | Play / Pause **(timeline)** |
+| `S` | Split clip at playhead **(timeline)** |
+| `C` | Toggle the Cut (razor) tool **(timeline)** |
+| `Delete` / `Backspace` | Delete the selected clip **(timeline)** |
+| `Shift + Delete` | Delete the selected layer/track **(timeline)** |
+| `Ctrl + C` | Copy the selected clip **(timeline)** |
+| `Ctrl + V` | Paste the copied clip at the playhead **(timeline)** |
+| `Ctrl + D` | Duplicate the selected clip **(timeline)** |
+| `Ctrl + A` | Select the first clip **(timeline)** |
+| `Esc` | Deselect all **(timeline)** |
+| `,` / `.` | Nudge the selected clip left / right by one frame **(timeline)** |
+| `←` / `→` | Move back / forward 1 frame **(timeline)** |
+| `↑` / `↓` | Move back / forward 5 seconds **(timeline)** |
+| `Home` / `End` | Jump to the start / end of the timeline **(timeline)** |
 | `Ctrl + Z` | Undo |
 | `Ctrl + Y` / `Ctrl + Shift + Z` | Redo |
+| `Ctrl + N` / `Ctrl + O` | New project / Open project |
 | `Ctrl + I` | Open the Import Media dialog |
+| `Ctrl + Shift + R` | Screen recorder |
 | `Ctrl + T` | Add a new Text layer |
 | `Ctrl + Shift + L` | Add an Effect Layer (adjustment layer for the tracks below) |
 | `Ctrl + E` | Open the Export dialog (video & audio) |
 | `Ctrl + Shift + P` | Project frame & Canvas settings |
+| `Ctrl + ,` | Preferences / Settings |
 | `Ctrl + S` | Save project |
 | `Ctrl + Shift + S` | Save project as (Save As) |
-| `+` / `-` (or `Ctrl + Scroll`) | Zoom In / Zoom Out on the Timeline |
+| `Ctrl + Q` | Quit |
+| `Ctrl + +` / `Ctrl + -` | Zoom In / Zoom Out on the Timeline |
+| `+` / `-` | Zoom In / Zoom Out on the Timeline **(timeline)** |
+| `Ctrl`/`Alt` + `Wheel` | Zoom the timeline around the cursor |
 | `Shift + Z` | Fit the whole timeline to the window (Zoom to fit) |
 | `Mouse Wheel` | Pan the timeline horizontally (`Shift + Wheel` scrolls vertically) |
 

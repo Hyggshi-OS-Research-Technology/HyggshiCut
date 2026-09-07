@@ -38,7 +38,8 @@ RUN cmake -B build -DCMAKE_BUILD_TYPE=Release -DHYGGSHICUT_BUILD_TESTS=ON \
     && cmake --build build -j$(nproc) \
     && ./build/TextCacheAndCpuFallbackTest \
     && ./build/SegmentBoundTest \
-    && ./build/EffectLayerTest
+    && ./build/EffectLayerTest \
+    && ./build/ShortcutTest
 
 # Default command: build debian package (.deb)
 CMD ["sh", "-c", "dpkg-buildpackage -us -uc -b -j$(nproc) && mkdir -p dist && mv ../hyggshicut_*.deb dist/ && ls -lh dist/"]

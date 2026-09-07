@@ -125,13 +125,54 @@ MainWindow::~MainWindow() {
 }
 
 void MainWindow::buildMenus() {
+    // buildMenus() re-runs on every language change (updateUiTexts() clears the
+    // menu bar and rebuilds it). Actions that appear in more than one menu are
+    // owned by the window rather than by a QMenu, so they must be destroyed
+    // explicitly here or each rebuild would leak a duplicate set of shortcuts.
+    qDeleteAll(m_sharedMenuActions);
+    m_sharedMenuActions.clear();
+    m_timelineScopedActions.clear();
+
+    // Creates an action once and reuses the same instance in several menus.
+    // Registering the *same* QAction twice is fine; creating two actions with
+    // the same QKeySequence is not — Qt detects the collision at trigger time
+    // and fires neither, which is what silently broke S, Delete,
+    // Shift+Delete, Ctrl+Shift+P and Ctrl+, below.
+    const auto makeShared = [this](const QString& text, const QKeySequence& shortcut,
+                                   auto&& slot, Qt::ShortcutContext context) {
+        auto* act = new QAction(text, this);
+        if (!shortcut.isEmpty()) {
+            act->setShortcut(shortcut);
+            act->setShortcutContext(context);
+        }
+        connect(act, &QAction::triggered, this, slot);
+        m_sharedMenuActions.append(act);
+        if (context == Qt::WidgetWithChildrenShortcut) m_timelineScopedActions.append(act);
+        return act;
+    };
+
+    // Single-key editing shortcuts (S, C) are scoped to the timeline widget.
+    // As window-level shortcuts they would steal every plain "s"/"c"
+    // keystroke from the Explorer search box and the Text panel's editors.
+    auto* splitAction = makeShared(LTR("menu.edit.splitAtPlayhead"), QKeySequence(Qt::Key_S),
+                                   &MainWindow::onSplitAtPlayhead, Qt::WidgetWithChildrenShortcut);
+    auto* deleteClipAction = makeShared(LTR("menu.edit.deleteClip"), QKeySequence::Delete,
+                                        &MainWindow::onDeleteSelectedClip, Qt::WidgetWithChildrenShortcut);
+    auto* deleteTrackAction = makeShared(LTR("menu.edit.deleteTrack"), QKeySequence(Qt::SHIFT | Qt::Key_Delete),
+                                         &MainWindow::onDeleteSelectedTrack, Qt::WidgetWithChildrenShortcut);
+    auto* canvasAction = makeShared(LTR("menu.settings.canvas"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_P),
+                                    &MainWindow::onProjectSettings, Qt::WindowShortcut);
+    auto* preferencesAction = makeShared(LTR("menu.settings.preferences"), QKeySequence(Qt::CTRL | Qt::Key_Comma),
+                                         [this]() { openSettingsDialog(SettingsTab::Window); },
+                                         Qt::WindowShortcut);
+
     auto* fileMenu = menuBar()->addMenu(LTR("menu.file"));
     fileMenu->addAction(LTR("menu.file.new"), QKeySequence::New, this, &MainWindow::onNewProject);
     fileMenu->addAction(LTR("menu.file.open"), QKeySequence::Open, this, &MainWindow::onOpenProject);
     fileMenu->addAction(LTR("menu.file.save"), QKeySequence::Save, this, &MainWindow::onSaveProject);
     fileMenu->addAction(LTR("menu.file.saveas"), QKeySequence::SaveAs, this, &MainWindow::onSaveProjectAs);
     fileMenu->addSeparator();
-    fileMenu->addAction(LTR("menu.settings.canvas"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_P), this, &MainWindow::onProjectSettings);
+    fileMenu->addAction(canvasAction);
     fileMenu->addSeparator();
     fileMenu->addAction(tr("Nhập media..."), QKeySequence(Qt::CTRL | Qt::Key_I), this, &MainWindow::onImportRequested);
     fileMenu->addAction(LTR("menu.file.screenRecord"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_R), this, &MainWindow::onScreenRecord);
@@ -147,29 +188,39 @@ void MainWindow::buildMenus() {
     m_redoAction->setShortcuts({QKeySequence::Redo, QKeySequence(Qt::CTRL | Qt::Key_Y)});
 
     editMenu->addSeparator();
-    auto* cutToolAct = editMenu->addAction(LTR("menu.edit.cutTool"), QKeySequence(Qt::Key_C), this, [this]() {
+    auto* cutToolAct = new QAction(LTR("menu.edit.cutTool"), this);
+    cutToolAct->setShortcut(QKeySequence(Qt::Key_C));
+    cutToolAct->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+    connect(cutToolAct, &QAction::triggered, this, [this]() {
         if (m_cutToolAction) m_cutToolAction->toggle();
     });
+    m_sharedMenuActions.append(cutToolAct);
+    m_timelineScopedActions.append(cutToolAct);
+    editMenu->addAction(cutToolAct);
     cutToolAct->setCheckable(true);
     if (m_cutToolAction) {
         cutToolAct->setChecked(m_cutToolAction->isChecked());
         connect(m_cutToolAction, &QAction::toggled, cutToolAct, &QAction::setChecked);
     }
 
-    editMenu->addAction(LTR("menu.edit.splitAtPlayhead"), QKeySequence(Qt::Key_S), this, &MainWindow::onSplitAtPlayhead);
-    editMenu->addAction(LTR("menu.edit.deleteClip"), QKeySequence::Delete, this, &MainWindow::onDeleteSelectedClip);
-    editMenu->addAction(LTR("menu.edit.deleteTrack"), QKeySequence(Qt::SHIFT | Qt::Key_Delete), this, &MainWindow::onDeleteSelectedTrack);
+    editMenu->addAction(splitAction);
+    editMenu->addAction(deleteClipAction);
+    editMenu->addAction(deleteTrackAction);
 
     editMenu->addSeparator();
-    editMenu->addAction(tr("Sao chép clip"), QKeySequence::Copy, this, [this]() {
+    // Clip clipboard actions are timeline-scoped: as window shortcuts they
+    // would override Ctrl+C/Ctrl+V inside the Explorer search box and the Text
+    // panel's editors, so copying text out of those fields silently copied the
+    // selected clip instead.
+    editMenu->addAction(makeShared(tr("Sao chép clip"), QKeySequence::Copy, [this]() {
         if (m_timelineWidget) m_timelineWidget->copySelectedClip();
-    });
-    editMenu->addAction(tr("Dán clip"), QKeySequence::Paste, this, [this]() {
+    }, Qt::WidgetWithChildrenShortcut));
+    editMenu->addAction(makeShared(tr("Dán clip"), QKeySequence::Paste, [this]() {
         if (m_timelineWidget) m_timelineWidget->pasteClip();
-    });
-    editMenu->addAction(tr("Nhân đôi clip"), QKeySequence(Qt::CTRL | Qt::Key_D), this, [this]() {
+    }, Qt::WidgetWithChildrenShortcut));
+    editMenu->addAction(makeShared(tr("Nhân đôi clip"), QKeySequence(Qt::CTRL | Qt::Key_D), [this]() {
         if (m_timelineWidget) m_timelineWidget->duplicateSelectedClip();
-    });
+    }, Qt::WidgetWithChildrenShortcut));
     editMenu->addSeparator();
     editMenu->addAction(tr("Xóa & dồn clip sau lại (Ripple delete)"), this, [this]() {
         if (m_timelineWidget) m_timelineWidget->rippleDeleteSelectedClip();
@@ -182,13 +233,16 @@ void MainWindow::buildMenus() {
     });
 
     editMenu->addSeparator();
-    editMenu->addAction(tr("Chọn clip đầu tiên"), QKeySequence(Qt::CTRL | Qt::Key_A), this, &MainWindow::onSelectFirstClip);
-    editMenu->addAction(tr("Bỏ chọn tất cả"), QKeySequence(Qt::Key_Escape), this, &MainWindow::onDeselectAll);
+    // Likewise Ctrl+A ("select first clip") must not shadow select-all in a
+    // text field, and Escape must not be consumed window-wide (it is also how
+    // dialogs and the search box's clear button are expected to behave).
+    editMenu->addAction(makeShared(tr("Chọn clip đầu tiên"), QKeySequence(Qt::CTRL | Qt::Key_A),
+                                   &MainWindow::onSelectFirstClip, Qt::WidgetWithChildrenShortcut));
+    editMenu->addAction(makeShared(tr("Bỏ chọn tất cả"), QKeySequence(Qt::Key_Escape),
+                                   &MainWindow::onDeselectAll, Qt::WidgetWithChildrenShortcut));
 
     editMenu->addSeparator();
-    editMenu->addAction(LTR("menu.settings.preferences"), QKeySequence(Qt::CTRL | Qt::Key_Comma), this, [this]() {
-        openSettingsDialog(SettingsTab::Window);
-    });
+    editMenu->addAction(preferencesAction);
 
     updateUndoRedoActions();
 
@@ -200,9 +254,9 @@ void MainWindow::buildMenus() {
     timelineMenu->addAction(LTR("menu.track.addEffectLayer"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_L),
                             this, &MainWindow::onAddEffectLayer);
     timelineMenu->addSeparator();
-    timelineMenu->addAction(LTR("menu.edit.splitAtPlayhead"), QKeySequence(Qt::Key_S), this, &MainWindow::onSplitAtPlayhead);
-    timelineMenu->addAction(LTR("menu.edit.deleteClip"), QKeySequence::Delete, this, &MainWindow::onDeleteSelectedClip);
-    timelineMenu->addAction(LTR("menu.edit.deleteTrack"), QKeySequence(Qt::SHIFT | Qt::Key_Delete), this, &MainWindow::onDeleteSelectedTrack);
+    timelineMenu->addAction(splitAction);
+    timelineMenu->addAction(deleteClipAction);
+    timelineMenu->addAction(deleteTrackAction);
 
     m_viewMenu = menuBar()->addMenu(LTR("menu.view"));
     m_viewMenu->addAction(LTR("menu.view.zoomin"), QKeySequence::ZoomIn, this, &MainWindow::onZoomIn);
@@ -239,10 +293,8 @@ void MainWindow::buildMenus() {
 
     // --- Settings & Extensions Menu ---
     auto* settingsMenu = menuBar()->addMenu(LTR("menu.settings"));
-    settingsMenu->addAction(LTR("menu.settings.preferences"), QKeySequence(Qt::CTRL | Qt::Key_Comma), this, [this]() {
-        openSettingsDialog(SettingsTab::Window);
-    });
-    settingsMenu->addAction(LTR("menu.settings.canvas"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_P), this, &MainWindow::onProjectSettings);
+    settingsMenu->addAction(preferencesAction);
+    settingsMenu->addAction(canvasAction);
     settingsMenu->addSeparator();
 
     // Theme / Appearance Submenu (Dark, Light, System)
@@ -342,6 +394,20 @@ void MainWindow::buildMenus() {
     // --- Help Menu ---
     auto* helpMenu = menuBar()->addMenu(LTR("menu.help"));
     helpMenu->addAction(LTR("menu.help.about"), this, &MainWindow::onAbout);
+
+    // The timeline-scoped shortcuts only work once their actions are added to
+    // the widget they are scoped to.
+    attachTimelineShortcuts();
+}
+
+void MainWindow::attachTimelineShortcuts() {
+    if (!m_timelineWidget) return;
+    for (QAction* act : m_timelineScopedActions) {
+        if (!act) continue;
+        if (!m_timelineWidget->actions().contains(act)) {
+            m_timelineWidget->addAction(act);
+        }
+    }
 }
 
 void MainWindow::buildToolbar() {
@@ -452,6 +518,11 @@ void MainWindow::rebuildProjectDependentUi() {
     m_timelineWidget = new TimelineWidget(m_project.get(), this);
     m_timelineWidget->setCutToolActive(m_cutToolAction && m_cutToolAction->isChecked());
     if (m_snapAction) m_timelineWidget->setSnapEnabled(m_snapAction->isChecked());
+    // The timeline is recreated for every New/Open project, so the
+    // timeline-scoped shortcuts (S, C, Delete, Shift+Delete) have to be
+    // re-registered on the new widget or they stop working after the first
+    // project switch.
+    attachTimelineShortcuts();
     auto* scrollArea = new TimelineScrollArea(m_timelineWidget, this);
     scrollArea->setWidget(m_timelineWidget);
     scrollArea->setWidgetResizable(false);
