@@ -71,7 +71,14 @@ public:
 
     Ticks totalDuration() const {
         Ticks maxEnd = 0;
-        for (const auto& c : m_clips) maxEnd = std::max(maxEnd, c.timelineEnd());
+        // Effect Layers (adjustment layers) are excluded on purpose: they hold
+        // no media, so stretching one past the end of the footage must not
+        // lengthen the timeline (and therefore the preview range or the
+        // exported file, which would just add a black tail).
+        for (const auto& c : m_clips) {
+            if (c.isEffectLayer()) continue;
+            maxEnd = std::max(maxEnd, c.timelineEnd());
+        }
         return maxEnd;
     }
 

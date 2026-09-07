@@ -360,12 +360,17 @@ void PlaybackController::renderFrameAt(Ticks t) {
 
     for (const auto& visLayer : activeClips) {
         const Clip* activeClip = visLayer.clip;
+        if (!activeClip) continue;
         try {
             GLLayer layer;
             layer.transform = activeClip->transformAt(t);
             layer.opacity = activeClip->opacityAt(t) * visLayer.weight;
             layer.blendMode = activeClip->blendMode;
-            layer.effects = activeClip->effects;
+            // Clip's own effects PLUS the stacks of every Effect Layer
+            // (adjustment layer) above it that is active at `t`. The exporter
+            // builds the very same list (Timeline::effectLayerRangesFor), so
+            // an inherited grade looks identical in Preview and in the file.
+            layer.effects = Timeline::mergedEffects(*activeClip, visLayer.effectLayers);
 
             // ── Incoming transition (wipe / slide / dip-to-color) ──
             // The same math drives the ffmpeg exporter (see

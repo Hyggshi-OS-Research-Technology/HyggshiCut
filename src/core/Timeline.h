@@ -122,9 +122,125 @@ public:
     // always 1.0 today (all transition math lives in transitionVisual()
     // above); the field is kept so callers that read it keep compiling.
     struct VisualLayer {
-        const Clip* clip;
+        const Clip* clip = nullptr;
         double weight = 1.0;
+        // Index of the track this clip sits on within tracks() (needed to
+        // know which Effect Layers are "above" it).
+        int trackIndex = -1;
+        // Effect Layers (adjustment layers) on the tracks ABOVE this clip
+        // that are active at the queried time, ordered bottom-to-top. Empty
+        // in the common case; feed it to mergedEffects() to get the exact
+        // stack the GL preview, the CPU preview and the exporter must apply.
+        std::vector<const Clip*> effectLayers;
     };
+
+    // ── Effect Layers (adjustment layers) ────────────────────────────
+    // An Effect Layer is a media-less clip (ClipType::EffectLayer) that lives
+    // on a Visual track and lends its effect stack to every visual clip on
+    // the tracks BELOW it (lower track index == drawn underneath) for as long
+    // as the two overlap in time. The layer itself composites nothing, so it
+    // never shows up in activeVisualClipsAt(); hidden tracks disable the
+    // layers they carry, exactly like they hide ordinary clips.
+    //
+    // Inherited stacks are applied AFTER the clip's own effects, and layers
+    // are applied bottom-to-top, so a stack of two layers reads the same way
+    // it does in a classic NLE: the lower layer grades the footage, the upper
+    // layer grades the result.
+    struct EffectLayerHit {
+        const Clip* clip = nullptr;
+        int trackIndex = -1;
+    };
+
+    // Every Effect Layer active at time `t`, ordered bottom-to-top (ascending
+    // track index, then timeline order within a track).
+    std::vector<EffectLayerHit> activeEffectLayersAt(Ticks t) const {
+        std::vector<EffectLayerHit> out;
+        for (int i = 0; i < static_cast<int>(m_tracks.size()); ++i) {
+            const Track& track = m_tracks[i];
+            if (track.type != TrackType::Visual) continue;
+            if (track.hidden) continue;
+            for (const auto& c : track.clips()) {
+                if (!c.isEffectLayer()) continue;
+                if (!c.containsTimelineTime(t)) continue;
+                out.push_back(EffectLayerHit{&c, i});
+            }
+        }
+        return out;
+    }
+
+    // One Effect Layer's contribution to a specific clip: the layer plus the
+    // exact time window where the two overlap. `coversWholeClip` lets the
+    // exporter know whether the stack can simply be appended to the clip's
+    // own filter chain, or has to be time-gated to the overlap window.
+    struct EffectLayerRange {
+        const Clip* layer = nullptr;
+        int trackIndex = -1;
+        Ticks rangeStart = 0;   // absolute timeline ticks: max(clip start, layer start)
+        Ticks rangeEnd = 0;     // absolute timeline ticks: min(clip end, layer end)
+        bool coversWholeClip = false;
+    };
+
+    // Every Effect Layer that overlaps `clip` (which sits on track
+    // `clipTrackIndex`), ordered bottom-to-top. Used by the Exporter, which
+    // builds ONE filter branch per clip for its whole duration and therefore
+    // needs the precise sub-range each inherited stack applies to.
+    std::vector<EffectLayerRange> effectLayerRangesFor(const Clip& clip, int clipTrackIndex) const {
+        std::vector<EffectLayerRange> out;
+        const Ticks clipStart = clip.timelineStart;
+        const Ticks clipEnd = clip.timelineEnd();
+        if (clipEnd <= clipStart) return out;
+        for (int i = std::max(0, clipTrackIndex + 1); i < static_cast<int>(m_tracks.size()); ++i) {
+            const Track& track = m_tracks[i];
+            if (track.type != TrackType::Visual) continue;
+            if (track.hidden) continue;
+            for (const auto& c : track.clips()) {
+                if (!c.isEffectLayer()) continue;
+                if (c.effects.empty()) continue;   // nothing to inherit
+                const Ticks a = std::max(clipStart, c.timelineStart);
+                const Ticks b = std::min(clipEnd, c.timelineEnd());
+                if (b <= a) continue;
+                EffectLayerRange r;
+                r.layer = &c;
+                r.trackIndex = i;
+                r.rangeStart = a;
+                r.rangeEnd = b;
+                r.coversWholeClip = (a <= clipStart && b >= clipEnd);
+                out.push_back(r);
+            }
+        }
+        return out;
+    }
+
+    // The effect stack a clip is actually rendered with: its own effects
+    // first, then each inherited Effect Layer's stack (bottom-to-top).
+    static std::vector<Effect> mergedEffects(const Clip& clip,
+                                             const std::vector<const Clip*>& effectLayers) {
+        std::vector<Effect> out = clip.effects;
+        for (const Clip* layer : effectLayers) {
+            if (!layer) continue;
+            for (const auto& eff : layer->effects) out.push_back(eff);
+        }
+        return out;
+    }
+
+    // Convenience wrapper: merged stack for `clip` at time `t`.
+    std::vector<Effect> effectiveEffectsAt(const Clip& clip, int clipTrackIndex, Ticks t) const {
+        std::vector<const Clip*> layers;
+        for (const auto& hit : activeEffectLayersAt(t)) {
+            if (hit.trackIndex > clipTrackIndex) layers.push_back(hit.clip);
+        }
+        return mergedEffects(clip, layers);
+    }
+
+    // Index of a track by id, or -1 when unknown. Handy for callers holding a
+    // Track& (or a trackId from the UI) that need the stacking order to ask
+    // for inherited Effect Layers.
+    int trackIndexOf(const QString& trackId) const {
+        for (int i = 0; i < static_cast<int>(m_tracks.size()); ++i) {
+            if (m_tracks[i].id == trackId) return i;
+        }
+        return -1;
+    }
 
     // Every *visual* clip (video, image, text) active at time `t`, ordered
     // bottom-to-top (ascending track index, then ascending timelineStart
@@ -136,17 +252,33 @@ public:
     // transitionVisual() above so the GL compositor and the ffmpeg exporter
     // stay pixel-consistent; this query only decides *which* clips are on
     // screen and in what order.
+    //
+    // Effect Layers are never returned here (they composite nothing), but
+    // each returned layer carries the Effect Layers above it so the caller
+    // can build the inherited effect stack with mergedEffects().
     std::vector<VisualLayer> activeVisualClipsAt(Ticks t) const {
         std::vector<VisualLayer> result;
-        for (const auto& track : m_tracks) {
+        // Collect the active Effect Layers once instead of re-scanning every
+        // track for every clip (this runs once per rendered frame).
+        const std::vector<EffectLayerHit> layers = activeEffectLayersAt(t);
+        for (int trackIndex = 0; trackIndex < static_cast<int>(m_tracks.size()); ++trackIndex) {
+            const Track& track = m_tracks[trackIndex];
             if (track.type != TrackType::Visual) continue;
             if (track.hidden) continue;
             // track.clips() is kept sorted by timelineStart, so iterating
             // in order naturally draws the outgoing clip of a transition
             // before the incoming one.
             for (const auto& c : track.clips()) {
+                if (c.isEffectLayer()) continue;
                 if (!c.containsTimelineTime(t)) continue;
-                result.push_back(VisualLayer{&c, 1.0});
+                VisualLayer layer;
+                layer.clip = &c;
+                layer.weight = 1.0;
+                layer.trackIndex = trackIndex;
+                for (const auto& hit : layers) {
+                    if (hit.trackIndex > trackIndex) layer.effectLayers.push_back(hit.clip);
+                }
+                result.push_back(std::move(layer));
             }
         }
         return result;
@@ -157,7 +289,9 @@ public:
         for (auto it = m_tracks.rbegin(); it != m_tracks.rend(); ++it) {
             if (it->type != TrackType::Visual) continue;
             if (it->hidden) continue;
-            if (const Clip* c = it->clipAt(t)) return c;
+            const Clip* c = it->clipAt(t);
+            // An Effect Layer is not a visible clip: keep looking underneath.
+            if (c && !c->isEffectLayer()) return c;
         }
         return nullptr;
     }

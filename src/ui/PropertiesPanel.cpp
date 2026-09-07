@@ -166,6 +166,8 @@ void PropertiesPanel::setSelectedClip(Project* project, const QString& trackId, 
     switch (clip->type) {
         case ClipType::Text:  m_tabs->setCurrentIndex(m_textTab); break;
         case ClipType::Audio: m_tabs->setCurrentIndex(m_audioTab); break;
+        // An Effect Layer's whole purpose is its effect stack, so land on it.
+        case ClipType::EffectLayer: m_tabs->setCurrentIndex(m_effectsTab); break;
         case ClipType::Video:
         case ClipType::Image: m_tabs->setCurrentIndex(m_transformTab); break;
     }

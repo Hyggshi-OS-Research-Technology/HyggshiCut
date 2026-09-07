@@ -31,6 +31,7 @@
     "menu.track.addImage": "Image",
     "menu.track.addAudio": "Audio",
     "menu.track.addText": "Text/Title",
+    "menu.track.addEffectLayer": "Effect Layer (Adjustment)",
     "menu.track.deleteSelected": "Delete Selected Layer",
 
     "menu.view": "View",
@@ -132,6 +133,7 @@
     "explorer.hint.sounds": "Double-click a sound to add it to the timeline.",
     "explorer.hint.text": "Double-click a style to add a Text clip.",
     "explorer.hint.effects": "Double-click, or drag onto a clip, to apply it.",
+    "explorer.effectLayerCard": "Effect Layer (applies to clips below)",
     "explorer.hint.transitions": "Double-click to apply before the selected clip.",
 
     "preset.text.title": "Title",
@@ -176,6 +178,8 @@
     "timeline.track.image": "Image",
     "timeline.track.audio": "Audio",
     "timeline.track.text": "Text",
+    "timeline.effectLayer": "Effect Layer",
+    "timeline.effectLayerHint": "Applies its effects to every clip below it",
 
     "transform.group": "Transform / Free Transform",
     "transform.posX": "Position X",

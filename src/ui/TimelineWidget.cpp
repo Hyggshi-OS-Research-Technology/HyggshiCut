@@ -1,5 +1,6 @@
 #include "TimelineWidget.h"
 #include "EffectsPanel.h"
+#include "../i18n/LanguageManager.h"
 #include <QPainter>
 #include <QPainterPath>
 #include <QMouseEvent>
@@ -27,6 +28,15 @@ namespace {
 constexpr Ticks kMinClipDuration = 33'333; // ~1 frame at 30fps, floor for trims
 constexpr int kEdgeGrabPx = 6;
 constexpr Ticks kDefaultTransitionTicks = 500'000; // 0.5s
+
+// Localized display name for an Effect Layer clip. Falls back to the
+// Vietnamese string used elsewhere in this widget when the active language
+// pack predates the feature (LTR() echoes the key back when it's missing).
+QString effectLayerName() {
+    const QString key = QStringLiteral("timeline.effectLayer");
+    const QString translated = LTR(key);
+    return (translated == key || translated.isEmpty()) ? QStringLiteral("Lớp hiệu ứng") : translated;
+}
 
 // --- Sleek vector button rendering for the per-track control cards ---
 void drawControlButton(QPainter& p, const QRect& r, int ctrlIndex, bool active, bool hovered) {
@@ -678,7 +688,8 @@ bool TimelineWidget::transitionMarkerAt(const QPoint& pos, QString* outTrackId,
     for (size_t i = 1; i < clips.size(); ++i) {
         const Clip& prevClip = clips[i - 1];
         const Clip& curClip = clips[i];
-        if (prevClip.type == ClipType::Text || curClip.type == ClipType::Text) continue;
+        if (prevClip.type == ClipType::Text || curClip.type == ClipType::Text ||
+            prevClip.isEffectLayer() || curClip.isEffectLayer()) continue;
         const bool touching = curClip.timelineStart == prevClip.timelineEnd();
         const bool hasTransition = curClip.transitionInDuration > 0 &&
             curClip.timelineStart == prevClip.timelineEnd() - curClip.transitionInDuration;
@@ -823,6 +834,142 @@ void TimelineWidget::buildTransitionMenu(QMenu* menu, Track* track,
         emit timelineEdited();
         update();
     });
+}
+
+// Builds the effect-stack editor menu for an Effect Layer clip: the list of
+// effect types that can be added to the layer, a "clear all" entry once the
+// stack is non-empty, and a rename entry. Shared by the double-click popup
+// and the right-click context menu so both offer exactly the same actions.
+QMenu* TimelineWidget::buildEffectLayerMenu(const QString& trackId, const QString& clipId) {
+    QMenu* menu = new QMenu(this);
+    Track* track = m_project ? m_project->timeline().findTrack(trackId) : nullptr;
+    Clip* clip = track ? track->findClip(clipId) : nullptr;
+    if (!clip) return menu;
+
+    QAction* titleAct = menu->addAction(clip->displayLabel.isEmpty() ? effectLayerName()
+                                                                     : clip->displayLabel);
+    QFont titleFont = titleAct->font();
+    titleFont.setBold(true);
+    titleAct->setFont(titleFont);
+    titleAct->setEnabled(false);
+
+    // One-line reminder of what an Effect Layer does, straight from the
+    // language pack (skipped silently when the pack predates the feature).
+    const QString hintKey = QStringLiteral("timeline.effectLayerHint");
+    const QString hint = LTR(hintKey);
+    if (!hint.isEmpty() && hint != hintKey) {
+        QAction* hintAct = menu->addAction(hint);
+        hintAct->setEnabled(false);
+    }
+    menu->addSeparator();
+
+    // Every action re-looks-up track+clip by id instead of holding raw
+    // pointers, so the menu stays safe even if the timeline changes between
+    // building it and clicking an entry (undo/redo, another edit).
+    auto addEffect = [this, trackId, clipId](const QString& typeId) {
+        if (!m_project) return;
+        Track* t = m_project->timeline().findTrack(trackId);
+        Clip* c = t ? t->findClip(clipId) : nullptr;
+        if (!c || !c->isEffectLayer()) return;
+        pushUndo();
+        c->effects.push_back(EffectsPanel::buildEffect(typeId));
+        m_project->timeline().notifyClipChanged(trackId);
+        emit selectionChanged(clipId, trackId);
+        emit timelineEdited();
+        emit seekRequested(m_playheadTime); // re-render with the new stack
+        update();
+    };
+
+    QAction* addHeader = menu->addAction(tr("Thêm hiệu ứng vào lớp này:"));
+    addHeader->setEnabled(false);
+    const QStringList effectIds = EffectsPanel::effectTypeIds();
+    for (const QString& typeId : effectIds) {
+        menu->addAction(EffectsPanel::effectTypeName(typeId), this,
+                        [addEffect, typeId]() { addEffect(typeId); });
+    }
+
+    if (!clip->effects.empty()) {
+        menu->addSeparator();
+        menu->addAction(tr("Xóa toàn bộ hiệu ứng trên lớp này"), this, [this, trackId, clipId]() {
+            if (!m_project) return;
+            Track* t = m_project->timeline().findTrack(trackId);
+            Clip* c = t ? t->findClip(clipId) : nullptr;
+            if (!c || c->effects.empty()) return;
+            pushUndo();
+            c->effects.clear();
+            m_project->timeline().notifyClipChanged(trackId);
+            emit timelineEdited();
+            emit seekRequested(m_playheadTime);
+            update();
+        });
+    }
+
+    menu->addSeparator();
+    menu->addAction(tr("Đổi tên lớp hiệu ứng..."), this, [this, trackId, clipId]() {
+        if (!m_project) return;
+        Track* t = m_project->timeline().findTrack(trackId);
+        Clip* c = t ? t->findClip(clipId) : nullptr;
+        if (!c) return;
+        bool ok = false;
+        const QString newName = QInputDialog::getText(this, effectLayerName(),
+            tr("Tên lớp hiệu ứng:"), QLineEdit::Normal,
+            c->displayLabel.isEmpty() ? effectLayerName() : c->displayLabel, &ok);
+        if (!ok) return;
+        pushUndo();
+        c->displayLabel = newName.trimmed();
+        emit timelineEdited();
+        update();
+    });
+
+    return menu;
+}
+
+// Adds an Effect Layer (adjustment layer) to the timeline. The layer spans the
+// whole timeline when there is already footage (5s on an empty project) and
+// lands on the selected Visual track when it is unlocked and has room for it;
+// otherwise a brand-new Visual track is created, which is appended at the END
+// of the track vector == the TOP of the visual stack, so the new layer
+// influences every clip below it.
+void TimelineWidget::addEffectLayer() {
+    if (!m_project) return;
+    const Ticks existing = m_project->timeline().totalDuration();
+    addEffectLayerAt(0, existing > 0 ? existing : secondsToTicks(5.0));
+}
+
+void TimelineWidget::addEffectLayerAt(Ticks start, Ticks duration) {
+    if (!m_project) return;
+    auto& tl = m_project->timeline();
+
+    const Ticks layerStart = std::max<Ticks>(0, start);
+    const Ticks layerDuration = std::max<Ticks>(kMinClipDuration, duration);
+
+    pushUndo(); // snapshot BEFORE adding the clip / track
+
+    Track* target = tl.findTrack(m_selectedTrackId);
+    auto spanIsFree = [layerStart, layerDuration](const Track& t) {
+        for (const auto& other : t.clips()) {
+            if (layerStart < other.timelineEnd() &&
+                layerStart + layerDuration > other.timelineStart) return false;
+        }
+        return true;
+    };
+    if (!target || target->type != TrackType::Visual || target->locked || !spanIsFree(*target)) {
+        target = &tl.addTrack(TrackType::Visual,
+                              QString("Effect %1").arg(tl.tracks().size() + 1));
+    }
+
+    Clip* added = target->addClip(Clip::makeEffectLayer(layerStart, layerDuration));
+    if (added) {
+        // Select it right away so the Inspector jumps to its Effects tab and
+        // the user can start building the stack immediately.
+        m_selectedClipId = added->id;
+        m_selectedTrackId = target->id;
+        emit selectionChanged(m_selectedClipId, m_selectedTrackId);
+    }
+
+    refresh();
+    emit timelineEdited();
+    emit seekRequested(m_playheadTime);
 }
 
 void TimelineWidget::paintEvent(QPaintEvent* event) {
@@ -1088,6 +1235,11 @@ void TimelineWidget::paintEvent(QPaintEvent* event) {
             if (clip.type == ClipType::Audio) {
                 clipGrad.setColorAt(0.0, QColor(16, 145, 105));
                 clipGrad.setColorAt(1.0, QColor(10, 100, 72));
+            } else if (clip.isEffectLayer()) {
+                // Effect Layer: warm orange (same family as the "Fx" badge) so
+                // it reads as "effects carrier", not as media.
+                clipGrad.setColorAt(0.0, QColor(217, 110, 24));
+                clipGrad.setColorAt(1.0, QColor(146, 62, 18));
             } else if (clip.type == ClipType::Text) {
                 clipGrad.setColorAt(0.0, QColor(139, 92, 246));
                 clipGrad.setColorAt(1.0, QColor(109, 40, 217));
@@ -1112,6 +1264,23 @@ void TimelineWidget::paintEvent(QPaintEvent* event) {
                 p.setPen(Qt::NoPen);
                 p.setBrush(QColor(255, 255, 255, 45));
                 p.drawRoundedRect(QRect(r.left() + 2, r.top() + 1, r.width() - 4, 2), 1.0, 1.0);
+            }
+
+            // Effect Layer: diagonal hatch across the block. It has no media
+            // of its own (no thumbnail, no waveform), so the hatch is what
+            // tells the user "this is a grade/effect carrier for the tracks
+            // below", the same way a transparency checkerboard does elsewhere.
+            if (clip.isEffectLayer() && r.width() > 6 && r.height() > 6) {
+                p.save();
+                QPainterPath blockPath;
+                blockPath.addRoundedRect(QRectF(r.adjusted(1, 1, -2, -2)), 3.5, 3.5);
+                p.setClipPath(blockPath);
+                p.setPen(QPen(QColor(255, 255, 255, 34), 1.0));
+                const int step = 10;
+                for (int hx = r.left() - r.height(); hx < r.right(); hx += step) {
+                    p.drawLine(hx, r.bottom(), hx + r.height(), r.top());
+                }
+                p.restore();
             }
 
             // Audio waveform
@@ -1183,7 +1352,11 @@ void TimelineWidget::paintEvent(QPaintEvent* event) {
             }
 
             QString label = clip.displayLabel;
-            if (label.isEmpty()) {
+            if (clip.isEffectLayer()) {
+                // Media-less: never fall through to the "(media bị mất)" label
+                // below, and let the user rename the layer via displayLabel.
+                if (label.isEmpty()) label = effectLayerName();
+            } else if (label.isEmpty()) {
                 const auto asset = m_project->findAsset(clip.assetId);
                 if (asset && asset->kind != MediaKind::Unknown) {
                     label = asset->displayName;
@@ -1207,7 +1380,10 @@ void TimelineWidget::paintEvent(QPaintEvent* event) {
             // Effect badge: a small "Fx N" pill in the top-right corner shows
             // that this clip carries visual effects (added from the Explorer's
             // Effects page, either by double-click or by drag & drop).
-            if (!clip.effects.empty() && r.width() > 40) {
+            // On an Effect Layer the pill is always drawn — even at "Fx 0" —
+            // because the layer IS its effect stack, so an empty one should
+            // look obviously empty rather than like ordinary media.
+            if ((!clip.effects.empty() || clip.isEffectLayer()) && r.width() > 40) {
                 QFont badgeFont = p.font();
                 badgeFont.setPointSize(6);
                 badgeFont.setBold(true);
@@ -1217,7 +1393,9 @@ void TimelineWidget::paintEvent(QPaintEvent* event) {
                 const int bh = 13;
                 const QRect badge(r.right() - bw - 4, r.top() + 3, bw, bh);
                 p.setPen(Qt::NoPen);
-                p.setBrush(QColor(249, 115, 22, 235)); // amber-orange
+                // Dark pill on the orange Effect Layer block, amber-orange pill
+                // everywhere else (where the clip body is blue/green/violet).
+                p.setBrush(clip.isEffectLayer() ? QColor(20, 20, 24, 165) : QColor(249, 115, 22, 235));
                 p.drawRoundedRect(badge, 3.0, 3.0);
                 p.setPen(Qt::white);
                 p.drawText(badge, Qt::AlignCenter, badgeText);
@@ -1261,7 +1439,9 @@ void TimelineWidget::paintEvent(QPaintEvent* event) {
             for (size_t i = 1; i < clips.size(); ++i) {
                 const Clip& prevClip = clips[i - 1];
                 const Clip& curClip = clips[i];
-                if (prevClip.type == ClipType::Text || curClip.type == ClipType::Text) continue;
+                // Effect Layers are invisible carriers, never transition ends.
+                if (prevClip.type == ClipType::Text || curClip.type == ClipType::Text ||
+                    prevClip.isEffectLayer() || curClip.isEffectLayer()) continue;
                 const bool touching = curClip.timelineStart == prevClip.timelineEnd();
                 const bool hasTransition = curClip.transitionInDuration > 0 &&
                     curClip.timelineStart == prevClip.timelineEnd() - curClip.transitionInDuration;
@@ -1297,6 +1477,39 @@ void TimelineWidget::paintEvent(QPaintEvent* event) {
                 p.setPen(Qt::white);
                 p.drawText(QRect(mx - 8, my - 8, 16, 16), Qt::AlignCenter, hasTransition ? tr("×") : tr("+"));
             }
+        }
+    }
+
+    // ── Effect Layer influence band ────────────────────────────────────
+    // When the selected clip is an Effect Layer, tint the region it actually
+    // affects — its own time span on every track BELOW it — so the user can
+    // see at a glance which clips inherit its stack (and that the layer
+    // itself renders nothing).
+    if (!m_selectedClipId.isEmpty() && trackCount > 0) {
+        for (int i = 0; i < trackCount; ++i) {
+            const Clip* sel = nullptr;
+            for (const auto& c : tracks[i].clips()) {
+                if (c.id == m_selectedClipId) { sel = &c; break; }
+            }
+            if (!sel || !sel->isEffectLayer()) continue;
+
+            const int layerRow = trackCount - 1 - i;                 // visual row of the layer
+            const int yTop = m_rulerHeight + (layerRow + 1) * m_trackHeight;
+            const int yBottom = m_rulerHeight + trackCount * m_trackHeight;
+            if (yBottom > yTop) {
+                const int x0 = std::max(timeToPixel(sel->timelineStart), m_headerWidth);
+                const int x1 = std::min(timeToPixel(sel->timelineEnd()), width());
+                const QRect band(x0, yTop, std::max(0, x1 - x0), yBottom - yTop);
+                if (band.width() > 0 && band.intersects(dirty)) {
+                    p.save();
+                    p.fillRect(band, QColor(249, 115, 22, 26));
+                    p.setPen(QPen(QColor(249, 115, 22, 130), 1.0, Qt::DashLine));
+                    p.drawLine(band.left(), band.top(), band.left(), band.bottom());
+                    p.drawLine(band.right(), band.top(), band.right(), band.bottom());
+                    p.restore();
+                }
+            }
+            break;
         }
     }
 
@@ -1647,9 +1860,11 @@ void TimelineWidget::mouseMoveEvent(QMouseEvent* event) {
     } else if (m_dragMode == DragMode::TrimRight) {
         // Don't let a trim run past the *source media* length (for video/audio),
         // or past the start of the next clip on this track.
-        // Static clips (image, text) have no source duration limit.
+        // Static clips (image, text) have no source duration limit, and neither
+        // does an Effect Layer — it has no media at all, so it stretches freely.
         const auto asset = m_project->findAsset(clip->assetId);
-        const bool isStatic = clip->isStaticVisual() || (asset && asset->kind == MediaKind::Image);
+        const bool isStatic = clip->isStaticVisual() || clip->isEffectLayer() ||
+                              (asset && asset->kind == MediaKind::Image);
         const Ticks sourceMax = isStatic ? std::numeric_limits<Ticks>::max()
                                : (asset && asset->duration > 0 ? asset->duration
                                                                : m_dragClipOrigOut + secondsToTicks(60));
@@ -1779,12 +1994,25 @@ void TimelineWidget::mouseDoubleClickEvent(QMouseEvent* event) {
         return;
     }
 
-    // Double-clicking a Text clip renames its label (the actual title).
+    // Double-clicking an Effect Layer opens its effect-stack menu: the
+    // layer's whole purpose is its stack, so this is the fastest way to build
+    // one (the Inspector's Effects tab and dragging effect cards from the
+    // Explorer onto the layer work too).
     QString trackId, clipId;
     DragMode mode;
     hitTest(event->pos(), &trackId, &clipId, &mode);
     Track* track = m_project->timeline().findTrack(trackId);
     Clip* clip = track ? track->findClip(clipId) : nullptr;
+
+    if (clip && clip->isEffectLayer() && track && !track->locked) {
+        QMenu* menu = buildEffectLayerMenu(trackId, clipId);
+        menu->exec(event->globalPos());
+        menu->deleteLater();
+        QWidget::mouseDoubleClickEvent(event);
+        return;
+    }
+
+    // Double-clicking a Text clip renames its label (the actual title).
     if (clip && clip->type == ClipType::Text && !track->locked) {
         bool ok = false;
         const QString newLabel = QInputDialog::getText(this, tr("Tiêu đề"),
@@ -2147,6 +2375,8 @@ void TimelineWidget::contextMenuEvent(QContextMenuEvent* event) {
                 refresh();
                 emit timelineEdited();
             });
+            menu.addAction(tr("Thêm lớp hiệu ứng (Effect Layer)"), this,
+                             &TimelineWidget::addEffectLayer);
 
             menu.exec(event->globalPos());
             return;
@@ -2163,12 +2393,26 @@ void TimelineWidget::contextMenuEvent(QContextMenuEvent* event) {
             update();
 
             Clip* clip = track.findClip(clipId);
-            auto* titleAct = menu.addAction(clip ? (clip->displayLabel.isEmpty() ? tr("Clip") : clip->displayLabel) : tr("Clip"));
+            const QString titleText = !clip ? tr("Clip")
+                : !clip->displayLabel.isEmpty() ? clip->displayLabel
+                : clip->isEffectLayer() ? effectLayerName()
+                                        : tr("Clip");
+            auto* titleAct = menu.addAction(titleText);
             QFont font = titleAct->font();
             font.setBold(true);
             titleAct->setFont(font);
             titleAct->setEnabled(false);
             menu.addSeparator();
+
+            // Effect Layer: its stack IS the clip, so offer it right at the top
+            // (same menu the double-click popup shows).
+            if (clip && clip->isEffectLayer() && !track.locked) {
+                QMenu* fxMenu = buildEffectLayerMenu(trackId, clipId);
+                fxMenu->setTitle(tr("Hiệu ứng của lớp này"));
+                fxMenu->setParent(&menu); // destroyed together with `menu`
+                menu.addMenu(fxMenu);
+                menu.addSeparator();
+            }
 
             menu.addAction(tr("Cắt tại playhead (S)"), this, &TimelineWidget::splitAtPlayhead);
             menu.addAction(tr("Xóa clip này (Delete)"), this, &TimelineWidget::deleteSelectedClip);
@@ -2207,6 +2451,8 @@ void TimelineWidget::contextMenuEvent(QContextMenuEvent* event) {
         refresh();
         emit timelineEdited();
     });
+    menu.addAction(tr("Thêm lớp hiệu ứng (Effect Layer)"), this,
+                     &TimelineWidget::addEffectLayer);
     if (!m_selectedTrackId.isEmpty()) {
         menu.addSeparator();
         menu.addAction(tr("Xóa layer đang chọn"), this, &TimelineWidget::deleteSelectedTrack);
@@ -2237,6 +2483,15 @@ void TimelineWidget::dragMoveEvent(QDragMoveEvent* event) {
         return;
     }
     if (event->mimeData()->hasFormat("application/x-hyggshicut-effect")) {
+        // The Effect Layer card creates a brand-new layer instead of editing
+        // the clip under the cursor, so every spot on the timeline is a valid
+        // drop target for it.
+        const QString draggedId = QString::fromUtf8(
+            event->mimeData()->data("application/x-hyggshicut-effect"));
+        if (draggedId == EffectsPanel::effectLayerCardId()) {
+            event->acceptProposedAction();
+            return;
+        }
         // Only accept while hovering a clip the effect can actually apply to,
         // so the drag cursor reflects where the drop will land.
         QString trackId, clipId;
@@ -2244,7 +2499,7 @@ void TimelineWidget::dragMoveEvent(QDragMoveEvent* event) {
             Track* track = m_project->timeline().findTrack(trackId);
             Clip* clip = track ? track->findClip(clipId) : nullptr;
             if (clip && (clip->type == ClipType::Video || clip->type == ClipType::Image ||
-                         clip->type == ClipType::Text)) {
+                         clip->type == ClipType::Text || clip->isEffectLayer())) {
                 event->acceptProposedAction();
             }
         }
@@ -2260,13 +2515,26 @@ void TimelineWidget::dropEvent(QDropEvent* event) {
         const QString effectTypeId = QString::fromUtf8(
             event->mimeData()->data("application/x-hyggshicut-effect"));
 
+        // The "Effect Layer" card is not an effect: dropping it creates a new
+        // media-less Effect Layer starting at the drop point (default 5s, the
+        // same default the Text layer uses). It lands on the selected Visual
+        // track when that track is free at the drop point, otherwise on a
+        // brand-new track at the top of the stack.
+        if (effectTypeId == EffectsPanel::effectLayerCardId()) {
+            addEffectLayerAt(pixelToTime(pos.x()), secondsToTicks(5.0));
+            event->acceptProposedAction();
+            return;
+        }
+
         QString trackId, clipId;
         if (!clipAtPoint(pos, &trackId, &clipId)) return;
         Track* track = m_project->timeline().findTrack(trackId);
         Clip* clip = track ? track->findClip(clipId) : nullptr;
+        // Effect cards land on visual/text clips — and on Effect Layers, which
+        // exist precisely to carry a stack for the tracks below them.
         if (!clip || (clip->type != ClipType::Video && clip->type != ClipType::Image &&
-                      clip->type != ClipType::Text)) {
-            return; // visual effects only apply to visual/text clips
+                      clip->type != ClipType::Text && !clip->isEffectLayer())) {
+            return;
         }
 
         pushUndo();

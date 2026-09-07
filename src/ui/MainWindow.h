@@ -49,6 +49,9 @@ private slots:
     void onAddImageTrack();
     void onAddAudioTrack();
     void onAddTextTrack();
+    // Adds a media-less Effect Layer (adjustment layer) to the timeline: its
+    // effect stack is inherited by every visual clip on the tracks below it.
+    void onAddEffectLayer();
     void onSplitAtPlayhead();
     void onDeleteSelectedClip();
     void onDeleteSelectedTrack();

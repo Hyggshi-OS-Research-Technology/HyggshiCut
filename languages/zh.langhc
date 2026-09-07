@@ -30,6 +30,7 @@
     "menu.track.addImage": "图片",
     "menu.track.addAudio": "音频",
     "menu.track.addText": "文字/标题",
+    "menu.track.addEffectLayer": "特效层（调整层）",
     "menu.track.deleteSelected": "删除所选图层",
 
     "menu.view": "视图",
@@ -63,6 +64,8 @@
     "timeline.track.image": "图片",
     "timeline.track.audio": "音频",
     "timeline.track.text": "文字",
+    "timeline.effectLayer": "特效层",
+    "timeline.effectLayerHint": "将其特效应用于下方所有片段",
 
     "transform.group": "变换 / 自由变换",
     "transform.posX": "位置 X",
@@ -116,6 +119,7 @@
     "audio.compRatio": "比率 (Ratio :1)",
 
     "effects.filtersLabel": "滤镜",
+    "explorer.effectLayerCard": "特效层（应用于下方片段）",
     "effects.addBtn": "+ 添加",
     "effects.removeBtn": "− 移除",
     "effects.preset": "预设：",

@@ -31,6 +31,7 @@
     "menu.track.addImage": "Ảnh",
     "menu.track.addAudio": "Audio",
     "menu.track.addText": "Văn bản/tiêu đề",
+    "menu.track.addEffectLayer": "Lớp hiệu ứng (Effect Layer)",
     "menu.track.deleteSelected": "Xóa layer đang chọn",
 
     "menu.view": "Xem",
@@ -132,6 +133,7 @@
     "explorer.hint.sounds": "Nhấp đúp để thêm âm thanh vào timeline.",
     "explorer.hint.text": "Nhấp đúp để thêm clip Văn bản.",
     "explorer.hint.effects": "Nhấp đúp hoặc kéo thả lên clip để áp dụng.",
+    "explorer.effectLayerCard": "Lớp hiệu ứng (áp dụng cho clip bên dưới)",
     "explorer.hint.transitions": "Nhấp đúp để áp dụng trước clip đang chọn.",
 
     "preset.text.title": "Tiêu đề",
@@ -176,6 +178,8 @@
     "timeline.track.image": "Ảnh",
     "timeline.track.audio": "Audio",
     "timeline.track.text": "Văn bản",
+    "timeline.effectLayer": "Lớp hiệu ứng",
+    "timeline.effectLayerHint": "Áp dụng hiệu ứng của lớp này cho mọi clip nằm DƯỚI nó",
 
     "transform.group": "Transform / Free Transform",
     "transform.posX": "Vị trí X",

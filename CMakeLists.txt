@@ -150,6 +150,24 @@ if(HYGGSHICUT_BUILD_TESTS)
     target_include_directories(SegmentBoundTest PRIVATE src src/core src/decode src/render src/export)
     target_link_libraries(SegmentBoundTest PRIVATE Qt6::Core Qt6::Gui OpenGL::GL PkgConfig::FFMPEG)
 
+    # Offline test: Effect Layers (adjustment layers) — the inheritance rules
+    # in the timeline model, the .hcproj round-trip, and the ffmpeg filter
+    # graph the exporter builds for them (full-cover vs time-gated). Spawns no
+    # ffmpeg process and needs no display; it generates its own tiny PNG and
+    # SKIPs the export checks if that cannot be probed.
+    add_executable(EffectLayerTest
+        tests/effect_layer_test.cpp
+        src/core/Timeline.h
+        src/core/MediaAsset.cpp
+        src/core/Project.cpp
+        src/decode/Decoder.cpp
+        src/render/TextureCache.cpp
+        src/render/TextRenderer.cpp
+        src/export/Exporter.cpp
+    )
+    target_include_directories(EffectLayerTest PRIVATE src src/core src/decode src/render src/export)
+    target_link_libraries(EffectLayerTest PRIVATE Qt6::Core Qt6::Gui OpenGL::GL PkgConfig::FFMPEG)
+
     add_executable(MixedEffectsExportTest
         tests/mixed_effects_export_test.cpp
         src/core/Timeline.h

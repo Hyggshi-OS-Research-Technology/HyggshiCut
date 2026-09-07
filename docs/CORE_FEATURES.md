@@ -10,6 +10,7 @@ later versions.
 
 ### Timeline & Editing
 - **Multi-track timeline:** Support for video, audio, image, and text tracks.
+- **Effect layers (adjustment layers):** Media-less layers on a visual track whose effect stack is inherited by every clip on the tracks below them for the duration they overlap. Layers never render a frame of their own and never lengthen the timeline; hiding the layer's track bypasses it.
 - **Clip manipulation:** Cut, split, trim, move, duplicate, delete, ripple delete.
 - **Real-time preview:** Playback from memory-mapped frames with audio synchronization.
 - **Snapping:** Magnetic snapping to grid, clips, and timeline markers.
@@ -24,6 +25,7 @@ later versions.
 ### Video Effects & Compositing (OpenGL)
 - **Blend modes:** Support for 19 blend modes (Normal, Multiply, Screen, Overlay, Add, etc.).
 - **Post-processing chain:** Brightness, Contrast, Saturation, Hue Rotate, Gaussian Blur, Sharpen, Vignette.
+- **Inherited effect stacks:** Effects carried by an effect layer are applied on top of each affected clip's own effects, in bottom-to-top layer order, identically in the preview and in the ffmpeg export (partially overlapping layers are time-gated per frame).
 - **Color grading:** 3-way color wheels (Lift, Gamma, Gain) + Luma control.
 - **Color presets:** Built-in color grading presets.
 

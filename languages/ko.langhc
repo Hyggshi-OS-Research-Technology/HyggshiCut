@@ -30,6 +30,7 @@
     "menu.track.addImage": "이미지",
     "menu.track.addAudio": "오디오",
     "menu.track.addText": "텍스트/제목",
+    "menu.track.addEffectLayer": "효과 레이어(조정 레이어)",
     "menu.track.deleteSelected": "선택한 트랙 삭제",
 
     "menu.view": "보기",
@@ -63,6 +64,8 @@
     "timeline.track.image": "이미지",
     "timeline.track.audio": "오디오",
     "timeline.track.text": "텍스트",
+    "timeline.effectLayer": "효과 레이어",
+    "timeline.effectLayerHint": "아래에 있는 모든 클립에 효과를 적용합니다",
 
     "transform.group": "변환 / 자유 변형",
     "transform.posX": "위치 X",
@@ -116,6 +119,7 @@
     "audio.compRatio": "비율 (Ratio :1)",
 
     "effects.filtersLabel": "필터",
+    "explorer.effectLayerCard": "효과 레이어(아래 클립에 적용)",
     "effects.addBtn": "+ 추가",
     "effects.removeBtn": "− 제거",
     "effects.preset": "프리셋:",

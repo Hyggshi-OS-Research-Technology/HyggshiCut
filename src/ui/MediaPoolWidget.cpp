@@ -559,6 +559,27 @@ void MediaPoolWidget::populatePresetPages() {
     // --- Effects presets (single source of truth: EffectsPanel) ---
     if (m_effectsList) {
         m_effectsList->clear();
+
+        // "Effect Layer" card first. Unlike the effect cards below (which push
+        // one effect onto the selected clip), this card creates a media-less
+        // Effect Layer on the timeline whose whole stack is inherited by every
+        // clip BELOW it (see Timeline::effectLayerRangesFor).
+        {
+            const QColor layerCol(217, 110, 24);
+            const QString layerKey = QStringLiteral("explorer.effectLayerCard");
+            const QString layerName = LTR(layerKey);
+            auto* item = new QListWidgetItem(
+                (layerName.isEmpty() || layerName == layerKey)
+                    ? tr("Lớp hiệu ứng (Effect Layer)") : layerName);
+            item->setIcon(QIcon(presetIcon(kThumbWidth, kThumbHeight, layerCol,
+                                           layerCol.darker(150), QStringLiteral("FX"))));
+            item->setData(Qt::UserRole, EffectsPanel::effectLayerCardId());
+            item->setToolTip(tr("Nhấp đúp để thêm một Lớp hiệu ứng trải suốt timeline, "
+                                "hoặc kéo thả vào timeline để đặt tại vị trí thả. "
+                                "Mọi hiệu ứng trên lớp này áp dụng cho các clip nằm DƯỚI nó."));
+            m_effectsList->addItem(item);
+        }
+
         const QColor cols[] = { QColor(200, 140, 60), QColor(90, 170, 210), QColor(170, 120, 210) };
         int ci = 0;
         const QStringList ids = EffectsPanel::effectTypeIds();
