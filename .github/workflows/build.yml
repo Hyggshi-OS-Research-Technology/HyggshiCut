@@ -49,6 +49,16 @@ jobs:
           dpkg-deb --info "${deb_file}"
           dpkg-deb --contents "${deb_file}" | head -40
 
+      - name: Build & run the offline Effect Layer test
+        run: |
+          # Tests are opt-in (HYGGSHICUT_BUILD_TESTS) and the .deb build above
+          # does not touch them, so compile+run the offline core test here to
+          # keep it from rotting. It needs no display, no real media (it
+          # generates its own tiny PNG) and spawns no ffmpeg process.
+          cmake -S . -B build-tests -DCMAKE_BUILD_TYPE=Release -DHYGGSHICUT_BUILD_TESTS=ON
+          cmake --build build-tests --target EffectLayerTest -j"$(nproc)"
+          ./build-tests/EffectLayerTest
+
       - name: Upload .deb artifact
         uses: actions/upload-artifact@v4
         with:
