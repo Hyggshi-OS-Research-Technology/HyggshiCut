@@ -29,6 +29,7 @@
 [**Build from Source**](#building-from-source) •
 [**Packaging**](#packaging--installing-the-deb-package-debian--ubuntu) •
 [**Headless CLI Render**](#headless-cli-render-guide) •
+[**Environment Check**](#environment-check) •
 [**Keyboard Shortcuts**](#keyboard-shortcuts) •
 [**Plugins & Languages**](#plugin-system--multi-language-support)
 
@@ -208,6 +209,7 @@ HyggshiCut --render -p <project.hcproj> -o <output.mp4> [options]
 | `--height <px>` | | Output frame height |
 | `--fps <fps>` | | Frame rate |
 | `--progress` | | Show a real-time render progress bar |
+| `--check-env` | | Run the environment check, print a report and exit (see below) |
 
 ### Usage examples:
 
@@ -221,6 +223,58 @@ HyggshiCut -r -p wedding.hcproj -o wedding_4k.mp4 --codec hevc --crf 20 --width 
 # 3. Extract audio only, as high-quality MP3
 HyggshiCut -r -p podcast.hcproj -o podcast_audio.mp3 --preset audio-mp3
 ```
+
+---
+
+## Environment Check
+
+HyggshiCut resolves several dependencies at **run time** rather than link time,
+and each of them fails in a way that is confusing when you hit it mid-edit: a
+missing `ffmpeg` binary breaks every export, a missing encoder only breaks the
+one codec you picked, a software OpenGL renderer just makes preview mysteriously
+slow, and missing language packs show raw translation keys.
+
+The environment check probes all of them and reports what works:
+
+- **ffmpeg binary** — resolved exactly the way the exporter resolves it (PATH,
+  then `/usr/bin`, `/usr/local/bin`, `/snap/bin`, `/bin`), plus its version.
+- **ffmpeg encoders** — verifies the encoders the export presets actually use
+  (`libx264`, `aac`, `libx265`, `libvpx-vp9`, `libsvtav1`, `prores_ks`,
+  `libmp3lame`, `pcm_s16le`). H.264 and AAC are errors when missing; the rest
+  are warnings, since only some presets need them.
+- **OpenGL renderer** — the live driver strings, flagging both a shader-link
+  failure (CPU fallback) and Mesa's software rasterisers (`llvmpipe`, `softpipe`,
+  `swrast`), which work but are slow.
+- **Audio output** — opens the ALSA `default` PCM device the same way the
+  timeline preview does, so it detects an unusable device rather than merely a
+  present one.
+- **Bundled assets** — `.langhc` and `.plhc` discovery across the same search
+  path the app uses.
+- **System** — Qt and libav\* build-vs-runtime versions (a major-version
+  mismatch is flagged), CPU cores and RAM against the thresholds that trigger
+  low-memory mode, and whether the proxy cache directory is genuinely writable.
+
+### From the GUI
+
+**Settings → Check Environment…**, or **Help → Check Environment…** — then press
+**Run check**. Results are colour-coded, each problem comes with a suggested fix,
+and **Copy report** puts the whole thing on the clipboard for a bug report.
+
+### From the command line
+
+```bash
+HyggshiCut --check-env
+```
+
+Prints a plain-text report and exits **0** when everything passes, **1** if any
+check failed — so it can gate an install script or a CI job:
+
+```bash
+HyggshiCut --check-env || echo "Environment is not ready"
+```
+
+This path runs without a GUI (it never constructs a `QApplication`), so it works
+over SSH and inside containers where no display is available.
 
 ---
 
@@ -311,7 +365,7 @@ HyggshiCut/
 │   ├── main.cpp                # Application entry point & Headless CLI handling
 │   ├── audio/                  # Audio filter chain processing (EQ, Denoise, Compressor)
 │   ├── cache/                  # Data & render caching
-│   ├── core/                   # Core data models: Project, Timeline, Track, Clip, MediaAsset
+│   ├── core/                   # Core data models + EnvironmentCheck (runtime diagnostics)
 │   ├── decode/                 # FFmpeg media demuxing & decoding
 │   ├── export/                 # RAM-optimized video export engine (Single-pass Exporter)
 │   ├── i18n/                   # LanguageManager

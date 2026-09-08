@@ -70,6 +70,12 @@ public:
     static QString rendererString();
     static QString versionString();
     static QString glslVersionString();
+    // True once some GLVideoWidget has initialized a GL context, so the
+    // strings above hold real driver values rather than their placeholders.
+    static bool glProbed();
+    // False if the OpenGL 3.3 core shaders failed to link and the CPU
+    // fallback renderer took over.
+    static bool glShadersLinked();
 
 protected:
     void initializeGL() override;

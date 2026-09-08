@@ -56,11 +56,12 @@ jobs:
           # keep it from rotting. It needs no display, no real media (it
           # generates its own tiny PNG) and spawns no ffmpeg process.
           cmake -S . -B build-tests -DCMAKE_BUILD_TYPE=Release -DHYGGSHICUT_BUILD_TESTS=ON
-          cmake --build build-tests --target EffectLayerTest SegmentBoundTest ScreenRecorderTest ShortcutTest -j"$(nproc)"
+          cmake --build build-tests --target EffectLayerTest SegmentBoundTest ScreenRecorderTest ShortcutTest EnvironmentCheckTest -j"$(nproc)"
           ./build-tests/EffectLayerTest
           ./build-tests/SegmentBoundTest
           QT_QPA_PLATFORM=offscreen ./build-tests/ScreenRecorderTest
           QT_QPA_PLATFORM=offscreen ./build-tests/ShortcutTest
+          ./build-tests/EnvironmentCheckTest
 
       - name: Upload .deb artifact
         uses: actions/upload-artifact@v4

@@ -224,6 +224,19 @@ if(HYGGSHICUT_BUILD_TESTS)
     target_include_directories(TextCacheAndCpuFallbackTest PRIVATE src src/core src/decode src/render src/export)
     target_link_libraries(TextCacheAndCpuFallbackTest PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets OpenGL::GL PkgConfig::FFMPEG)
 
+    # Runtime environment diagnostics (ffmpeg/codecs/audio/assets/proxy cache).
+    # Needs no display: QCoreApplication only.
+    add_executable(EnvironmentCheckTest
+        tests/environment_check_test.cpp
+        src/core/EnvironmentCheck.cpp
+    )
+    target_include_directories(EnvironmentCheckTest PRIVATE src src/core)
+    target_link_libraries(EnvironmentCheckTest PRIVATE
+        Qt6::Core
+        PkgConfig::FFMPEG
+        PkgConfig::ALSA
+    )
+
     add_executable(ScreenRecorderTest
         tests/screen_recorder_test.cpp
         src/capture/ScreenRecorder.cpp

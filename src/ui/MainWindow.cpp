@@ -379,6 +379,9 @@ void MainWindow::buildMenus() {
     });
 
     settingsMenu->addSeparator();
+    settingsMenu->addAction(LTR("menu.settings.checkEnvironment"), this, [this]() {
+        openSettingsDialog(SettingsTab::Environment);
+    });
     settingsMenu->addAction(LTR("menu.settings.plugins"), this, &MainWindow::onOpenPluginManager);
     settingsMenu->addSeparator();
     settingsMenu->addAction(LTR("menu.settings.about"), this, &MainWindow::onAbout);
@@ -393,6 +396,10 @@ void MainWindow::buildMenus() {
 
     // --- Help Menu ---
     auto* helpMenu = menuBar()->addMenu(LTR("menu.help"));
+    helpMenu->addAction(LTR("menu.settings.checkEnvironment"), this, [this]() {
+        openSettingsDialog(SettingsTab::Environment);
+    });
+    helpMenu->addSeparator();
     helpMenu->addAction(LTR("menu.help.about"), this, &MainWindow::onAbout);
 
     // The timeline-scoped shortcuts only work once their actions are added to

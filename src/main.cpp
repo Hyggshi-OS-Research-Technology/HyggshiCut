@@ -8,6 +8,12 @@
 #include <QDebug>
 #include <iostream>
 #include <clocale>
+// Unconditionally required: argv scanning below uses std::strcmp, and the
+// headless --check-env path constructs a QCoreApplication. (The __linux__
+// block that follows re-includes <cstring> for the crash handler; that is
+// harmless.)
+#include <cstring>
+#include <QCoreApplication>
 #if defined(__linux__)
 #include <csignal>
 #include <unistd.h>
@@ -18,6 +24,7 @@
 #include "ui/MainWindow.h"
 #include "core/Project.h"
 #include "export/Exporter.h"
+#include "core/EnvironmentCheck.h"
 #include "i18n/LanguageManager.h"
 #include "plugin/PluginManager.h"
 #include "ui/ThemeManager.h"
@@ -147,6 +154,31 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    // ━━━ ENVIRONMENT CHECK (headless) ━━━
+    // Handled before QApplication exists: --check-env is most useful on a
+    // machine where the GUI cannot start at all (no display, missing driver),
+    // and constructing a QApplication there aborts the process. A
+    // QCoreApplication needs no display but still provides
+    // applicationDirPath() for the bundled-asset probes.
+    //
+    // Exits 1 when any check failed so CI and install scripts can gate on it.
+    for (int i = 1; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--check-env") != 0) continue;
+
+        QCoreApplication probeApp(argc, argv);
+        QCoreApplication::setApplicationName("HyggshiCut");
+        QCoreApplication::setOrganizationName("Hyggshi OS Foundation");
+        QCoreApplication::setApplicationVersion(QStringLiteral(HYGGSHICUT_VERSION));
+
+        const auto groups = hc::EnvironmentCheck::run();
+        std::cout << hc::EnvironmentCheck::toPlainText(groups).toStdString() << std::flush;
+        if (hc::EnvironmentCheck::hasErrors(groups)) {
+            std::cerr << "One or more checks FAILED.\n";
+            return 1;
+        }
+        return 0;
+    }
+
     // Configure Graphics Backend Profile from user settings
     {
         QSettings prefSettings("HyggshiCut", "Preferences");
@@ -273,6 +305,13 @@ int main(int argc, char* argv[]) {
         "progress",
         "Hiển thị thanh tiến trình render trên terminal");
     parser.addOption(progressOption);
+
+    // --check-env (handled earlier, before the GUI is created; declared here
+    // so it shows up in --help)
+    QCommandLineOption checkEnvOption(
+        "check-env",
+        "Kiểm tra môi trường (ffmpeg, codec, âm thanh, gói ngôn ngữ...) rồi thoát");
+    parser.addOption(checkEnvOption);
 
     parser.process(app);
 

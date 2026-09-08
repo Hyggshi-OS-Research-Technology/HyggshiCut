@@ -10,6 +10,7 @@
 #include <QIODevice>
 #include <QSettings>
 #include <algorithm>
+#include "../core/EnvironmentCheck.h"
 
 namespace hc {
 
@@ -232,7 +233,12 @@ void ProxyManager::startNextInQueue() {
 
     m_stdoutBuffer.clear();
     m_process = new QProcess(this);
-    m_process->setProgram("ffmpeg");
+    // Resolve ffmpeg the same way Exporter does (PATH, then the usual install
+    // prefixes). Previously this hard-coded "ffmpeg", so proxy generation
+    // failed on setups where export worked — e.g. a snap/ /usr/local install
+    // not on the GUI process's PATH.
+    const QString ffmpegProg = EnvironmentCheck::resolveFfmpegPath();
+    m_process->setProgram(ffmpegProg.isEmpty() ? QStringLiteral("ffmpeg") : ffmpegProg);
     m_process->setArguments(args);
     connect(m_process, &QProcess::readyReadStandardOutput, this, &ProxyManager::onReadyReadStandardOutput);
     connect(m_process, &QProcess::finished, this, &ProxyManager::onProcessFinished);

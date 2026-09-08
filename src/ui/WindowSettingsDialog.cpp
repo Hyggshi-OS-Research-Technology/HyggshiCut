@@ -10,6 +10,12 @@
 #include <QStandardPaths>
 #include <QThread>
 #include <QGuiApplication>
+#include <QScrollArea>
+#include <QClipboard>
+#include <QApplication>
+#include <QFrame>
+#include <QToolTip>
+#include "../core/EnvironmentCheck.h"
 #include "../i18n/LanguageManager.h"
 #include "../render/GLVideoWidget.h"
 #include "../cache/ProxyManager.h"
@@ -75,6 +81,7 @@ void WindowSettingsDialog::setupUi() {
     m_tabWidget->addTab(createLanguageTab(), LTR("settings.tab.language"));
     m_tabWidget->addTab(createGraphicsTab(), LTR("settings.tab.graphics"));
     m_tabWidget->addTab(createProxyTab(), LTR("settings.tab.proxy"));
+    m_tabWidget->addTab(createEnvironmentTab(), LTR("settings.tab.environment"));
     m_tabWidget->addTab(createAboutTab(), LTR("settings.tab.about"));
 
     mainLayout->addWidget(m_tabWidget);
@@ -349,6 +356,198 @@ QWidget* WindowSettingsDialog::createProxyTab() {
     tabLayout->addWidget(actGroup);
     tabLayout->addStretch();
     return tab;
+}
+
+namespace {
+
+// Colour for each status, matching the dark theme's accent palette.
+QString envStatusColor(hc::CheckStatus s) {
+    switch (s) {
+        case hc::CheckStatus::Ok:      return QStringLiteral("#4caf50");
+        case hc::CheckStatus::Warning: return QStringLiteral("#ffb300");
+        case hc::CheckStatus::Error:   return QStringLiteral("#e53935");
+        case hc::CheckStatus::Unknown: break;
+    }
+    return QStringLiteral("#888888");
+}
+
+QString envStatusGlyph(hc::CheckStatus s) {
+    switch (s) {
+        case hc::CheckStatus::Ok:      return QStringLiteral("OK");
+        case hc::CheckStatus::Warning: return QStringLiteral("!");
+        case hc::CheckStatus::Error:   return QStringLiteral("X");
+        case hc::CheckStatus::Unknown: break;
+    }
+    return QStringLiteral("?");
+}
+
+} // namespace
+
+QWidget* WindowSettingsDialog::createEnvironmentTab() {
+    auto* tab = new QWidget(this);
+    auto* tabLayout = new QVBoxLayout(tab);
+
+    auto* intro = new QLabel(LTR("settings.env.intro"), tab);
+    intro->setWordWrap(true);
+    intro->setStyleSheet("color: #aaa;");
+    tabLayout->addWidget(intro);
+
+    m_envSummaryLabel = new QLabel(tab);
+    m_envSummaryLabel->setWordWrap(true);
+    m_envSummaryLabel->setStyleSheet("font-weight: bold; padding: 6px 0;");
+    tabLayout->addWidget(m_envSummaryLabel);
+
+    // The result rows are rebuilt on every run, so they live inside a
+    // dedicated host widget whose layout we can clear wholesale.
+    auto* scroll = new QScrollArea(tab);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    m_envResultsHost = new QWidget(scroll);
+    auto* hostLayout = new QVBoxLayout(m_envResultsHost);
+    hostLayout->setContentsMargins(0, 0, 0, 0);
+    hostLayout->setSpacing(8);
+    scroll->setWidget(m_envResultsHost);
+    tabLayout->addWidget(scroll, 1);
+
+    auto* btnRow = new QHBoxLayout();
+    m_envRunBtn = new QPushButton(LTR("settings.env.run"), tab);
+    connect(m_envRunBtn, &QPushButton::clicked, this, &WindowSettingsDialog::onRunEnvironmentCheck);
+    btnRow->addWidget(m_envRunBtn);
+
+    m_envCopyBtn = new QPushButton(LTR("settings.env.copy"), tab);
+    m_envCopyBtn->setEnabled(false);
+    connect(m_envCopyBtn, &QPushButton::clicked, this, &WindowSettingsDialog::onCopyEnvironmentReport);
+    btnRow->addWidget(m_envCopyBtn);
+
+    btnRow->addStretch();
+    tabLayout->addLayout(btnRow);
+
+    // Probing spawns ffmpeg twice, so it is not run until the user asks.
+    m_envSummaryLabel->setText(LTR("settings.env.notRun"));
+    return tab;
+}
+
+void WindowSettingsDialog::onRunEnvironmentCheck() {
+    if (!m_envResultsHost) return;
+
+    auto* hostLayout = qobject_cast<QVBoxLayout*>(m_envResultsHost->layout());
+    if (!hostLayout) return;
+
+    // Clear previous results.
+    while (QLayoutItem* item = hostLayout->takeAt(0)) {
+        if (QWidget* w = item->widget()) w->deleteLater();
+        delete item;
+    }
+
+    if (m_envRunBtn) {
+        m_envRunBtn->setEnabled(false);
+        m_envRunBtn->setText(LTR("settings.env.running"));
+    }
+    QGuiApplication::setOverrideCursor(Qt::WaitCursor);
+    // Let the button repaint before the (blocking) ffmpeg probes start.
+    QApplication::processEvents();
+
+    // The GPU entry needs a live GL context, which only the preview widget
+    // has; GLVideoWidget caches the driver strings from its initializeGL().
+    hc::CheckResult gpu;
+    gpu.id = "gpu.opengl";
+    gpu.name = "OpenGL renderer";
+    if (!hc::GLVideoWidget::glProbed()) {
+        gpu.status = hc::CheckStatus::Unknown;
+        gpu.value = LTR("settings.env.gpuNotReady");
+        gpu.detail = LTR("settings.env.gpuNotReadyDetail");
+    } else {
+        const QString renderer = hc::GLVideoWidget::rendererString();
+        gpu.value = renderer;
+        gpu.detail = QStringLiteral("%1\nGLSL %2")
+                         .arg(hc::GLVideoWidget::versionString(),
+                              hc::GLVideoWidget::glslVersionString());
+        if (!hc::GLVideoWidget::glShadersLinked()) {
+            gpu.status = hc::CheckStatus::Error;
+            gpu.remedy = LTR("settings.env.gpuShaderFail");
+        } else if (renderer.contains("llvmpipe", Qt::CaseInsensitive) ||
+                   renderer.contains("softpipe", Qt::CaseInsensitive) ||
+                   renderer.contains("swrast", Qt::CaseInsensitive)) {
+            // Mesa's software rasterisers. GL works, but compositing is on the
+            // CPU and preview will be slow, which is worth flagging explicitly.
+            gpu.status = hc::CheckStatus::Warning;
+            gpu.remedy = LTR("settings.env.gpuSoftware");
+        } else {
+            gpu.status = hc::CheckStatus::Ok;
+        }
+    }
+
+    const QList<hc::CheckGroup> groups = hc::EnvironmentCheck::runWithGpu(gpu);
+    m_envReportText = hc::EnvironmentCheck::toPlainText(groups);
+
+    for (const hc::CheckGroup& g : groups) {
+        auto* box = new QGroupBox(g.name, m_envResultsHost);
+        auto* boxLayout = new QVBoxLayout(box);
+        boxLayout->setSpacing(6);
+
+        for (const hc::CheckResult& res : g.results) {
+            auto* row = new QWidget(box);
+            auto* rowLayout = new QHBoxLayout(row);
+            rowLayout->setContentsMargins(0, 0, 0, 0);
+            rowLayout->setSpacing(8);
+
+            auto* badge = new QLabel(envStatusGlyph(res.status), row);
+            badge->setFixedWidth(26);
+            badge->setAlignment(Qt::AlignCenter);
+            badge->setStyleSheet(
+                QStringLiteral("background: %1; color: #fff; border-radius: 3px; "
+                               "font-weight: bold; font-size: 10px; padding: 2px 0;")
+                    .arg(envStatusColor(res.status)));
+            rowLayout->addWidget(badge, 0, Qt::AlignTop);
+
+            QString text = QStringLiteral("<b>%1</b>: %2")
+                               .arg(res.name.toHtmlEscaped(), res.value.toHtmlEscaped());
+            if (!res.detail.isEmpty()) {
+                text += QStringLiteral("<br><span style='color:#999;font-size:11px;'>%1</span>")
+                            .arg(res.detail.toHtmlEscaped().replace('\n', QStringLiteral("<br>")));
+            }
+            if (!res.remedy.isEmpty() && res.status != hc::CheckStatus::Ok) {
+                text += QStringLiteral("<br><span style='color:%1;font-size:11px;'>&#8594; %2</span>")
+                            .arg(envStatusColor(res.status), res.remedy.toHtmlEscaped());
+            }
+            auto* label = new QLabel(text, row);
+            label->setWordWrap(true);
+            label->setTextInteractionFlags(Qt::TextSelectableByMouse);
+            rowLayout->addWidget(label, 1);
+
+            boxLayout->addWidget(row);
+        }
+        hostLayout->addWidget(box);
+    }
+    hostLayout->addStretch();
+
+    // Summary line.
+    if (hc::EnvironmentCheck::hasErrors(groups)) {
+        m_envSummaryLabel->setText(LTR("settings.env.summaryError"));
+        m_envSummaryLabel->setStyleSheet("font-weight: bold; padding: 6px 0; color: #e53935;");
+    } else if (hc::EnvironmentCheck::hasWarnings(groups)) {
+        m_envSummaryLabel->setText(LTR("settings.env.summaryWarning"));
+        m_envSummaryLabel->setStyleSheet("font-weight: bold; padding: 6px 0; color: #ffb300;");
+    } else {
+        m_envSummaryLabel->setText(LTR("settings.env.summaryOk"));
+        m_envSummaryLabel->setStyleSheet("font-weight: bold; padding: 6px 0; color: #4caf50;");
+    }
+
+    QGuiApplication::restoreOverrideCursor();
+    if (m_envRunBtn) {
+        m_envRunBtn->setEnabled(true);
+        m_envRunBtn->setText(LTR("settings.env.rerun"));
+    }
+    if (m_envCopyBtn) m_envCopyBtn->setEnabled(true);
+}
+
+void WindowSettingsDialog::onCopyEnvironmentReport() {
+    if (m_envReportText.isEmpty()) return;
+    QGuiApplication::clipboard()->setText(m_envReportText);
+    if (m_envCopyBtn) {
+        QToolTip::showText(m_envCopyBtn->mapToGlobal(QPoint(0, 0)),
+                           LTR("settings.env.copied"), m_envCopyBtn);
+    }
 }
 
 QWidget* WindowSettingsDialog::createAboutTab() {
