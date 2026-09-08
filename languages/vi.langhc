@@ -120,6 +120,7 @@
     "settings.about.descriptionTitle": "Giới thiệu ứng dụng",
     "settings.about.descriptionText": "HyggshiCut là phần mềm biên tập video và hiệu ứng đồ họa mã nguồn mở thế hệ mới, tối ưu hóa cho Linux với kiến trúc tăng tốc phần cứng GPU, xử lý âm thanh ALSA/PipeWire độ trễ thấp và engine render đơn lượt hiệu năng cao.",
     "settings.about.stackTitle": "Công nghệ & Thư viện nền tảng",
+    "settings.about.copyright": "© 2026 Hyggshi OS Research & Foundation. Mã nguồn mở theo giấy phép MIT / HOSL-1.3.",
     "dialog.ok": "Đồng ý",
     "dialog.apply": "Áp dụng",
     "dialog.cancel": "Hủy",

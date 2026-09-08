@@ -120,6 +120,7 @@
     "settings.about.descriptionTitle": "Application Description",
     "settings.about.descriptionText": "HyggshiCut is a next-generation open-source video editor and motion graphics suite built for Linux with native GPU hardware acceleration, low-latency ALSA/PipeWire audio routing, and a high-throughput single-pass export compositor.",
     "settings.about.stackTitle": "Core Technologies & Libraries",
+    "settings.about.copyright": "© 2026 Hyggshi OS Research & Foundation. Open source under MIT / HOSL-1.3.",
     "dialog.ok": "OK",
     "dialog.apply": "Apply",
     "dialog.cancel": "Cancel",

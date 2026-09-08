@@ -583,7 +583,10 @@ QWidget* WindowSettingsDialog::createAboutTab() {
     stackLayout->addRow("Preview Backend:", new QLabel("libmpv 2.0 Engine", stackBox));
     tabLayout->addWidget(stackBox);
 
-    auto* copyLabel = new QLabel("© 2026 Hyggshi OS Research & Foundation. Giấy phép mã nguồn mở GPL v3 / MIT.", tab);
+    // The project ships exactly two licences: MIT (LICENSE) and HOSL-1.3
+    // (LICENSE-HOSL-1.3.md). This label previously claimed "GPL v3 / MIT",
+    // which named a licence the repository does not contain.
+    auto* copyLabel = new QLabel(LTR("settings.about.copyright"), tab);
     copyLabel->setStyleSheet("color: #777; font-size: 11px; margin-top: 10px;");
     copyLabel->setAlignment(Qt::AlignCenter);
     tabLayout->addWidget(copyLabel);
