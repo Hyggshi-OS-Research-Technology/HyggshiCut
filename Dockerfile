@@ -34,13 +34,11 @@ COPY . .
 
 # Build binary and run offline test suite using offscreen platform
 ENV QT_QPA_PLATFORM=offscreen
+# Every test target is registered with CTest, so this runs the whole suite
+# instead of a hand-maintained list that drifts as tests are added.
 RUN cmake -B build -DCMAKE_BUILD_TYPE=Release -DHYGGSHICUT_BUILD_TESTS=ON \
     && cmake --build build -j$(nproc) \
-    && ./build/TextCacheAndCpuFallbackTest \
-    && ./build/SegmentBoundTest \
-    && ./build/EffectLayerTest \
-    && ./build/ShortcutTest \
-    && ./build/EnvironmentCheckTest
+    && ctest --test-dir build --output-on-failure
 
 # Default command: build debian package (.deb)
 CMD ["sh", "-c", "dpkg-buildpackage -us -uc -b -j$(nproc) && mkdir -p dist && mv ../hyggshicut_*.deb dist/ && ls -lh dist/"]

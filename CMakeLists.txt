@@ -86,11 +86,18 @@ install(DIRECTORY plugins/
         DESTINATION share/hyggshicut/plugins
         FILES_MATCHING PATTERN "*.plhc")
 
-# --- Optional headless smoke test (core engine only, no GUI/OpenGL) ---
+# --- Optional headless smoke tests ---
 option(HYGGSHICUT_BUILD_TESTS "Build the headless export smoke test" OFF)
 if(HYGGSHICUT_BUILD_TESTS)
-    add_executable(HyggshiCutExportSmokeTest
-        tests/export_smoke_test.cpp
+    include(CTest)
+    enable_testing()
+
+    # The offline engine tests all compile the same slice of the core: the
+    # timeline model, the decoder and the exporter's filter-graph builder.
+    # They were ten near-identical 10-line blocks; a single list plus a helper
+    # keeps them from drifting apart (three of them had already grown
+    # different include-directory sets for no reason).
+    set(HC_ENGINE_SOURCES
         src/core/Timeline.h
         src/core/MediaAsset.cpp
         src/core/Project.cpp
@@ -99,9 +106,53 @@ if(HYGGSHICUT_BUILD_TESTS)
         src/render/TextRenderer.cpp
         src/export/Exporter.cpp
     )
-    target_include_directories(HyggshiCutExportSmokeTest PRIVATE src src/core src/decode src/render src/export)
-    target_link_libraries(HyggshiCutExportSmokeTest PRIVATE Qt6::Core Qt6::Gui OpenGL::GL PkgConfig::FFMPEG)
 
+    # add_engine_test(<target> <source> [EXTRA_SOURCES...])
+    #
+    # Registers the executable with CTest as well as building it, so `ctest`
+    # actually runs the suite. Previously every test had to be named by hand
+    # in CI and in the Dockerfile, which is why some of them were built but
+    # never executed.
+    function(add_engine_test target source)
+        add_executable(${target} ${source} ${HC_ENGINE_SOURCES} ${ARGN})
+        target_include_directories(${target} PRIVATE
+            src src/core src/decode src/render src/export)
+        target_link_libraries(${target} PRIVATE
+            Qt6::Core Qt6::Gui OpenGL::GL PkgConfig::FFMPEG)
+        add_test(NAME ${target} COMMAND ${target})
+    endfunction()
+
+    add_engine_test(HyggshiCutExportSmokeTest tests/export_smoke_test.cpp)
+    add_engine_test(PipTransformSmokeTest     tests/pip_transform_smoke_test.cpp)
+    add_engine_test(KeyframeExportSmokeTest   tests/keyframe_export_smoke_test.cpp)
+    add_engine_test(TextAndImageExportTest    tests/text_and_image_export_test.cpp)
+    add_engine_test(MixedEffectsExportTest    tests/mixed_effects_export_test.cpp)
+    add_engine_test(UserProjectExportTest     tests/user_project_export_test.cpp)
+
+    # Offline: inspects the filter_complex string buildFfmpegArgs() produces
+    # (see segment_bound_test.cpp). Spawns no ffmpeg process.
+    add_engine_test(SegmentBoundTest tests/segment_bound_test.cpp)
+
+    # Offline: Effect Layers (adjustment layers) - inheritance rules in the
+    # timeline model, the .hcproj round-trip, and the filter graph built for
+    # them (full-cover vs time-gated). Generates its own tiny PNG and SKIPs
+    # the export checks if that cannot be probed.
+    add_engine_test(EffectLayerTest tests/effect_layer_test.cpp)
+
+    # Needs the widget stack too, for the CPU-fallback path in GLVideoWidget.
+    add_executable(TextCacheAndCpuFallbackTest
+        tests/text_cache_and_cpu_fallback_test.cpp
+        ${HC_ENGINE_SOURCES}
+        src/render/GLVideoWidget.cpp
+    )
+    target_include_directories(TextCacheAndCpuFallbackTest PRIVATE
+        src src/core src/decode src/render src/export)
+    target_link_libraries(TextCacheAndCpuFallbackTest PRIVATE
+        Qt6::Core Qt6::Gui Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets
+        OpenGL::GL PkgConfig::FFMPEG)
+    add_test(NAME TextCacheAndCpuFallbackTest COMMAND TextCacheAndCpuFallbackTest)
+
+    # Does not use the exporter/render slice, so it is not an engine test.
     add_executable(HyggshiCutAudioProjectTest
         tests/audio_and_project_test.cpp
         src/core/Timeline.h
@@ -110,119 +161,9 @@ if(HYGGSHICUT_BUILD_TESTS)
         src/decode/Decoder.cpp
     )
     target_include_directories(HyggshiCutAudioProjectTest PRIVATE src src/core src/decode)
-    target_link_libraries(HyggshiCutAudioProjectTest PRIVATE Qt6::Core Qt6::Gui PkgConfig::FFMPEG)
-
-    add_executable(PipTransformSmokeTest
-        tests/pip_transform_smoke_test.cpp
-        src/core/Timeline.h
-        src/core/MediaAsset.cpp
-        src/core/Project.cpp
-        src/decode/Decoder.cpp
-        src/render/TextureCache.cpp
-        src/render/TextRenderer.cpp
-        src/export/Exporter.cpp
-    )
-    target_include_directories(PipTransformSmokeTest PRIVATE src src/core src/decode src/render src/export)
-    target_link_libraries(PipTransformSmokeTest PRIVATE Qt6::Core Qt6::Gui OpenGL::GL PkgConfig::FFMPEG)
-
-    add_executable(KeyframeExportSmokeTest
-        tests/keyframe_export_smoke_test.cpp
-        src/core/Timeline.h
-        src/core/MediaAsset.cpp
-        src/core/Project.cpp
-        src/decode/Decoder.cpp
-        src/render/TextureCache.cpp
-        src/render/TextRenderer.cpp
-        src/export/Exporter.cpp
-    )
-    target_include_directories(KeyframeExportSmokeTest PRIVATE src src/core src/decode src/render src/export)
-    target_link_libraries(KeyframeExportSmokeTest PRIVATE Qt6::Core Qt6::Gui OpenGL::GL PkgConfig::FFMPEG)
-
-    add_executable(TextAndImageExportTest
-        tests/text_and_image_export_test.cpp
-        src/core/Timeline.h
-        src/core/MediaAsset.cpp
-        src/core/Project.cpp
-        src/decode/Decoder.cpp
-        src/render/TextureCache.cpp
-        src/render/TextRenderer.cpp
-        src/export/Exporter.cpp
-    )
-    target_include_directories(TextAndImageExportTest PRIVATE src src/core src/decode src/render src/export)
-    target_link_libraries(TextAndImageExportTest PRIVATE Qt6::Core Qt6::Gui OpenGL::GL PkgConfig::FFMPEG)
-
-    # Offline test: no real media/ffmpeg process needed, just inspects the
-    # filter_complex string buildFfmpegArgs() produces (see segment_bound_test.cpp).
-    add_executable(SegmentBoundTest
-        tests/segment_bound_test.cpp
-        src/core/Timeline.h
-        src/core/MediaAsset.cpp
-        src/core/Project.cpp
-        src/decode/Decoder.cpp
-        src/render/TextureCache.cpp
-        src/render/TextRenderer.cpp
-        src/export/Exporter.cpp
-    )
-    target_include_directories(SegmentBoundTest PRIVATE src src/core src/decode src/render src/export)
-    target_link_libraries(SegmentBoundTest PRIVATE Qt6::Core Qt6::Gui OpenGL::GL PkgConfig::FFMPEG)
-
-    # Offline test: Effect Layers (adjustment layers) — the inheritance rules
-    # in the timeline model, the .hcproj round-trip, and the ffmpeg filter
-    # graph the exporter builds for them (full-cover vs time-gated). Spawns no
-    # ffmpeg process and needs no display; it generates its own tiny PNG and
-    # SKIPs the export checks if that cannot be probed.
-    add_executable(EffectLayerTest
-        tests/effect_layer_test.cpp
-        src/core/Timeline.h
-        src/core/MediaAsset.cpp
-        src/core/Project.cpp
-        src/decode/Decoder.cpp
-        src/render/TextureCache.cpp
-        src/render/TextRenderer.cpp
-        src/export/Exporter.cpp
-    )
-    target_include_directories(EffectLayerTest PRIVATE src src/core src/decode src/render src/export)
-    target_link_libraries(EffectLayerTest PRIVATE Qt6::Core Qt6::Gui OpenGL::GL PkgConfig::FFMPEG)
-
-    add_executable(MixedEffectsExportTest
-        tests/mixed_effects_export_test.cpp
-        src/core/Timeline.h
-        src/core/MediaAsset.cpp
-        src/core/Project.cpp
-        src/decode/Decoder.cpp
-        src/render/TextureCache.cpp
-        src/render/TextRenderer.cpp
-        src/export/Exporter.cpp
-    )
-    target_include_directories(MixedEffectsExportTest PRIVATE src src/core src/decode src/render src/export)
-    target_link_libraries(MixedEffectsExportTest PRIVATE Qt6::Core Qt6::Gui OpenGL::GL PkgConfig::FFMPEG)
-
-    add_executable(UserProjectExportTest
-        tests/user_project_export_test.cpp
-        src/core/Timeline.h
-        src/core/MediaAsset.cpp
-        src/core/Project.cpp
-        src/decode/Decoder.cpp
-        src/render/TextureCache.cpp
-        src/render/TextRenderer.cpp
-        src/export/Exporter.cpp
-    )
-    target_include_directories(UserProjectExportTest PRIVATE src src/core src/decode src/render src/export)
-    target_link_libraries(UserProjectExportTest PRIVATE Qt6::Core Qt6::Gui OpenGL::GL PkgConfig::FFMPEG)
-
-    add_executable(TextCacheAndCpuFallbackTest
-        tests/text_cache_and_cpu_fallback_test.cpp
-        src/core/Timeline.h
-        src/core/MediaAsset.cpp
-        src/core/Project.cpp
-        src/decode/Decoder.cpp
-        src/render/TextureCache.cpp
-        src/render/TextRenderer.cpp
-        src/render/GLVideoWidget.cpp
-        src/export/Exporter.cpp
-    )
-    target_include_directories(TextCacheAndCpuFallbackTest PRIVATE src src/core src/decode src/render src/export)
-    target_link_libraries(TextCacheAndCpuFallbackTest PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets OpenGL::GL PkgConfig::FFMPEG)
+    target_link_libraries(HyggshiCutAudioProjectTest PRIVATE
+        Qt6::Core Qt6::Gui PkgConfig::FFMPEG)
+    add_test(NAME HyggshiCutAudioProjectTest COMMAND HyggshiCutAudioProjectTest)
 
     # Runtime environment diagnostics (ffmpeg/codecs/audio/assets/proxy cache).
     # Needs no display: QCoreApplication only.
@@ -232,10 +173,8 @@ if(HYGGSHICUT_BUILD_TESTS)
     )
     target_include_directories(EnvironmentCheckTest PRIVATE src src/core)
     target_link_libraries(EnvironmentCheckTest PRIVATE
-        Qt6::Core
-        PkgConfig::FFMPEG
-        PkgConfig::ALSA
-    )
+        Qt6::Core PkgConfig::FFMPEG PkgConfig::ALSA)
+    add_test(NAME EnvironmentCheckTest COMMAND EnvironmentCheckTest)
 
     add_executable(ScreenRecorderTest
         tests/screen_recorder_test.cpp
@@ -243,62 +182,35 @@ if(HYGGSHICUT_BUILD_TESTS)
     )
     target_include_directories(ScreenRecorderTest PRIVATE src src/capture)
     target_link_libraries(ScreenRecorderTest PRIVATE Qt6::Core Qt6::DBus)
+    add_test(NAME ScreenRecorderTest COMMAND ScreenRecorderTest)
+    set_tests_properties(ScreenRecorderTest PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
     set(APP_LIB_SOURCES ${SOURCES})
     list(FILTER APP_LIB_SOURCES EXCLUDE REGEX ".*/main\\.cpp$")
 
+    # add_gui_test(<target> <source>)
+    #
+    # Links the whole application (minus main.cpp) and therefore needs the
+    # full Qt/mpv/ALSA set. These require a Qt platform plugin, so CTest runs
+    # them with QT_QPA_PLATFORM=offscreen.
+    function(add_gui_test target source)
+        add_executable(${target} ${source} ${APP_LIB_SOURCES})
+        target_include_directories(${target} PRIVATE
+            src src/core src/decode src/render src/playback
+            src/export src/ui src/cache src/capture)
+        target_link_libraries(${target} PRIVATE
+            Qt6::Widgets Qt6::OpenGLWidgets Qt6::DBus OpenGL::GL
+            PkgConfig::FFMPEG PkgConfig::MPV PkgConfig::ALSA)
+        add_test(NAME ${target} COMMAND ${target})
+        set_tests_properties(${target} PROPERTIES
+            ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+    endfunction()
+
     # Regression test for the keyboard shortcut table: catches two actions
     # sharing a QKeySequence (which makes Qt fire neither) and editing
-    # shortcuts that would shadow typing in a text field. Needs a Qt platform
-    # plugin: run with QT_QPA_PLATFORM=offscreen.
-    add_executable(ShortcutTest
-        tests/shortcut_test.cpp
-        ${APP_LIB_SOURCES}
-    )
-    target_include_directories(ShortcutTest PRIVATE
-        src
-        src/core
-        src/decode
-        src/render
-        src/playback
-        src/export
-        src/ui
-        src/cache
-        src/capture
-    )
-    target_link_libraries(ShortcutTest PRIVATE
-        Qt6::Widgets
-        Qt6::OpenGLWidgets
-        Qt6::DBus
-        OpenGL::GL
-        PkgConfig::FFMPEG
-        PkgConfig::MPV
-        PkgConfig::ALSA
-    )
-
-    add_executable(SettingsDialogTest
-        tests/settings_dialog_test.cpp
-        ${APP_LIB_SOURCES}
-    )
-    target_include_directories(SettingsDialogTest PRIVATE
-        src
-        src/core
-        src/decode
-        src/render
-        src/playback
-        src/export
-        src/ui
-        src/cache
-        src/capture
-    )
-    target_link_libraries(SettingsDialogTest PRIVATE
-        Qt6::Widgets
-        Qt6::OpenGLWidgets
-        Qt6::DBus
-        OpenGL::GL
-        PkgConfig::FFMPEG
-        PkgConfig::MPV
-        PkgConfig::ALSA
-    )
+    # shortcuts that would shadow typing in a text field.
+    add_gui_test(ShortcutTest tests/shortcut_test.cpp)
+    add_gui_test(SettingsDialogTest tests/settings_dialog_test.cpp)
 endif()
 

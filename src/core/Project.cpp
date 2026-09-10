@@ -6,6 +6,7 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <algorithm>
+#include <ranges>
 
 namespace hc {
 
@@ -210,8 +211,9 @@ Clip clipFromJson(const QJsonObject& o) {
             kf.value.opacity = k["opacity"].toDouble(1.0);
             c.transformKeyframes.push_back(kf);
         }
-        std::sort(c.transformKeyframes.begin(), c.transformKeyframes.end(),
-                  [](const TransformKeyframe& a, const TransformKeyframe& b) { return a.time < b.time; });
+        // Sort by .time using a projection rather than a comparator lambda:
+        // there is no way to get the operands backwards.
+        std::ranges::sort(c.transformKeyframes, {}, &TransformKeyframe::time);
     }
     c.fadeInDuration = o["fadeInDuration"].toString().toLongLong();
     c.fadeOutDuration = o["fadeOutDuration"].toString().toLongLong();
@@ -291,11 +293,10 @@ MediaAssetPtr Project::findAsset(const QString& assetId) const {
 }
 
 bool Project::removeAsset(const QString& assetId) {
-    const auto before = m_assets.size();
-    m_assets.erase(std::remove_if(m_assets.begin(), m_assets.end(),
-                                   [&](const MediaAssetPtr& a) { return a->id == assetId; }),
-                   m_assets.end());
-    const bool changed = m_assets.size() != before;
+    // std::erase_if replaces the erase(remove_if(...), end()) idiom and
+    // returns the number removed, so the size comparison is unnecessary.
+    const bool changed =
+        std::erase_if(m_assets, [&](const MediaAssetPtr& a) { return a->id == assetId; }) > 0;
     if (changed) emit assetsChanged();
     return changed;
 }

@@ -141,33 +141,61 @@ sudo pacman -S base-devel cmake qt6-base qt6-declarative \
 git clone https://github.com/Hyggshi-OS-Research-Technology/HyggshiCut.git
 cd HyggshiCut
 
-# 2. Create the build directory
-mkdir -p build && cd build
+# 2. Install the build dependencies (parsed from debian/control, so this
+#    list can never drift away from what the .deb declares)
+./scripts/install-build-deps.sh
 
-# 3. Configure CMake (Release mode)
-cmake .. -DCMAKE_BUILD_TYPE=Release
-
-# 4. Build (using all CPU cores)
-cmake --build . -j"$(nproc)"
-
-# 5. Launch HyggshiCut
-./HyggshiCut
+# 3. Configure, build and launch
+cmake --preset release
+cmake --build --preset release
+./build/release/HyggshiCut
 ```
 
-### Building with tests enabled:
+### CMake presets
+
+`CMakePresets.json` defines the standard configurations, so nobody has to
+remember the flag combinations:
+
+| Preset | Build type | Tests | Purpose |
+|---|---|---|---|
+| `release` | Release | off | What the `.deb` ships |
+| `debug` | Debug | on | Day-to-day development |
+| `tests` | Release | on | Mirrors CI exactly — green locally means green in CI |
+| `asan` | Debug | on | AddressSanitizer + UBSan, for the decode/export buffer arithmetic |
+| `tidy` | Release | on | Runs `clang-tidy` as part of the compile |
 
 ```bash
-cmake .. -DCMAKE_BUILD_TYPE=Debug -DHYGGSHICUT_BUILD_TESTS=ON
-cmake --build . -j"$(nproc)"
-
-# Run the offline tests (no display, no media, no ffmpeg process required)
-./EffectLayerTest
-./SegmentBoundTest
-
-# Tests that need media and/or a (possibly offscreen) Qt platform plugin
-QT_QPA_PLATFORM=offscreen ./TextCacheAndCpuFallbackTest
-QT_QPA_PLATFORM=offscreen ./SettingsDialogTest
+cmake --preset tests
+cmake --build --preset tests
+ctest --preset tests            # runs all 14 test binaries
 ```
+
+Presets use the Ninja generator (`sudo apt install ninja-build`). To build
+without presets, the old form still works:
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DHYGGSHICUT_BUILD_TESTS=ON
+cmake --build build -j"$(nproc)"
+ctest --test-dir build --output-on-failure
+```
+
+Every test target is registered with CTest, so `ctest` runs the whole suite;
+the ones needing a Qt platform plugin get `QT_QPA_PLATFORM=offscreen`
+automatically.
+
+### Code style
+
+`.clang-format` and `.clang-tidy` are checked in, with values derived from the
+existing tree rather than a stock preset. `.editorconfig` mirrors them for
+editors.
+
+```bash
+clang-format -i $(git ls-files '*.cpp' '*.h')   # format
+cmake --preset tidy && cmake --build --preset tidy   # static analysis
+```
+
+CI reports formatting deviations but does not yet fail on them, because the
+tree predates the config.
 
 ---
 
