@@ -25,6 +25,7 @@ class TextPanel;
 class AudioFilterPanel;
 class EffectsPanel;
 class ProxyManager;
+class AutosaveManager;
 struct WindowSettings;
 
 class MainWindow : public QMainWindow {
@@ -129,10 +130,19 @@ private:
     void applyWindowSettings(const hc::WindowSettings& settings);
     void resetDockLayout();
     bool maybeSaveUnsavedChanges();
+
+    // Startup: a snapshot left by a previous run means it did not exit
+    // cleanly, so offer the work back before anything can overwrite it.
+    void offerCrashRecovery();
+    void startAutosaveForCurrentProject();
+
     void updateUndoRedoActions();
     void refreshTextPreview();
 
     std::unique_ptr<Project> m_project;
+    // Periodic crash-recovery snapshots of m_project. Lives for the whole
+    // session; re-pointed at the new Project on New/Open.
+    std::unique_ptr<AutosaveManager> m_autosave;
     std::unique_ptr<PlaybackController> m_playback;
     // Owned here (not per-project) so generated proxies and their on-disk
     // cache index persist across New/Open project and across app restarts —

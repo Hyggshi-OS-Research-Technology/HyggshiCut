@@ -16,6 +16,7 @@
 #include <QFrame>
 #include <QToolTip>
 #include "../core/EnvironmentCheck.h"
+#include "../core/Autosave.h"
 #include "../i18n/LanguageManager.h"
 #include "../render/GLVideoWidget.h"
 #include "../cache/ProxyManager.h"
@@ -173,6 +174,37 @@ QWidget* WindowSettingsDialog::createWindowTab() {
     uiElementsLayout->addWidget(m_resetLayoutBtn);
 
     tabLayout->addWidget(uiElementsGroup);
+
+    // 4. Autosave & crash recovery. Lives here rather than in its own tab
+    //    because it is window/session behaviour, next to "confirm on exit".
+    auto* autosaveGroup = new QGroupBox(LTR("settings.autosave.title"), tab);
+    auto* autosaveLayout = new QVBoxLayout(autosaveGroup);
+
+    m_autosaveEnableCheck = new QCheckBox(LTR("settings.autosave.enable"), autosaveGroup);
+    autosaveLayout->addWidget(m_autosaveEnableCheck);
+
+    auto* intervalRow = new QHBoxLayout();
+    intervalRow->addWidget(new QLabel(LTR("settings.autosave.interval"), autosaveGroup));
+    m_autosaveIntervalSpin = new QSpinBox(autosaveGroup);
+    m_autosaveIntervalSpin->setRange(AutosaveManager::kMinIntervalSec,
+                                     AutosaveManager::kMaxIntervalSec);
+    m_autosaveIntervalSpin->setSingleStep(15);
+    m_autosaveIntervalSpin->setSuffix(LTR("settings.autosave.seconds"));
+    intervalRow->addWidget(m_autosaveIntervalSpin);
+    intervalRow->addStretch();
+    autosaveLayout->addLayout(intervalRow);
+
+    // The interval is meaningless while autosave is off; grey it out rather
+    // than letting the user set a value that does nothing.
+    connect(m_autosaveEnableCheck, &QCheckBox::toggled,
+            m_autosaveIntervalSpin, &QWidget::setEnabled);
+
+    auto* autosaveHint = new QLabel(LTR("settings.autosave.hint"), autosaveGroup);
+    autosaveHint->setWordWrap(true);
+    autosaveHint->setStyleSheet("color: #888; font-size: 11px;");
+    autosaveLayout->addWidget(autosaveHint);
+
+    tabLayout->addWidget(autosaveGroup);
     tabLayout->addStretch();
     return tab;
 }
@@ -605,6 +637,11 @@ void WindowSettingsDialog::loadValues() {
     m_alwaysOnTopCheck->setChecked(ws.alwaysOnTop);
     m_lockDocksCheck->setChecked(ws.lockDocks);
     m_confirmExitCheck->setChecked(ws.confirmExit);
+
+    const bool autosaveOn = AutosaveManager::isEnabled();
+    m_autosaveEnableCheck->setChecked(autosaveOn);
+    m_autosaveIntervalSpin->setValue(AutosaveManager::intervalSeconds());
+    m_autosaveIntervalSpin->setEnabled(autosaveOn);
     m_showToolbarCheck->setChecked(ws.showToolbar);
     m_showStatusBarCheck->setChecked(ws.showStatusBar);
 
@@ -767,6 +804,11 @@ WindowSettings WindowSettingsDialog::currentSettings() const {
     ws.alwaysOnTop = m_alwaysOnTopCheck->isChecked();
     ws.lockDocks = m_lockDocksCheck->isChecked();
     ws.confirmExit = m_confirmExitCheck->isChecked();
+
+    // Persisted separately from WindowSettings because AutosaveManager reads
+    // these directly (it has no dependency on the UI layer).
+    AutosaveManager::setEnabled(m_autosaveEnableCheck->isChecked());
+    AutosaveManager::setIntervalSeconds(m_autosaveIntervalSpin->value());
     ws.showToolbar = m_showToolbarCheck->isChecked();
     ws.showStatusBar = m_showStatusBarCheck->isChecked();
     return ws;

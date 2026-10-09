@@ -1,8 +1,24 @@
 cmake_minimum_required(VERSION 3.20)
 project(HyggshiCut VERSION 1.0.0 LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 20)
+# Target C++23 where the toolchain supports it, falling back to C++20.
+#
+# Not a blind bump: C++23 is a compiler-level switch here, while the *library*
+# side varies a lot by toolchain. GCC 12, for example, accepts -std=c++23 and
+# ships <expected> but has neither std::format nor std::print. Any use of a
+# C++23 library facility therefore has to be guarded with the corresponding
+# __cpp_lib_* feature macro (see src/core/CxxFeatures.h) rather than assumed
+# from the standard version alone.
+include(CheckCXXCompilerFlag)
+check_cxx_compiler_flag("-std=c++23" HC_HAS_CXX23)
+if(HC_HAS_CXX23)
+    set(CMAKE_CXX_STANDARD 23)
+else()
+    set(CMAKE_CXX_STANDARD 20)
+endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+message(STATUS "HyggshiCut: building as C++${CMAKE_CXX_STANDARD}")
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
@@ -132,6 +148,10 @@ if(HYGGSHICUT_BUILD_TESTS)
     # Offline: inspects the filter_complex string buildFfmpegArgs() produces
     # (see segment_bound_test.cpp). Spawns no ffmpeg process.
     add_engine_test(SegmentBoundTest tests/segment_bound_test.cpp)
+
+    # Autosave / crash recovery, plus the atomic-save guarantee in
+    # Project::saveToFile(). Data-loss paths, so they are covered headlessly.
+    add_engine_test(AutosaveTest tests/autosave_test.cpp src/core/Autosave.cpp)
 
     # Offline: Effect Layers (adjustment layers) - inheritance rules in the
     # timeline model, the .hcproj round-trip, and the filter graph built for

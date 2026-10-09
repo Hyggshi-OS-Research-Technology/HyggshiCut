@@ -1,5 +1,6 @@
 #include "Project.h"
 #include <QFile>
+#include <QSaveFile>
 #include <QFileInfo>
 #include <QDir>
 #include <QJsonDocument>
@@ -436,13 +437,33 @@ bool Project::saveToFile(const QString& path, QString* errorOut) {
         return false;
     }
 
-    QFile file(path);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+    // Write atomically. The previous code opened the real file with Truncate
+    // and wrote straight into it, so an app crash, a full disk or a power cut
+    // part-way through left the user with a truncated, unparseable .hcproj —
+    // and the previous good version was already gone. QSaveFile writes to a
+    // temporary alongside the target and rename()s it into place on commit(),
+    // so the original survives any failure and readers never observe a
+    // half-written file.
+    QSaveFile file(path);
+    if (!file.open(QIODevice::WriteOnly)) {
         if (errorOut) *errorOut = QStringLiteral("Không ghi được file dự án: %1").arg(path);
         return false;
     }
-    file.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
-    file.close();
+
+    const QByteArray payload = QJsonDocument(root).toJson(QJsonDocument::Indented);
+    if (file.write(payload) != payload.size()) {
+        // Checked explicitly: a short write (disk full, quota) used to be
+        // ignored and the function still returned true, reporting success
+        // for a corrupt file.
+        if (errorOut) *errorOut = QStringLiteral("Ghi file dự án bị lỗi (đĩa đầy?): %1").arg(path);
+        file.cancelWriting();
+        return false;
+    }
+    if (!file.commit()) {
+        if (errorOut) *errorOut = QStringLiteral("Không hoàn tất ghi file dự án: %1").arg(file.errorString());
+        return false;
+    }
+
     filePath = path;
     return true;
 }

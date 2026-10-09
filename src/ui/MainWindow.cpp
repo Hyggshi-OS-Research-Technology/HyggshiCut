@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include "../core/Autosave.h"
 #include "MediaPoolWidget.h"
 #include "TimelineWidget.h"
 #include "PreviewWidget.h"
@@ -28,6 +29,7 @@
 #include <QScrollArea>
 #include <QFileDialog>
 #include <QMessageBox>
+#include <QPushButton>
 #include <QStatusBar>
 #include <QLabel>
 #include <QKeySequence>
@@ -106,7 +108,92 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     statusBar()->addPermanentWidget(m_zoomLabel);
 
     rebuildProjectDependentUi();
+
+    // Crash recovery must run before the user can touch anything, otherwise
+    // a New/Open would start overwriting state the snapshot refers to.
+    m_autosave = std::make_unique<AutosaveManager>();
+    connect(m_autosave.get(), &AutosaveManager::autosaved, this,
+            [this](const QString&, const QDateTime& when) {
+                statusBar()->showMessage(
+                    LTR("status.autosaved").arg(when.toString(QStringLiteral("HH:mm:ss"))), 2500);
+            });
+    connect(m_autosave.get(), &AutosaveManager::autosaveFailed, this,
+            [this](const QString& err) {
+                statusBar()->showMessage(LTR("status.autosaveFailed").arg(err), 6000);
+            });
+
+    QTimer::singleShot(0, this, [this] {
+        offerCrashRecovery();
+        startAutosaveForCurrentProject();
+    });
+
     statusBar()->showMessage(tr("Sẵn sàng. Kéo media vào timeline để bắt đầu dựng."));
+}
+
+void MainWindow::startAutosaveForCurrentProject() {
+    if (!m_autosave) return;
+    // Poll the window's own dirty flag so an untouched project is not
+    // rewritten every tick.
+    m_autosave->start(m_project.get(), [this] { return m_modified; });
+}
+
+void MainWindow::offerCrashRecovery() {
+    const QList<RecoverySession> sessions = AutosaveManager::findRecoverableSessions();
+    if (sessions.isEmpty()) return;
+
+    // Newest first; offer that one. The rest are listed so nothing is lost
+    // silently, and all are cleaned up once the user has decided.
+    const RecoverySession& s = sessions.front();
+
+    const QString displayName =
+        s.projectName.isEmpty() ? LTR("recovery.untitled") : s.projectName;
+    const QString where = s.originalPath.isEmpty() ? LTR("recovery.neverSaved") : s.originalPath;
+
+    QString body = LTR("recovery.body")
+                       .arg(displayName)
+                       .arg(s.savedAt.toString(QStringLiteral("yyyy-MM-dd HH:mm:ss")))
+                       .arg(where);
+    if (sessions.size() > 1) {
+        body += QStringLiteral("\n\n") + LTR("recovery.alsoFound").arg(sessions.size() - 1);
+    }
+
+    QMessageBox box(this);
+    box.setIcon(QMessageBox::Warning);
+    box.setWindowTitle(LTR("recovery.title"));
+    box.setText(body);
+    QPushButton* recoverBtn = box.addButton(LTR("recovery.recover"), QMessageBox::AcceptRole);
+    QPushButton* discardBtn = box.addButton(LTR("recovery.discard"), QMessageBox::DestructiveRole);
+    box.addButton(LTR("recovery.later"), QMessageBox::RejectRole);
+    box.setDefaultButton(recoverBtn);
+    box.exec();
+
+    if (box.clickedButton() == recoverBtn) {
+        QString err;
+        auto recovered = std::make_unique<Project>();
+        if (!recovered->loadFromFile(s.autosavePath, &err)) {
+            QMessageBox::warning(this, LTR("recovery.title"), LTR("recovery.failed").arg(err));
+            return;
+        }
+        // Point the recovered project back at the user's real file (or at
+        // nothing, if it was never saved) so Ctrl+S does not write into the
+        // recovery directory.
+        recovered->filePath = s.originalPath;
+
+        m_project = std::move(recovered);
+        rebuildProjectDependentUi();
+
+        // The recovered state is by definition not yet in the user's file.
+        m_modified = true;
+        updateWindowTitle();
+
+        statusBar()->showMessage(LTR("recovery.done").arg(displayName), 6000);
+        AutosaveManager::discardSession(s.sessionId);
+    } else if (box.clickedButton() == discardBtn) {
+        for (const RecoverySession& other : sessions) {
+            AutosaveManager::discardSession(other.sessionId);
+        }
+    }
+    // "Later" leaves everything on disk for the next launch.
 }
 
 MainWindow::~MainWindow() {
@@ -822,6 +909,9 @@ void MainWindow::onNewProject() {
     if (dlg.exec() != QDialog::Accepted) return;
 
     m_project = std::move(newProj);
+    // Autosave holds a raw Project*; re-point it or it would keep
+    // snapshotting the destroyed previous project.
+    startAutosaveForCurrentProject();
     m_project->name = dlg.projectName();
     m_project->timeline().videoWidth = dlg.videoWidth();
     m_project->timeline().videoHeight = dlg.videoHeight();
@@ -880,6 +970,9 @@ bool MainWindow::openProjectFromFile(const QString& path, QString* errorOut) {
     }
 
     m_project = std::move(newProject);
+    // Autosave holds a raw Project*; re-point it or it would keep
+    // snapshotting the destroyed previous project.
+    startAutosaveForCurrentProject();
     m_modified = false;
     rebuildProjectDependentUi();
     updateWindowTitle();
@@ -1696,6 +1789,10 @@ void MainWindow::openSettingsDialog(SettingsTab tab) {
     connect(&dlg, &WindowSettingsDialog::languageChanged, this, &MainWindow::onLanguageSelected);
     connect(&dlg, &WindowSettingsDialog::themeChanged, this, &MainWindow::onThemeSelected);
     dlg.exec();
+
+    // Pick up an autosave interval/enable change straight away, rather than
+    // leaving the old timer running until the next restart.
+    if (m_autosave) m_autosave->reloadSettings();
 }
 
 void MainWindow::onThemeSelected(const QString& theme) {
@@ -1766,6 +1863,13 @@ void MainWindow::closeEvent(QCloseEvent* event) {
         prefSettings.setValue("window/geometry", saveGeometry());
         prefSettings.setValue("window/state", saveState());
     }
+
+    // Clean exit: drop this session's recovery snapshot so the next launch
+    // does not offer to restore a project that was closed deliberately.
+    // Only reached once the user has confirmed above, so a cancelled close
+    // keeps autosaving.
+    if (m_autosave) m_autosave->stop();
+
     event->accept();
 }
 

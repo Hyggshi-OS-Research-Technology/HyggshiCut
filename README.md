@@ -29,6 +29,7 @@
 [**Build from Source**](#building-from-source) •
 [**Packaging**](#packaging--installing-the-deb-package-debian--ubuntu) •
 [**Headless CLI Render**](#headless-cli-render-guide) •
+[**Autosave & Recovery**](#autosave--crash-recovery) •
 [**Environment Check**](#environment-check) •
 [**Keyboard Shortcuts**](#keyboard-shortcuts) •
 [**Plugins & Languages**](#plugin-system--multi-language-support)
@@ -183,6 +184,28 @@ Every test target is registered with CTest, so `ctest` runs the whole suite;
 the ones needing a Qt platform plugin get `QT_QPA_PLATFORM=offscreen`
 automatically.
 
+### C++ standard
+
+The build targets **C++23** where the compiler supports it and falls back to
+C++20 otherwise (`check_cxx_compiler_flag` in `CMakeLists.txt`; the configure
+output reports which was chosen).
+
+Accepting `-std=c++23` says nothing about which *library* pieces exist, and
+the two move independently. GCC 12 is the concrete case: it compiles as C++23
+and ships `<expected>`, but has neither `std::format` nor `std::print` nor the
+C++23 ranges adaptors. So C++23 library facilities are never used behind a
+bare `__cplusplus` check — `src/core/CxxFeatures.h` exposes one `HC_HAS_*`
+macro per facility, each testing the specific `__cpp_lib_*` macro:
+
+```cpp
+#include "core/CxxFeatures.h"
+#if HC_HAS_STD_EXPECTED
+    std::expected<Frame, DecodeError> decode();
+#else
+    // C++20 fallback
+#endif
+```
+
 ### Code style
 
 `.clang-format` and `.clang-tidy` are checked in, with values derived from the
@@ -251,6 +274,48 @@ HyggshiCut -r -p wedding.hcproj -o wedding_4k.mp4 --codec hevc --crf 20 --width 
 # 3. Extract audio only, as high-quality MP3
 HyggshiCut -r -p podcast.hcproj -o podcast_audio.mp3 --preset audio-mp3
 ```
+
+---
+
+## Autosave & Crash Recovery
+
+A video editor dies more often than most applications — GPU driver resets, an
+ffmpeg child running out of memory on a 4K export, the OOM killer on a large
+timeline — and before this HyggshiCut only ever wrote a `.hcproj` when you
+pressed Ctrl+S. Everything since the last manual save was simply gone.
+
+HyggshiCut now snapshots the open project in the background:
+
+- Snapshots go to `~/.local/share/HyggshiCut/recovery/`, **not** your project
+  folder, so they never pollute a project directory or end up in version
+  control.
+- Every 2 minutes by default, and only when the project actually has unsaved
+  changes — an untouched timeline is never rewritten.
+- A snapshot is an ordinary `.hcproj`. Recovery is just "open this file", so
+  there is no second format that can fall out of sync.
+- On a normal exit the snapshot is deleted. Anything still there at startup
+  belongs to a session that **did not** exit cleanly, so that is exactly when
+  you are offered the work back.
+- Ownership is tracked by pid, and a pid is only treated as alive if it is
+  still a running HyggshiCut. A second instance running right now is not
+  mistaken for a crash, and a recycled pid is not mistaken for a live app.
+
+After a crash, the next launch offers **Recover**, **Discard**, or **Decide
+later** (which leaves the snapshot for next time). A recovered project is
+pointed back at your original file and marked modified, so Ctrl+S writes where
+you expect — never into the recovery directory.
+
+Configure it in **Settings → Window → Autosave & crash recovery** (on/off and
+a 15 s – 30 min interval). Changes take effect immediately.
+
+### Saving is now atomic
+
+`Project::saveToFile()` previously opened your `.hcproj` with `Truncate` and
+wrote straight into it. A crash, a full disk or a power cut part-way through
+left a truncated, unparseable project — and the previous good version was
+already gone. Saving now writes to a temporary file and renames it into place,
+so the original survives any failure, and a short write (disk full) is
+reported as an error instead of being silently treated as success.
 
 ---
 

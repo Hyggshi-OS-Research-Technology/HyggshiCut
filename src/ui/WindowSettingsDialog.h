@@ -4,6 +4,7 @@
 #include <QComboBox>
 #include <QSlider>
 #include <QCheckBox>
+#include <QSpinBox>
 #include <QPushButton>
 #include <QLabel>
 #include <QLineEdit>
@@ -103,6 +104,8 @@ private:
     QCheckBox* m_confirmExitCheck = nullptr;
     QCheckBox* m_showToolbarCheck = nullptr;
     QCheckBox* m_showStatusBarCheck = nullptr;
+    QCheckBox* m_autosaveEnableCheck = nullptr;
+    QSpinBox* m_autosaveIntervalSpin = nullptr;
     QPushButton* m_resetLayoutBtn = nullptr;
 
     // Appearance tab widgets
