@@ -18,6 +18,44 @@ fail() {
     exit 1
 }
 
+report_failed_command() {
+    local stage="$1" log_file="$2" status="$3" message
+    echo "build-appimage: ${stage} failed (exit ${status}); last output:" >&2
+    tail -n 35 "${log_file}" >&2 || true
+    message="$(tail -n 20 "${log_file}" 2>/dev/null | tr '\n' ' ' | \
+        sed -e 's/%/%25/g' -e 's/\r/%0D/g' -e 's/:/%3A/g')"
+    if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+        printf '### AppImage build failure: %s\n\n```text\n%s\n```\n' "${stage}" \
+            "$(tail -n 35 "${log_file}" 2>/dev/null)" >> "${GITHUB_STEP_SUMMARY}"
+    fi
+    printf '::error title=%s::%s\n' "${stage}" "${message}"
+}
+run_logged() {
+    local stage="$1" log_file="$2" status
+    shift 2
+    echo "Running ${stage}"
+    if "$@" >"${log_file}" 2>&1; then
+        cat "${log_file}"
+    else
+        status=$?
+        report_failed_command "${stage}" "${log_file}" "${status}"
+        return "${status}"
+    fi
+}
+
+run_logged_in_dir() {
+    local directory="$1" stage="$2" log_file="$3" status
+    shift 3
+    echo "Running ${stage}"
+    if (cd "${directory}" && "$@") >"${log_file}" 2>&1; then
+        cat "${log_file}"
+    else
+        status=$?
+        report_failed_command "${stage}" "${log_file}" "${status}"
+        return "${status}"
+    fi
+}
+
 if [[ "$(uname -m)" != "x86_64" ]]; then
     fail "the linuxdeploy AppImage is x86_64-only (host: $(uname -m))"
 fi
@@ -36,15 +74,18 @@ app_version="${APP_VERSION:-$(awk '$1 == "project(HyggshiCut" && $2 == "VERSION"
 
 parallel="${CMAKE_BUILD_PARALLEL_LEVEL:-$(nproc 2>/dev/null || echo 2)}"
 echo "Configuring HyggshiCut ${app_version} for AppImage (x86_64)"
-cmake -S "${repo_root}" -B "${cmake_build_dir}" \
+run_logged "CMake configure" "${build_root}/cmake-configure.log" \
+    cmake -S "${repo_root}" -B "${cmake_build_dir}" \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX=/usr \
     -DHYGGSHICUT_BUILD_TESTS=OFF
-cmake --build "${cmake_build_dir}" --parallel "${parallel}"
+run_logged "CMake build" "${build_root}/cmake-build.log" \
+    cmake --build "${cmake_build_dir}" --parallel "${parallel}"
 
 rm -rf -- "${appdir}" "${tool_output_dir}"
 mkdir -p "${appdir}" "${tool_output_dir}"
-DESTDIR="${appdir}" cmake --install "${cmake_build_dir}"
+run_logged "CMake install" "${build_root}/cmake-install.log" \
+    env DESTDIR="${appdir}" cmake --install "${cmake_build_dir}"
 
 # Desktop integration and project licences are not part of the CMake install
 # targets used by the Debian package, so stage them explicitly in the AppDir.
@@ -86,18 +127,16 @@ export EXTRA_PLATFORM_PLUGINS="${EXTRA_PLATFORM_PLUGINS:-libqoffscreen.so}"
 export ARCH=x86_64
 export APPIMAGE_EXTRACT_AND_RUN=1
 
-(
-    cd "${tool_output_dir}"
+run_logged_in_dir "${tool_output_dir}" "linuxdeploy" "${tool_output_dir}/linuxdeploy.log" \
     "${linuxdeploy}" \
-        --appdir "${appdir}" \
-        --executable "${appdir}/usr/bin/HyggshiCut" \
-        --executable "${appdir}/usr/bin/ffmpeg" \
-        --desktop-file "${appdir}/usr/share/applications/hyggshicut.desktop" \
-        --icon-file "${appdir}/usr/share/pixmaps/hyggshicut.png" \
-        --custom-apprun "${repo_root}/scripts/AppRun" \
-        --plugin qt \
-        --output appimage
-)
+    --appdir "${appdir}" \
+    --executable "${appdir}/usr/bin/HyggshiCut" \
+    --executable "${appdir}/usr/bin/ffmpeg" \
+    --desktop-file "${appdir}/usr/share/applications/hyggshicut.desktop" \
+    --icon-file "${appdir}/usr/share/pixmaps/hyggshicut.png" \
+    --custom-apprun "${repo_root}/scripts/AppRun" \
+    --plugin qt \
+    --output appimage
 
 shopt -s nullglob
 images=("${tool_output_dir}"/*.AppImage)
