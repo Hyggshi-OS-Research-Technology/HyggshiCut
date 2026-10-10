@@ -84,3 +84,6 @@ debian/hyggshicut.substvars
 # Release/source archives (build outputs, not sources)
 *.zip
 *.tar.gz
+
+# AppImage build outputs
+*.AppImage

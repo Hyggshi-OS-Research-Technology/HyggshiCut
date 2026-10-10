@@ -1,4 +1,4 @@
-name: Build Linux .deb
+name: Build Linux packages
 
 on:
   push:
@@ -6,6 +6,9 @@ on:
     tags: ["v*"]
   pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   format:
@@ -87,22 +90,95 @@ jobs:
           path: dist/*.deb
           if-no-files-found: error
 
-      - name: Create GitHub Release (only for version tags)
-        if: startsWith(github.ref, 'refs/tags/v')
+  build-appimage:
+    name: Build HyggshiCut AppImage (x86_64)
+    # Build on Debian 12 (glibc 2.36), the oldest distro in this project's
+    # declared package matrix that provides the required FFmpeg 5 API.
+    runs-on: ubuntu-24.04
+    container:
+      image: debian:bookworm
+    timeout-minutes: 90
+
+    steps:
+      - name: Install checkout prerequisites
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates git
+
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install build and AppImage dependencies
+        run: |
+          mapfile -t build_deps < <(./scripts/install-build-deps.sh --print)
+          apt-get install -y --no-install-recommends \
+            "${build_deps[@]}" ffmpeg libfuse2 qt6-qpa-plugins curl
+
+      - name: Build AppImage
+        run: ./scripts/build-appimage.sh
+
+      - name: Smoke-test the AppImage
+        run: |
+          mapfile -t images < <(find dist -maxdepth 1 -type f -name '*.AppImage' -print)
+          test "${#images[@]}" -eq 1
+          chmod +x "${images[0]}"
+          output="$(APPIMAGE_EXTRACT_AND_RUN=1 QT_QPA_PLATFORM=offscreen \
+            "${images[0]}" --version)"
+          printf '%s\n' "$output"
+          grep -F "HyggshiCut 1.0.0" <<< "$output"
+
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hyggshicut-linux-appimage
+          path: dist/*.AppImage
+          if-no-files-found: error
+
+  release:
+    name: Publish Linux release assets
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build-deb, build-appimage]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Download .deb artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: hyggshicut-linux-deb
+          path: dist
+
+      - name: Download AppImage artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: hyggshicut-linux-appimage
+          path: dist
+
+      - name: Create or update GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DEB_FILE: ${{ env.deb_file }}
         run: |
-          # Build the notes with printf: an inline "\n" is not expanded by the
-          # shell, so the old one-liner published a release body containing a
-          # literal backslash-n. Failures are no longer swallowed by `|| true`.
           notes_file="$(mktemp)"
           printf '%s\n\n%s\n' \
             "Automatically built from tag **${GITHUB_REF_NAME}**." \
-            '- Linux `.deb` package attached.' > "$notes_file"
+            '- Linux `.deb` and x86_64 `.AppImage` packages attached.' > "$notes_file"
 
-          gh release create "${GITHUB_REF_NAME}" \
-            "${DEB_FILE}" \
-            --repo "${GITHUB_REPOSITORY}" \
-            --title "HyggshiCut ${GITHUB_REF_NAME}" \
-            --notes-file "$notes_file"
+          shopt -s nullglob
+          assets=(dist/*.deb dist/*.AppImage)
+          test "${#assets[@]}" -eq 2
+          if gh release view "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            gh release upload "${GITHUB_REF_NAME}" "${assets[@]}" \
+              --repo "${GITHUB_REPOSITORY}" --clobber
+          else
+            gh release create "${GITHUB_REF_NAME}" "${assets[@]}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --title "HyggshiCut ${GITHUB_REF_NAME}" \
+              --notes-file "$notes_file"
+          fi

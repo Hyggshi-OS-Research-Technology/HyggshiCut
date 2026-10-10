@@ -1,0 +1,10 @@
+#!/bin/sh
+# AppImage entry point: put bundled tools (notably ffmpeg) ahead of the host
+# PATH, then replace this wrapper with the GUI executable.
+set -eu
+
+APPDIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+PATH="${APPDIR}/usr/bin${PATH:+:${PATH}}"
+export PATH
+
+exec "${APPDIR}/usr/bin/HyggshiCut" "$@"

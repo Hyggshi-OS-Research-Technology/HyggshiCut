@@ -13,7 +13,7 @@
 
 **Modern, Lightweight & High-Performance Professional Video Editor for Linux**
 
-[![C++20](https://hyggshi-badge.vercel.app/api/badge?message=20&label=C%2B%2B&color=3b82f6&labelColor=0f172a&icon=cpp&animation=gradient-shift)](https://en.wikipedia.org/wiki/C%2B%2B20)
+[![C++23](https://hyggshi-badge.vercel.app/api/badge?message=23&label=C%2B%2B&color=3b82f6&labelColor=0f172a&icon=cpp&animation=gradient-shift)](https://en.wikipedia.org/wiki/C%2B%2B23)
 [![Qt6](https://hyggshi-badge.vercel.app/api/badge?message=6.x&label=Qt&color=22c55e&labelColor=0f172a&icon=qt&animation=gradient-shift)](https://www.qt.io/)
 [![FFmpeg](https://hyggshi-badge.vercel.app/api/badge?message=libav*&label=FFmpeg&color=10b981&labelColor=0f172a&icon=ffmpeg&animation=gradient-shift)](https://ffmpeg.org/)
 [![OpenGL](https://hyggshi-badge.vercel.app/api/badge?message=3.3+Core&label=OpenGL&color=f97316&labelColor=0f172a&icon=opengl&animation=gradient-shift)](https://www.opengl.org/)
@@ -40,7 +40,7 @@
 
 ## Overview
 
-**HyggshiCut** is an open-source, professional video editor that is ultra-lightweight and highly optimized for Linux. Built on **C++20**, **Qt6**, **FFmpeg (libav\*)**, and an **OpenGL 3.3 Core** rendering backend, HyggshiCut delivers a smooth editing experience with an extremely low RAM footprint.
+**HyggshiCut** is an open-source, professional video editor that is ultra-lightweight and highly optimized for Linux. Built on **C++23 where supported (C++20 fallback)**, **Qt6**, **FFmpeg (libav\*)**, and an **OpenGL 3.3 Core** rendering backend, HyggshiCut delivers a smooth editing experience with an extremely low RAM footprint.
 
 Beyond its intuitive, modern graphical interface, HyggshiCut also ships with a built-in **Headless CLI Render Engine**, letting you automate batch video exports on a server or in a CI/CD pipeline with no display required.
 
@@ -232,6 +232,37 @@ dpkg-buildpackage -us -uc -b -j"$(nproc)"
 
 # Install the newly built .deb package
 sudo dpkg -i ../hyggshicut_*.deb || sudo apt-get install -f
+```
+
+### AppImage (x86_64)
+
+The CI build creates an x86_64 AppImage on Debian 12 (glibc 2.36); use it on
+Debian 12-era Linux systems or newer. Pull-request builds upload it as the
+`hyggshicut-linux-appimage` artifact, and tagged releases attach it next to the
+`.deb`. The image bundles HyggshiCut's detected Qt/native runtime libraries
+and an `ffmpeg` executable; it still uses the host's graphics driver and
+desktop display services.
+
+Download the `.AppImage`, make it executable, and launch it:
+
+```bash
+chmod +x HyggshiCut-1.0.0-x86_64.AppImage
+./HyggshiCut-1.0.0-x86_64.AppImage
+```
+
+On systems without FUSE 2, use AppImage's extraction fallback:
+
+```bash
+APPIMAGE_EXTRACT_AND_RUN=1 ./HyggshiCut-1.0.0-x86_64.AppImage
+```
+
+To build one locally, install the [build dependencies](#installing-dependencies-on-ubuntu--debian),
+then install the runtime packager dependencies and run the build script:
+
+```bash
+sudo apt-get install -y curl ffmpeg libfuse2 qt6-qpa-plugins
+./scripts/build-appimage.sh
+# Output: dist/HyggshiCut-1.0.0-x86_64.AppImage
 ```
 
 ---

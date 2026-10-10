@@ -7,6 +7,7 @@ All notable changes to HyggshiCut are documented in this file.
 ## [Unreleased]
 
 ### New Features
+- **Linux AppImage build**: add an x86_64 AppImage build using linuxdeploy and its Qt plugin. The image bundles the app's detected Qt/native runtime dependencies and `ffmpeg`; a custom `AppRun` puts the bundled executable first on `PATH`, so export, proxy generation, and screen recording all use the packaged version. Pull-request builds upload an `hyggshicut-linux-appimage` artifact, and version-tag releases attach both `.deb` and `.AppImage` assets.
 - **Autosave & crash recovery** — the one thing an editor must not get wrong. HyggshiCut previously wrote a `.hcproj` only when you pressed Ctrl+S, so a GPU driver reset, an OOM-killed ffmpeg export or any crash lost everything since the last manual save. The open project is now snapshotted every 2 minutes (configurable 15 s – 30 min, or off, in **Settings → Window**), and only when it actually has unsaved changes.
   - Snapshots live in `~/.local/share/HyggshiCut/recovery/`, never in your project folder, and are plain `.hcproj` files — recovery is just "open this file", so there is no second format to keep in sync.
   - A clean exit deletes the snapshot, so anything present at startup is by definition a session that did not exit cleanly. That is when the work is offered back (**Recover** / **Discard** / **Decide later**).
