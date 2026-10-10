@@ -91,7 +91,12 @@ run_logged "CMake install" "${build_root}/cmake-install.log" \
 # targets used by the Debian package, so stage them explicitly in the AppDir.
 install -D -m 0644 "${repo_root}/debian/hyggshicut.desktop" \
     "${appdir}/usr/share/applications/hyggshicut.desktop"
-install -D -m 0644 "${repo_root}/debian/hyggshicut.png" \
+# linuxdeploy only accepts spec-compliant icon dimensions; the source PNG is
+# 1080x1080, so derive a 512px AppImage icon without altering the Debian art.
+mkdir -p "${appdir}/usr/share/pixmaps"
+"${ffmpeg_bin}" -hide_banner -loglevel error -y \
+    -i "${repo_root}/debian/hyggshicut.png" \
+    -vf "scale=512:512:flags=lanczos" -frames:v 1 -update 1 \
     "${appdir}/usr/share/pixmaps/hyggshicut.png"
 install -D -m 0644 "${repo_root}/LICENSE" \
     "${appdir}/usr/share/doc/hyggshicut/LICENSE"
