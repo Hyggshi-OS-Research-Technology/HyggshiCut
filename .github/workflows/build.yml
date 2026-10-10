@@ -92,22 +92,14 @@ jobs:
 
   build-appimage:
     name: Build HyggshiCut AppImage (x86_64)
-    # Build on Debian 12 (glibc 2.36), the oldest distro in this project's
-    # declared package matrix that provides the required FFmpeg 5 API.
+    # The source uses FFmpeg 6 APIs; this also sets the image's glibc baseline.
     runs-on: ubuntu-24.04
-    container:
-      image: debian:bookworm
     defaults:
       run:
         shell: bash
     timeout-minutes: 90
 
     steps:
-      - name: Install checkout prerequisites
-        run: |
-          apt-get update
-          apt-get install -y --no-install-recommends ca-certificates git
-
       - name: Checkout source
         uses: actions/checkout@v4
         with:
@@ -115,9 +107,9 @@ jobs:
 
       - name: Install build and AppImage dependencies
         run: |
-          mapfile -t build_deps < <(./scripts/install-build-deps.sh --print)
-          apt-get install -y --no-install-recommends \
-            "${build_deps[@]}" ffmpeg libfuse2 qt6-qpa-plugins curl
+          ./scripts/install-build-deps.sh
+          sudo apt-get install -y --no-install-recommends \
+            ffmpeg libfuse2 qt6-qpa-plugins curl
 
       - name: Build AppImage
         run: ./scripts/build-appimage.sh

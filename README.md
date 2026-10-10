@@ -236,12 +236,12 @@ sudo dpkg -i ../hyggshicut_*.deb || sudo apt-get install -f
 
 ### AppImage (x86_64)
 
-The CI build creates an x86_64 AppImage on Debian 12 (glibc 2.36); use it on
-Debian 12-era Linux systems or newer. Pull-request builds upload it as the
-`hyggshicut-linux-appimage` artifact, and tagged releases attach it next to the
-`.deb`. The image bundles HyggshiCut's detected Qt/native runtime libraries
-and an `ffmpeg` executable; it still uses the host's graphics driver and
-desktop display services.
+The CI build creates an x86_64 AppImage on Ubuntu 24.04 (glibc 2.39); use it
+on Ubuntu 24.04-compatible systems or newer. Pull-request builds upload it as
+the `hyggshicut-linux-appimage` artifact, and tagged releases attach it next
+to the `.deb`. The image bundles HyggshiCut's detected Qt/native runtime
+libraries and an `ffmpeg` executable; it still uses the host's graphics driver
+and desktop display services.
 
 Download the `.AppImage`, make it executable, and launch it:
 
