@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include "../core/Autosave.h"
 #include "MediaPoolWidget.h"
 #include "TimelineWidget.h"
 #include "PreviewWidget.h"
@@ -28,6 +29,7 @@
 #include <QScrollArea>
 #include <QFileDialog>
 #include <QMessageBox>
+#include <QPushButton>
 #include <QStatusBar>
 #include <QLabel>
 #include <QKeySequence>
@@ -106,7 +108,92 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     statusBar()->addPermanentWidget(m_zoomLabel);
 
     rebuildProjectDependentUi();
+
+    // Crash recovery must run before the user can touch anything, otherwise
+    // a New/Open would start overwriting state the snapshot refers to.
+    m_autosave = std::make_unique<AutosaveManager>();
+    connect(m_autosave.get(), &AutosaveManager::autosaved, this,
+            [this](const QString&, const QDateTime& when) {
+                statusBar()->showMessage(
+                    LTR("status.autosaved").arg(when.toString(QStringLiteral("HH:mm:ss"))), 2500);
+            });
+    connect(m_autosave.get(), &AutosaveManager::autosaveFailed, this,
+            [this](const QString& err) {
+                statusBar()->showMessage(LTR("status.autosaveFailed").arg(err), 6000);
+            });
+
+    QTimer::singleShot(0, this, [this] {
+        offerCrashRecovery();
+        startAutosaveForCurrentProject();
+    });
+
     statusBar()->showMessage(tr("Sẵn sàng. Kéo media vào timeline để bắt đầu dựng."));
+}
+
+void MainWindow::startAutosaveForCurrentProject() {
+    if (!m_autosave) return;
+    // Poll the window's own dirty flag so an untouched project is not
+    // rewritten every tick.
+    m_autosave->start(m_project.get(), [this] { return m_modified; });
+}
+
+void MainWindow::offerCrashRecovery() {
+    const QList<RecoverySession> sessions = AutosaveManager::findRecoverableSessions();
+    if (sessions.isEmpty()) return;
+
+    // Newest first; offer that one. The rest are listed so nothing is lost
+    // silently, and all are cleaned up once the user has decided.
+    const RecoverySession& s = sessions.front();
+
+    const QString displayName =
+        s.projectName.isEmpty() ? LTR("recovery.untitled") : s.projectName;
+    const QString where = s.originalPath.isEmpty() ? LTR("recovery.neverSaved") : s.originalPath;
+
+    QString body = LTR("recovery.body")
+                       .arg(displayName)
+                       .arg(s.savedAt.toString(QStringLiteral("yyyy-MM-dd HH:mm:ss")))
+                       .arg(where);
+    if (sessions.size() > 1) {
+        body += QStringLiteral("\n\n") + LTR("recovery.alsoFound").arg(sessions.size() - 1);
+    }
+
+    QMessageBox box(this);
+    box.setIcon(QMessageBox::Warning);
+    box.setWindowTitle(LTR("recovery.title"));
+    box.setText(body);
+    QPushButton* recoverBtn = box.addButton(LTR("recovery.recover"), QMessageBox::AcceptRole);
+    QPushButton* discardBtn = box.addButton(LTR("recovery.discard"), QMessageBox::DestructiveRole);
+    box.addButton(LTR("recovery.later"), QMessageBox::RejectRole);
+    box.setDefaultButton(recoverBtn);
+    box.exec();
+
+    if (box.clickedButton() == recoverBtn) {
+        QString err;
+        auto recovered = std::make_unique<Project>();
+        if (!recovered->loadFromFile(s.autosavePath, &err)) {
+            QMessageBox::warning(this, LTR("recovery.title"), LTR("recovery.failed").arg(err));
+            return;
+        }
+        // Point the recovered project back at the user's real file (or at
+        // nothing, if it was never saved) so Ctrl+S does not write into the
+        // recovery directory.
+        recovered->filePath = s.originalPath;
+
+        m_project = std::move(recovered);
+        rebuildProjectDependentUi();
+
+        // The recovered state is by definition not yet in the user's file.
+        m_modified = true;
+        updateWindowTitle();
+
+        statusBar()->showMessage(LTR("recovery.done").arg(displayName), 6000);
+        AutosaveManager::discardSession(s.sessionId);
+    } else if (box.clickedButton() == discardBtn) {
+        for (const RecoverySession& other : sessions) {
+            AutosaveManager::discardSession(other.sessionId);
+        }
+    }
+    // "Later" leaves everything on disk for the next launch.
 }
 
 MainWindow::~MainWindow() {
@@ -125,13 +212,54 @@ MainWindow::~MainWindow() {
 }
 
 void MainWindow::buildMenus() {
+    // buildMenus() re-runs on every language change (updateUiTexts() clears the
+    // menu bar and rebuilds it). Actions that appear in more than one menu are
+    // owned by the window rather than by a QMenu, so they must be destroyed
+    // explicitly here or each rebuild would leak a duplicate set of shortcuts.
+    qDeleteAll(m_sharedMenuActions);
+    m_sharedMenuActions.clear();
+    m_timelineScopedActions.clear();
+
+    // Creates an action once and reuses the same instance in several menus.
+    // Registering the *same* QAction twice is fine; creating two actions with
+    // the same QKeySequence is not — Qt detects the collision at trigger time
+    // and fires neither, which is what silently broke S, Delete,
+    // Shift+Delete, Ctrl+Shift+P and Ctrl+, below.
+    const auto makeShared = [this](const QString& text, const QKeySequence& shortcut,
+                                   auto&& slot, Qt::ShortcutContext context) {
+        auto* act = new QAction(text, this);
+        if (!shortcut.isEmpty()) {
+            act->setShortcut(shortcut);
+            act->setShortcutContext(context);
+        }
+        connect(act, &QAction::triggered, this, slot);
+        m_sharedMenuActions.append(act);
+        if (context == Qt::WidgetWithChildrenShortcut) m_timelineScopedActions.append(act);
+        return act;
+    };
+
+    // Single-key editing shortcuts (S, C) are scoped to the timeline widget.
+    // As window-level shortcuts they would steal every plain "s"/"c"
+    // keystroke from the Explorer search box and the Text panel's editors.
+    auto* splitAction = makeShared(LTR("menu.edit.splitAtPlayhead"), QKeySequence(Qt::Key_S),
+                                   &MainWindow::onSplitAtPlayhead, Qt::WidgetWithChildrenShortcut);
+    auto* deleteClipAction = makeShared(LTR("menu.edit.deleteClip"), QKeySequence::Delete,
+                                        &MainWindow::onDeleteSelectedClip, Qt::WidgetWithChildrenShortcut);
+    auto* deleteTrackAction = makeShared(LTR("menu.edit.deleteTrack"), QKeySequence(Qt::SHIFT | Qt::Key_Delete),
+                                         &MainWindow::onDeleteSelectedTrack, Qt::WidgetWithChildrenShortcut);
+    auto* canvasAction = makeShared(LTR("menu.settings.canvas"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_P),
+                                    &MainWindow::onProjectSettings, Qt::WindowShortcut);
+    auto* preferencesAction = makeShared(LTR("menu.settings.preferences"), QKeySequence(Qt::CTRL | Qt::Key_Comma),
+                                         [this]() { openSettingsDialog(SettingsTab::Window); },
+                                         Qt::WindowShortcut);
+
     auto* fileMenu = menuBar()->addMenu(LTR("menu.file"));
     fileMenu->addAction(LTR("menu.file.new"), QKeySequence::New, this, &MainWindow::onNewProject);
     fileMenu->addAction(LTR("menu.file.open"), QKeySequence::Open, this, &MainWindow::onOpenProject);
     fileMenu->addAction(LTR("menu.file.save"), QKeySequence::Save, this, &MainWindow::onSaveProject);
     fileMenu->addAction(LTR("menu.file.saveas"), QKeySequence::SaveAs, this, &MainWindow::onSaveProjectAs);
     fileMenu->addSeparator();
-    fileMenu->addAction(LTR("menu.settings.canvas"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_P), this, &MainWindow::onProjectSettings);
+    fileMenu->addAction(canvasAction);
     fileMenu->addSeparator();
     fileMenu->addAction(tr("Nhập media..."), QKeySequence(Qt::CTRL | Qt::Key_I), this, &MainWindow::onImportRequested);
     fileMenu->addAction(LTR("menu.file.screenRecord"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_R), this, &MainWindow::onScreenRecord);
@@ -147,29 +275,39 @@ void MainWindow::buildMenus() {
     m_redoAction->setShortcuts({QKeySequence::Redo, QKeySequence(Qt::CTRL | Qt::Key_Y)});
 
     editMenu->addSeparator();
-    auto* cutToolAct = editMenu->addAction(LTR("menu.edit.cutTool"), QKeySequence(Qt::Key_C), this, [this]() {
+    auto* cutToolAct = new QAction(LTR("menu.edit.cutTool"), this);
+    cutToolAct->setShortcut(QKeySequence(Qt::Key_C));
+    cutToolAct->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+    connect(cutToolAct, &QAction::triggered, this, [this]() {
         if (m_cutToolAction) m_cutToolAction->toggle();
     });
+    m_sharedMenuActions.append(cutToolAct);
+    m_timelineScopedActions.append(cutToolAct);
+    editMenu->addAction(cutToolAct);
     cutToolAct->setCheckable(true);
     if (m_cutToolAction) {
         cutToolAct->setChecked(m_cutToolAction->isChecked());
         connect(m_cutToolAction, &QAction::toggled, cutToolAct, &QAction::setChecked);
     }
 
-    editMenu->addAction(LTR("menu.edit.splitAtPlayhead"), QKeySequence(Qt::Key_S), this, &MainWindow::onSplitAtPlayhead);
-    editMenu->addAction(LTR("menu.edit.deleteClip"), QKeySequence::Delete, this, &MainWindow::onDeleteSelectedClip);
-    editMenu->addAction(LTR("menu.edit.deleteTrack"), QKeySequence(Qt::SHIFT | Qt::Key_Delete), this, &MainWindow::onDeleteSelectedTrack);
+    editMenu->addAction(splitAction);
+    editMenu->addAction(deleteClipAction);
+    editMenu->addAction(deleteTrackAction);
 
     editMenu->addSeparator();
-    editMenu->addAction(tr("Sao chép clip"), QKeySequence::Copy, this, [this]() {
+    // Clip clipboard actions are timeline-scoped: as window shortcuts they
+    // would override Ctrl+C/Ctrl+V inside the Explorer search box and the Text
+    // panel's editors, so copying text out of those fields silently copied the
+    // selected clip instead.
+    editMenu->addAction(makeShared(tr("Sao chép clip"), QKeySequence::Copy, [this]() {
         if (m_timelineWidget) m_timelineWidget->copySelectedClip();
-    });
-    editMenu->addAction(tr("Dán clip"), QKeySequence::Paste, this, [this]() {
+    }, Qt::WidgetWithChildrenShortcut));
+    editMenu->addAction(makeShared(tr("Dán clip"), QKeySequence::Paste, [this]() {
         if (m_timelineWidget) m_timelineWidget->pasteClip();
-    });
-    editMenu->addAction(tr("Nhân đôi clip"), QKeySequence(Qt::CTRL | Qt::Key_D), this, [this]() {
+    }, Qt::WidgetWithChildrenShortcut));
+    editMenu->addAction(makeShared(tr("Nhân đôi clip"), QKeySequence(Qt::CTRL | Qt::Key_D), [this]() {
         if (m_timelineWidget) m_timelineWidget->duplicateSelectedClip();
-    });
+    }, Qt::WidgetWithChildrenShortcut));
     editMenu->addSeparator();
     editMenu->addAction(tr("Xóa & dồn clip sau lại (Ripple delete)"), this, [this]() {
         if (m_timelineWidget) m_timelineWidget->rippleDeleteSelectedClip();
@@ -182,13 +320,16 @@ void MainWindow::buildMenus() {
     });
 
     editMenu->addSeparator();
-    editMenu->addAction(tr("Chọn clip đầu tiên"), QKeySequence(Qt::CTRL | Qt::Key_A), this, &MainWindow::onSelectFirstClip);
-    editMenu->addAction(tr("Bỏ chọn tất cả"), QKeySequence(Qt::Key_Escape), this, &MainWindow::onDeselectAll);
+    // Likewise Ctrl+A ("select first clip") must not shadow select-all in a
+    // text field, and Escape must not be consumed window-wide (it is also how
+    // dialogs and the search box's clear button are expected to behave).
+    editMenu->addAction(makeShared(tr("Chọn clip đầu tiên"), QKeySequence(Qt::CTRL | Qt::Key_A),
+                                   &MainWindow::onSelectFirstClip, Qt::WidgetWithChildrenShortcut));
+    editMenu->addAction(makeShared(tr("Bỏ chọn tất cả"), QKeySequence(Qt::Key_Escape),
+                                   &MainWindow::onDeselectAll, Qt::WidgetWithChildrenShortcut));
 
     editMenu->addSeparator();
-    editMenu->addAction(LTR("menu.settings.preferences"), QKeySequence(Qt::CTRL | Qt::Key_Comma), this, [this]() {
-        openSettingsDialog(SettingsTab::Window);
-    });
+    editMenu->addAction(preferencesAction);
 
     updateUndoRedoActions();
 
@@ -200,9 +341,9 @@ void MainWindow::buildMenus() {
     timelineMenu->addAction(LTR("menu.track.addEffectLayer"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_L),
                             this, &MainWindow::onAddEffectLayer);
     timelineMenu->addSeparator();
-    timelineMenu->addAction(LTR("menu.edit.splitAtPlayhead"), QKeySequence(Qt::Key_S), this, &MainWindow::onSplitAtPlayhead);
-    timelineMenu->addAction(LTR("menu.edit.deleteClip"), QKeySequence::Delete, this, &MainWindow::onDeleteSelectedClip);
-    timelineMenu->addAction(LTR("menu.edit.deleteTrack"), QKeySequence(Qt::SHIFT | Qt::Key_Delete), this, &MainWindow::onDeleteSelectedTrack);
+    timelineMenu->addAction(splitAction);
+    timelineMenu->addAction(deleteClipAction);
+    timelineMenu->addAction(deleteTrackAction);
 
     m_viewMenu = menuBar()->addMenu(LTR("menu.view"));
     m_viewMenu->addAction(LTR("menu.view.zoomin"), QKeySequence::ZoomIn, this, &MainWindow::onZoomIn);
@@ -239,10 +380,8 @@ void MainWindow::buildMenus() {
 
     // --- Settings & Extensions Menu ---
     auto* settingsMenu = menuBar()->addMenu(LTR("menu.settings"));
-    settingsMenu->addAction(LTR("menu.settings.preferences"), QKeySequence(Qt::CTRL | Qt::Key_Comma), this, [this]() {
-        openSettingsDialog(SettingsTab::Window);
-    });
-    settingsMenu->addAction(LTR("menu.settings.canvas"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_P), this, &MainWindow::onProjectSettings);
+    settingsMenu->addAction(preferencesAction);
+    settingsMenu->addAction(canvasAction);
     settingsMenu->addSeparator();
 
     // Theme / Appearance Submenu (Dark, Light, System)
@@ -327,6 +466,9 @@ void MainWindow::buildMenus() {
     });
 
     settingsMenu->addSeparator();
+    settingsMenu->addAction(LTR("menu.settings.checkEnvironment"), this, [this]() {
+        openSettingsDialog(SettingsTab::Environment);
+    });
     settingsMenu->addAction(LTR("menu.settings.plugins"), this, &MainWindow::onOpenPluginManager);
     settingsMenu->addSeparator();
     settingsMenu->addAction(LTR("menu.settings.about"), this, &MainWindow::onAbout);
@@ -341,7 +483,25 @@ void MainWindow::buildMenus() {
 
     // --- Help Menu ---
     auto* helpMenu = menuBar()->addMenu(LTR("menu.help"));
+    helpMenu->addAction(LTR("menu.settings.checkEnvironment"), this, [this]() {
+        openSettingsDialog(SettingsTab::Environment);
+    });
+    helpMenu->addSeparator();
     helpMenu->addAction(LTR("menu.help.about"), this, &MainWindow::onAbout);
+
+    // The timeline-scoped shortcuts only work once their actions are added to
+    // the widget they are scoped to.
+    attachTimelineShortcuts();
+}
+
+void MainWindow::attachTimelineShortcuts() {
+    if (!m_timelineWidget) return;
+    for (QAction* act : m_timelineScopedActions) {
+        if (!act) continue;
+        if (!m_timelineWidget->actions().contains(act)) {
+            m_timelineWidget->addAction(act);
+        }
+    }
 }
 
 void MainWindow::buildToolbar() {
@@ -452,6 +612,11 @@ void MainWindow::rebuildProjectDependentUi() {
     m_timelineWidget = new TimelineWidget(m_project.get(), this);
     m_timelineWidget->setCutToolActive(m_cutToolAction && m_cutToolAction->isChecked());
     if (m_snapAction) m_timelineWidget->setSnapEnabled(m_snapAction->isChecked());
+    // The timeline is recreated for every New/Open project, so the
+    // timeline-scoped shortcuts (S, C, Delete, Shift+Delete) have to be
+    // re-registered on the new widget or they stop working after the first
+    // project switch.
+    attachTimelineShortcuts();
     auto* scrollArea = new TimelineScrollArea(m_timelineWidget, this);
     scrollArea->setWidget(m_timelineWidget);
     scrollArea->setWidgetResizable(false);
@@ -744,6 +909,9 @@ void MainWindow::onNewProject() {
     if (dlg.exec() != QDialog::Accepted) return;
 
     m_project = std::move(newProj);
+    // Autosave holds a raw Project*; re-point it or it would keep
+    // snapshotting the destroyed previous project.
+    startAutosaveForCurrentProject();
     m_project->name = dlg.projectName();
     m_project->timeline().videoWidth = dlg.videoWidth();
     m_project->timeline().videoHeight = dlg.videoHeight();
@@ -802,6 +970,9 @@ bool MainWindow::openProjectFromFile(const QString& path, QString* errorOut) {
     }
 
     m_project = std::move(newProject);
+    // Autosave holds a raw Project*; re-point it or it would keep
+    // snapshotting the destroyed previous project.
+    startAutosaveForCurrentProject();
     m_modified = false;
     rebuildProjectDependentUi();
     updateWindowTitle();
@@ -1618,6 +1789,10 @@ void MainWindow::openSettingsDialog(SettingsTab tab) {
     connect(&dlg, &WindowSettingsDialog::languageChanged, this, &MainWindow::onLanguageSelected);
     connect(&dlg, &WindowSettingsDialog::themeChanged, this, &MainWindow::onThemeSelected);
     dlg.exec();
+
+    // Pick up an autosave interval/enable change straight away, rather than
+    // leaving the old timer running until the next restart.
+    if (m_autosave) m_autosave->reloadSettings();
 }
 
 void MainWindow::onThemeSelected(const QString& theme) {
@@ -1688,6 +1863,13 @@ void MainWindow::closeEvent(QCloseEvent* event) {
         prefSettings.setValue("window/geometry", saveGeometry());
         prefSettings.setValue("window/state", saveState());
     }
+
+    // Clean exit: drop this session's recovery snapshot so the next launch
+    // does not offer to restore a project that was closed deliberately.
+    // Only reached once the user has confirmed above, so a cancelled close
+    // keeps autosaving.
+    if (m_autosave) m_autosave->stop();
+
     event->accept();
 }
 

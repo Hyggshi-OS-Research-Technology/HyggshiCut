@@ -4,6 +4,7 @@
 #include <QComboBox>
 #include <QSlider>
 #include <QCheckBox>
+#include <QSpinBox>
 #include <QPushButton>
 #include <QLabel>
 #include <QLineEdit>
@@ -19,7 +20,8 @@ enum class SettingsTab {
     Language = 2,
     Graphics = 3,
     Proxy = 4,
-    About = 5
+    Environment = 5,
+    About = 6
 };
 
 struct WindowSettings {
@@ -75,6 +77,9 @@ private slots:
     void onClearProxyCacheClicked();
     void onGenerateProxiesClicked();
     void updateProxyCacheSizeLabel();
+    // Environment tab: (re)run every probe and repaint the results list.
+    void onRunEnvironmentCheck();
+    void onCopyEnvironmentReport();
 
 private:
     void setupUi();
@@ -83,6 +88,7 @@ private:
     QWidget* createLanguageTab();
     QWidget* createGraphicsTab();
     QWidget* createProxyTab();
+    QWidget* createEnvironmentTab();
     QWidget* createAboutTab();
 
     void loadValues();
@@ -98,6 +104,8 @@ private:
     QCheckBox* m_confirmExitCheck = nullptr;
     QCheckBox* m_showToolbarCheck = nullptr;
     QCheckBox* m_showStatusBarCheck = nullptr;
+    QCheckBox* m_autosaveEnableCheck = nullptr;
+    QSpinBox* m_autosaveIntervalSpin = nullptr;
     QPushButton* m_resetLayoutBtn = nullptr;
 
     // Appearance tab widgets
@@ -131,6 +139,13 @@ private:
     QPushButton* m_clearProxyCacheBtn = nullptr;
 
     // Dialog buttons
+    // Environment tab
+    QWidget* m_envResultsHost = nullptr;   // container the result rows live in
+    QLabel* m_envSummaryLabel = nullptr;
+    QPushButton* m_envRunBtn = nullptr;
+    QPushButton* m_envCopyBtn = nullptr;
+    QString m_envReportText;               // last report, for "copy"
+
     QPushButton* m_applyBtn = nullptr;
     QPushButton* m_okBtn = nullptr;
     QPushButton* m_cancelBtn = nullptr;

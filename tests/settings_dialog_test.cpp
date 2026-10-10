@@ -11,9 +11,20 @@
 #include <QPainter>
 #include <QImage>
 #include <QMouseEvent>
+#include <QTemporaryDir>
+#include <QDir>
 
 int main(int argc, char* argv[]) {
     QApplication app(argc, argv);
+
+    // Render previews into a self-cleaning temporary directory. These used to
+    // be hardcoded absolute paths under a developer's home directory, which
+    // made the test fail on every other machine (and in CI).
+    QTemporaryDir previewDir;
+    if (!previewDir.isValid()) {
+        std::cerr << "Cannot create a temporary directory for preview images" << std::endl;
+        return 1;
+    }
 
     std::cout << "[TEST] 1. Initializing LanguageManager with 'vi'..." << std::endl;
     hc::LanguageManager::instance().setLanguage("vi");
@@ -116,7 +127,7 @@ int main(int argc, char* argv[]) {
         timelineWidget->render(&p);
         p.end();
 
-        const QString outPath = "/home/hyggshi/.gemini/antigravity-ide/brain/29584d24-aa27-42bc-8c6d-6bfaed7c4155/timeline_preview.png";
+        const QString outPath = QDir(previewDir.path()).filePath("timeline_preview.png");
         bool saved = img.save(outPath);
         std::cout << "  Timeline preview image saved to " << outPath.toStdString() << " (success=" << saved << ")" << std::endl;
         assert(saved);
@@ -128,7 +139,7 @@ int main(int argc, char* argv[]) {
         QPainter p2(&img);
         timelineWidget->render(&p2);
         p2.end();
-        const QString outPath2 = "/home/hyggshi/.gemini/antigravity-ide/brain/29584d24-aa27-42bc-8c6d-6bfaed7c4155/timeline_controls_preview.png";
+        const QString outPath2 = QDir(previewDir.path()).filePath("timeline_controls_preview.png");
         img.save(outPath2);
         std::cout << "  Timeline controls preview image saved to " << outPath2.toStdString() << std::endl;
     }
@@ -180,7 +191,7 @@ int main(int argc, char* argv[]) {
         QPainter pEmpty(&emptyImg);
         timelineWidget->render(&pEmpty);
         pEmpty.end();
-        const QString emptyPath = "/home/hyggshi/.gemini/antigravity-ide/brain/29584d24-aa27-42bc-8c6d-6bfaed7c4155/timeline_empty_preview.png";
+        const QString emptyPath = QDir(previewDir.path()).filePath("timeline_empty_preview.png");
         emptyImg.save(emptyPath);
 
         const QPointF ptTrack(500, 80);

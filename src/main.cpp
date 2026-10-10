@@ -8,6 +8,12 @@
 #include <QDebug>
 #include <iostream>
 #include <clocale>
+// Unconditionally required: argv scanning below uses std::strcmp, and the
+// headless --check-env path constructs a QCoreApplication. (The __linux__
+// block that follows re-includes <cstring> for the crash handler; that is
+// harmless.)
+#include <cstring>
+#include <QCoreApplication>
 #if defined(__linux__)
 #include <csignal>
 #include <unistd.h>
@@ -18,9 +24,16 @@
 #include "ui/MainWindow.h"
 #include "core/Project.h"
 #include "export/Exporter.h"
+#include "core/EnvironmentCheck.h"
 #include "i18n/LanguageManager.h"
 #include "plugin/PluginManager.h"
 #include "ui/ThemeManager.h"
+
+// Injected by CMake (see target_compile_definitions) so the reported version
+// always matches project(HyggshiCut VERSION ...).
+#ifndef HYGGSHICUT_VERSION
+#define HYGGSHICUT_VERSION "1.0.0"
+#endif
 
 namespace {
 
@@ -63,7 +76,10 @@ void loadBundledAssets(const QApplication& app) {
     QStringList langDirs = {
         QDir(app.applicationDirPath()).filePath("languages"),
         QDir(app.applicationDirPath()).filePath("../languages"),
-        QDir::current().filePath("languages")
+        QDir(app.applicationDirPath()).filePath("../share/hyggshicut/languages"),
+        QDir::current().filePath("languages"),
+        "/usr/local/share/hyggshicut/languages",
+        "/usr/share/hyggshicut/languages"
     };
 
     for (const auto& dPath : langDirs) {
@@ -82,7 +98,10 @@ void loadBundledAssets(const QApplication& app) {
     QStringList pluginDirs = {
         QDir(app.applicationDirPath()).filePath("plugins"),
         QDir(app.applicationDirPath()).filePath("../plugins"),
-        QDir::current().filePath("plugins")
+        QDir(app.applicationDirPath()).filePath("../share/hyggshicut/plugins"),
+        QDir::current().filePath("plugins"),
+        "/usr/local/share/hyggshicut/plugins",
+        "/usr/share/hyggshicut/plugins"
     };
 
     for (const auto& dPath : pluginDirs) {
@@ -135,6 +154,31 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    // ━━━ ENVIRONMENT CHECK (headless) ━━━
+    // Handled before QApplication exists: --check-env is most useful on a
+    // machine where the GUI cannot start at all (no display, missing driver),
+    // and constructing a QApplication there aborts the process. A
+    // QCoreApplication needs no display but still provides
+    // applicationDirPath() for the bundled-asset probes.
+    //
+    // Exits 1 when any check failed so CI and install scripts can gate on it.
+    for (int i = 1; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--check-env") != 0) continue;
+
+        QCoreApplication probeApp(argc, argv);
+        QCoreApplication::setApplicationName("HyggshiCut");
+        QCoreApplication::setOrganizationName("Hyggshi OS Foundation");
+        QCoreApplication::setApplicationVersion(QStringLiteral(HYGGSHICUT_VERSION));
+
+        const auto groups = hc::EnvironmentCheck::run();
+        std::cout << hc::EnvironmentCheck::toPlainText(groups).toStdString() << std::flush;
+        if (hc::EnvironmentCheck::hasErrors(groups)) {
+            std::cerr << "One or more checks FAILED.\n";
+            return 1;
+        }
+        return 0;
+    }
+
     // Configure Graphics Backend Profile from user settings
     {
         QSettings prefSettings("HyggshiCut", "Preferences");
@@ -164,7 +208,7 @@ int main(int argc, char* argv[]) {
     QApplication app(argc, argv);
     QApplication::setApplicationName("HyggshiCut");
     QApplication::setOrganizationName("Hyggshi OS Foundation");
-    QApplication::setApplicationVersion("1.0.0");
+    QApplication::setApplicationVersion(QStringLiteral(HYGGSHICUT_VERSION));
 
     loadBundledAssets(app);
     hc::ThemeManager::loadPreference();
@@ -175,6 +219,11 @@ int main(int argc, char* argv[]) {
     parser.setApplicationDescription("HyggshiCut - Video Editor & Headless Render CLI");
     parser.addHelpOption();
     parser.addVersionOption();
+
+    // Accept the project as a bare argument too, so `HyggshiCut project.hcproj`
+    // works and the .desktop launcher (Exec=HyggshiCut %F, i.e. file managers
+    // and "Open With") actually opens the file instead of a blank editor.
+    parser.addPositionalArgument("project", "Đường dẫn file dự án .hcproj (tùy chọn)", "[project.hcproj]");
 
     // -p, --project <file>
     QCommandLineOption projectOption(
@@ -257,10 +306,23 @@ int main(int argc, char* argv[]) {
         "Hiển thị thanh tiến trình render trên terminal");
     parser.addOption(progressOption);
 
+    // --check-env (handled earlier, before the GUI is created; declared here
+    // so it shows up in --help)
+    QCommandLineOption checkEnvOption(
+        "check-env",
+        "Kiểm tra môi trường (ffmpeg, codec, âm thanh, gói ngôn ngữ...) rồi thoát");
+    parser.addOption(checkEnvOption);
+
     parser.process(app);
 
     const bool isRenderMode = parser.isSet(renderOption) || parser.isSet(noGuiOption);
-    const QString projectPath = parser.value(projectOption);
+
+    // --project wins; otherwise fall back to the first positional argument.
+    QString projectPath = parser.value(projectOption);
+    if (projectPath.isEmpty()) {
+        const QStringList positional = parser.positionalArguments();
+        if (!positional.isEmpty()) projectPath = positional.first();
+    }
 
     // ━━━ HEADLESS CLI RENDER MODE ━━━
     if (isRenderMode) {

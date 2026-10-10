@@ -1,0 +1,105 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 21,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "release",
+      "inherits": "base",
+      "displayName": "Release",
+      "description": "Optimised build, no tests. What the .deb ships.",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "HYGGSHICUT_BUILD_TESTS": "OFF"
+      }
+    },
+    {
+      "name": "debug",
+      "inherits": "base",
+      "displayName": "Debug",
+      "description": "Unoptimised with debug info and the test targets enabled.",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "HYGGSHICUT_BUILD_TESTS": "ON"
+      }
+    },
+    {
+      "name": "tests",
+      "inherits": "base",
+      "displayName": "Tests (Release)",
+      "description": "Release build with tests on. Mirrors the CI job so a green local run means a green CI run.",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "HYGGSHICUT_BUILD_TESTS": "ON"
+      }
+    },
+    {
+      "name": "asan",
+      "inherits": "base",
+      "displayName": "AddressSanitizer",
+      "description": "Debug build with ASan+UBSan. Use for the decode/export paths, which do the raw AVFrame buffer arithmetic.",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "HYGGSHICUT_BUILD_TESTS": "ON",
+        "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer -g",
+        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined"
+      }
+    },
+    {
+      "name": "tidy",
+      "inherits": "tests",
+      "displayName": "clang-tidy",
+      "description": "Runs clang-tidy as part of the compile, using the repo .clang-tidy.",
+      "cacheVariables": {
+        "CMAKE_CXX_CLANG_TIDY": "clang-tidy"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "release",
+      "configurePreset": "release"
+    },
+    {
+      "name": "debug",
+      "configurePreset": "debug"
+    },
+    {
+      "name": "tests",
+      "configurePreset": "tests"
+    },
+    {
+      "name": "asan",
+      "configurePreset": "asan"
+    },
+    {
+      "name": "tidy",
+      "configurePreset": "tidy"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "tests",
+      "configurePreset": "tests",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "stopOnFailure": false
+      }
+    }
+  ]
+}

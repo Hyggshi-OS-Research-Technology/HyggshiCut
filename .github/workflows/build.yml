@@ -1,4 +1,4 @@
-name: Build Linux .deb
+name: Build Linux packages
 
 on:
   push:
@@ -7,7 +7,30 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
+  format:
+    name: Formatting (clang-format)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Install clang-format
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends clang-format
+
+      # Advisory for now: the tree predates .clang-format, so this reports
+      # what would change without failing the build. Remove `|| true` once the
+      # tree has been reformatted once, so new code cannot regress.
+      - name: Check formatting
+        run: |
+          mapfile -t files < <(git ls-files '*.cpp' '*.h')
+          echo "Checking ${#files[@]} files against .clang-format"
+          clang-format --dry-run --Werror "${files[@]}" || true
+
   build-deb:
     name: Build HyggshiCut .deb (Linux)
     runs-on: ubuntu-24.04
@@ -25,13 +48,11 @@ jobs:
 
       - name: Install build & packaging dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential cmake pkg-config dpkg-dev debhelper \
-            qt6-base-dev libqt6opengl6-dev \
-            libavformat-dev libavcodec-dev libavutil-dev libswscale-dev \
-            libswresample-dev libavfilter-dev \
-            libmpv-dev libasound2-dev libgl-dev
+          # Derived from debian/control so this list cannot drift away from
+          # what the .deb actually declares. Also installs ninja, which the
+          # CMake presets use as their generator.
+          ./scripts/install-build-deps.sh
+          sudo apt-get install -y --no-install-recommends ninja-build qt6-qpa-plugins
 
       - name: Build Debian package (.deb)
         run: |
@@ -49,15 +70,18 @@ jobs:
           dpkg-deb --info "${deb_file}"
           dpkg-deb --contents "${deb_file}" | head -40
 
-      - name: Build & run the offline Effect Layer test
+      - name: Build & run the offline core tests
         run: |
           # Tests are opt-in (HYGGSHICUT_BUILD_TESTS) and the .deb build above
-          # does not touch them, so compile+run the offline core test here to
-          # keep it from rotting. It needs no display, no real media (it
-          # generates its own tiny PNG) and spawns no ffmpeg process.
+          # does not touch them, so compile and run them here to keep them
+          # from rotting. They need no display and no real media.
+          #
+          # Every test is registered with CTest in CMakeLists.txt, so this
+          # runs the whole suite rather than a hand-maintained list that
+          # silently omitted tests as they were added.
           cmake -S . -B build-tests -DCMAKE_BUILD_TYPE=Release -DHYGGSHICUT_BUILD_TESTS=ON
-          cmake --build build-tests --target EffectLayerTest -j"$(nproc)"
-          ./build-tests/EffectLayerTest
+          cmake --build build-tests -j"$(nproc)"
+          ctest --test-dir build-tests --output-on-failure
 
       - name: Upload .deb artifact
         uses: actions/upload-artifact@v4
@@ -66,14 +90,90 @@ jobs:
           path: dist/*.deb
           if-no-files-found: error
 
-      - name: Create GitHub Release (only for version tags)
-        if: startsWith(github.ref, 'refs/tags/v')
+  build-appimage:
+    name: Build HyggshiCut AppImage (x86_64)
+    # The source uses FFmpeg 6 APIs; this also sets the image's glibc baseline.
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        shell: bash
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install build and AppImage dependencies
+        run: |
+          ./scripts/install-build-deps.sh
+          sudo apt-get install -y --no-install-recommends \
+            ffmpeg libfuse2 qt6-qpa-plugins curl
+
+      - name: Build AppImage
+        run: ./scripts/build-appimage.sh
+
+      - name: Smoke-test the AppImage
+        run: |
+          mapfile -t images < <(find dist -maxdepth 1 -type f -name '*.AppImage' -print)
+          test "${#images[@]}" -eq 1
+          chmod +x "${images[0]}"
+          output="$(APPIMAGE_EXTRACT_AND_RUN=1 QT_QPA_PLATFORM=offscreen \
+            "${images[0]}" --version)"
+          printf '%s\n' "$output"
+          grep -F "HyggshiCut 1.0.0" <<< "$output"
+
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hyggshicut-linux-appimage
+          path: dist/*.AppImage
+          if-no-files-found: error
+
+  release:
+    name: Publish Linux release assets
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build-deb, build-appimage]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Download .deb artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: hyggshicut-linux-deb
+          path: dist
+
+      - name: Download AppImage artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: hyggshicut-linux-appimage
+          path: dist
+
+      - name: Create or update GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DEB_FILE: ${{ env.deb_file }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" \
-            "${DEB_FILE}" \
-            --repo "${GITHUB_REPOSITORY}" \
-            --title "HyggshiCut ${GITHUB_REF_NAME}" \
-            --notes "Automatically built from tag **${GITHUB_REF_NAME}**.\n\n- Linux \`.deb\` package attached." || true
+          notes_file="$(mktemp)"
+          printf '%s\n\n%s\n' \
+            "Automatically built from tag **${GITHUB_REF_NAME}**." \
+            '- Linux `.deb` and x86_64 `.AppImage` packages attached.' > "$notes_file"
+
+          shopt -s nullglob
+          assets=(dist/*.deb dist/*.AppImage)
+          test "${#assets[@]}" -eq 2
+          if gh release view "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            gh release upload "${GITHUB_REF_NAME}" "${assets[@]}" \
+              --repo "${GITHUB_REPOSITORY}" --clobber
+          else
+            gh release create "${GITHUB_REF_NAME}" "${assets[@]}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --title "HyggshiCut ${GITHUB_REF_NAME}" \
+              --notes-file "$notes_file"
+          fi

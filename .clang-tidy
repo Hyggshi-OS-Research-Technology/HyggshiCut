@@ -1,0 +1,68 @@
+# HyggshiCut static analysis.
+#
+# Scoped deliberately. The point is to catch real defects (the kind that
+# already bit this codebase: uninitialised members, dangling captures in Qt
+# lambdas, narrowing conversions in timeline arithmetic) rather than to
+# enforce a house style that would flag thousands of pre-existing lines.
+#
+# Notably NOT enabled:
+#   readability-identifier-naming  - the tree mixes m_camelCase members,
+#                                    s_ file statics and k prefixed constants
+#                                    consistently enough; enabling this would
+#                                    produce noise, not bugs.
+#   modernize-use-trailing-return-type - purely stylistic churn.
+#   fuchsia-*, llvmlibc-*, altera-* - not applicable to a Qt desktop app.
+#   cppcoreguidelines-pro-bounds-* - fires on every C array and ffmpeg
+#                                    AVFrame->data[i] access; unusable here.
+
+Checks: >
+  -*,
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-narrowing-conversions,
+  clang-analyzer-*,
+  -clang-analyzer-optin.cplusplus.VirtualCall,
+  concurrency-*,
+  misc-*,
+  -misc-non-private-member-variables-in-classes,
+  -misc-no-recursion,
+  -misc-include-cleaner,
+  modernize-*,
+  -modernize-use-trailing-return-type,
+  -modernize-avoid-c-arrays,
+  -modernize-use-nodiscard,
+  performance-*,
+  readability-*,
+  -readability-identifier-naming,
+  -readability-magic-numbers,
+  -readability-function-cognitive-complexity,
+  -readability-braces-around-statements,
+  -readability-implicit-bool-conversion,
+  -readability-else-after-return,
+  -readability-named-parameter,
+  -readability-uppercase-literal-suffix,
+  -readability-avoid-nested-conditional-operator,
+  -readability-redundant-member-init
+
+# Only diagnose our own headers. Without this, Qt's and ffmpeg's headers
+# generate tens of thousands of warnings and drown out anything real.
+HeaderFilterRegex: '.*/src/.*\.h$'
+
+# Warnings are informational in CI; the workflow does not fail on them yet
+# (see .github/workflows/build.yml). Flip to true once the existing backlog
+# is cleared, so new code cannot add to it.
+WarningsAsErrors: ''
+
+FormatStyle: file
+
+CheckOptions:
+  # Qt's connect() and the ffmpeg C API use plain pointers everywhere; a
+  # length of 2 keeps short scope-local names like `p`, `r`, `fi` legal.
+  - key: readability-identifier-length.MinimumVariableNameLength
+    value: '1'
+  - key: readability-identifier-length.MinimumParameterNameLength
+    value: '1'
+  - key: modernize-loop-convert.MinConfidence
+    value: reasonable
+  - key: performance-unnecessary-value-param.AllowedTypes
+    value: 'QString;QStringList'

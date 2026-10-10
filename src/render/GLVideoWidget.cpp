@@ -325,6 +325,12 @@ GLVideoWidget::~GLVideoWidget() {
 static QString s_glRenderer = "OpenGL (Initializing)";
 static QString s_glVersion = "Core Profile";
 static QString s_glslVersion = "330 core";
+// Set once a GL context has actually been initialized, so callers outside the
+// widget (the environment check) can tell "not probed yet" from a real result.
+static bool s_glInitialized = false;
+// Mirrors m_gpuAvailable for the last widget that initialized: false means the
+// 3.3 core shaders failed to link and the CPU fallback renderer is in use.
+static bool s_glShadersOk = false;
 
 QString GLVideoWidget::rendererString() {
     return s_glRenderer;
@@ -338,6 +344,14 @@ QString GLVideoWidget::glslVersionString() {
     return s_glslVersion;
 }
 
+bool GLVideoWidget::glProbed() {
+    return s_glInitialized;
+}
+
+bool GLVideoWidget::glShadersLinked() {
+    return s_glShadersOk;
+}
+
 void GLVideoWidget::initializeGL() {
     initializeOpenGLFunctions();
     glClearColor(0.06f, 0.06f, 0.07f, 1.0f);
@@ -348,6 +362,7 @@ void GLVideoWidget::initializeGL() {
     if (r) s_glRenderer = QString::fromUtf8(r);
     if (v) s_glVersion = QString::fromUtf8(v);
     if (s) s_glslVersion = QString::fromUtf8(s);
+    s_glInitialized = true;
 
     qInfo() << "HyggshiCut Graphics Renderer:"
             << s_glRenderer
@@ -379,10 +394,12 @@ void GLVideoWidget::initializeGL() {
 
     if (!okYUV || !okRGBA || !okPresent) {
         m_gpuAvailable = false;
+        s_glShadersOk = false;
         qWarning() << "HyggshiCut: OpenGL 3.3 core shaders could not be linked! Activating CPU preview renderer.";
         return;
     }
     m_gpuAvailable = true;
+    s_glShadersOk = true;
 
     const float verts[] = {
         -1.0f, -1.0f,  0.0f, 1.0f,

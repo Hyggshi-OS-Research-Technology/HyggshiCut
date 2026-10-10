@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-hyggshicut-project">
+    <comment>HyggshiCut project</comment>
+    <glob pattern="*.hcproj"/>
+    <icon name="hyggshicut"/>
+    <generic-icon name="video-x-generic"/>
+  </mime-type>
+</mime-info>

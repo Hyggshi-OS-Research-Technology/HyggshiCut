@@ -13,7 +13,7 @@
 
 **Modern, Lightweight & High-Performance Professional Video Editor for Linux**
 
-[![C++20](https://hyggshi-badge.vercel.app/api/badge?message=20&label=C%2B%2B&color=3b82f6&labelColor=0f172a&icon=cpp&animation=gradient-shift)](https://en.wikipedia.org/wiki/C%2B%2B20)
+[![C++23](https://hyggshi-badge.vercel.app/api/badge?message=23&label=C%2B%2B&color=3b82f6&labelColor=0f172a&icon=cpp&animation=gradient-shift)](https://en.wikipedia.org/wiki/C%2B%2B23)
 [![Qt6](https://hyggshi-badge.vercel.app/api/badge?message=6.x&label=Qt&color=22c55e&labelColor=0f172a&icon=qt&animation=gradient-shift)](https://www.qt.io/)
 [![FFmpeg](https://hyggshi-badge.vercel.app/api/badge?message=libav*&label=FFmpeg&color=10b981&labelColor=0f172a&icon=ffmpeg&animation=gradient-shift)](https://ffmpeg.org/)
 [![OpenGL](https://hyggshi-badge.vercel.app/api/badge?message=3.3+Core&label=OpenGL&color=f97316&labelColor=0f172a&icon=opengl&animation=gradient-shift)](https://www.opengl.org/)
@@ -21,15 +21,18 @@
 [![Packaging](https://hyggshi-badge.vercel.app/api/badge?message=.deb&label=debain&color=ef4444&labelColor=0f172a&icon=debian&animation=gradient-shift)](https://www.debian.org/)
 
 [![GitHub License](https://hyggshi-badge.vercel.app/api/badge?message=MIT&label=icense&color=3b82f6&labelColor=0f172a&animation=gradient-shift)](LICENSE)
-[![HOSL13](https://hyggshi-badge.vercel.app/api/badge?message=HOSL+1.3&label=icense&color=3b82f6&labelColor=0f172a&animation=gradient-shift)](license)
-[![HOSL13](https://hyggshi-badge.vercel.app/api/badge?message=protected+by+license+HOSL+1.3&label=Hyggshi+DMCA+Report+System+Team&color=6366f1&labelColor=0f172a&animation=gradient-shift)](license)
+[![HOSL13](https://hyggshi-badge.vercel.app/api/badge?message=HOSL+1.3&label=icense&color=3b82f6&labelColor=0f172a&animation=gradient-shift)](LICENSE-HOSL-1.3.md)
+[![HOSL13](https://hyggshi-badge.vercel.app/api/badge?message=protected+by+license+HOSL+1.3&label=Hyggshi+DMCA+Report+System+Team&color=6366f1&labelColor=0f172a&animation=gradient-shift)](LICENSE-HOSL-1.3.md)
 
-[**Features**](#-key-features) •
-[**Installation**](#-installation) •
-[**Build from Source**](#-building-from-source) •
-[**Headless CLI Render**](#-headless-cli-render-guide) •
-[**Keyboard Shortcuts**](#-keyboard-shortcuts) •
-[**Plugins & Languages**](#-plugin-system--multi-language-support)
+[**Features**](#key-features) •
+[**Dependencies**](#system-requirements--dependencies) •
+[**Build from Source**](#building-from-source) •
+[**Packaging**](#packaging--installing-the-deb-package-debian--ubuntu) •
+[**Headless CLI Render**](#headless-cli-render-guide) •
+[**Autosave & Recovery**](#autosave--crash-recovery) •
+[**Environment Check**](#environment-check) •
+[**Keyboard Shortcuts**](#keyboard-shortcuts) •
+[**Plugins & Languages**](#plugin-system--multi-language-support)
 
 </div>
 
@@ -37,7 +40,7 @@
 
 ## Overview
 
-**HyggshiCut** is an open-source, professional video editor that is ultra-lightweight and highly optimized for Linux. Built on **C++20**, **Qt6**, **FFmpeg (libav\*)**, and an **OpenGL 3.3 Core** rendering backend, HyggshiCut delivers a smooth editing experience with an extremely low RAM footprint.
+**HyggshiCut** is an open-source, professional video editor that is ultra-lightweight and highly optimized for Linux. Built on **C++23 where supported (C++20 fallback)**, **Qt6**, **FFmpeg (libav\*)**, and an **OpenGL 3.3 Core** rendering backend, HyggshiCut delivers a smooth editing experience with an extremely low RAM footprint.
 
 Beyond its intuitive, modern graphical interface, HyggshiCut also ships with a built-in **Headless CLI Render Engine**, letting you automate batch video exports on a server or in a CI/CD pipeline with no display required.
 
@@ -120,7 +123,7 @@ sudo apt-get install -y \
   qt6-base-dev libqt6opengl6-dev \
   libavformat-dev libavcodec-dev libavutil-dev libswscale-dev \
   libswresample-dev libavfilter-dev \
-  libmpv-dev libasound2-dev libgl1-mesa-dev
+  libmpv-dev libasound2-dev libgl-dev
 ```
 
 ### Installing dependencies on Arch Linux:
@@ -139,30 +142,83 @@ sudo pacman -S base-devel cmake qt6-base qt6-declarative \
 git clone https://github.com/Hyggshi-OS-Research-Technology/HyggshiCut.git
 cd HyggshiCut
 
-# 2. Create the build directory
-mkdir -p build && cd build
+# 2. Install the build dependencies (parsed from debian/control, so this
+#    list can never drift away from what the .deb declares)
+./scripts/install-build-deps.sh
 
-# 3. Configure CMake (Release mode)
-cmake .. -DCMAKE_BUILD_TYPE=Release
-
-# 4. Build (using all CPU cores)
-cmake --build . -j"$(nproc)"
-
-# 5. Launch HyggshiCut
-./HyggshiCut
+# 3. Configure, build and launch
+cmake --preset release
+cmake --build --preset release
+./build/release/HyggshiCut
 ```
 
-### Building with tests enabled:
+### CMake presets
+
+`CMakePresets.json` defines the standard configurations, so nobody has to
+remember the flag combinations:
+
+| Preset | Build type | Tests | Purpose |
+|---|---|---|---|
+| `release` | Release | off | What the `.deb` ships |
+| `debug` | Debug | on | Day-to-day development |
+| `tests` | Release | on | Mirrors CI exactly — green locally means green in CI |
+| `asan` | Debug | on | AddressSanitizer + UBSan, for the decode/export buffer arithmetic |
+| `tidy` | Release | on | Runs `clang-tidy` as part of the compile |
 
 ```bash
-cmake .. -DCMAKE_BUILD_TYPE=Debug -DHYGGSHICUT_BUILD_TESTS=ON
-cmake --build . -j"$(nproc)"
-
-# Run smoke tests
-./HyggshiCutExportSmokeTest
-./SegmentBoundTest
-./UserProjectExportTest
+cmake --preset tests
+cmake --build --preset tests
+ctest --preset tests            # runs all 14 test binaries
 ```
+
+Presets use the Ninja generator (`sudo apt install ninja-build`). To build
+without presets, the old form still works:
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DHYGGSHICUT_BUILD_TESTS=ON
+cmake --build build -j"$(nproc)"
+ctest --test-dir build --output-on-failure
+```
+
+Every test target is registered with CTest, so `ctest` runs the whole suite;
+the ones needing a Qt platform plugin get `QT_QPA_PLATFORM=offscreen`
+automatically.
+
+### C++ standard
+
+The build targets **C++23** where the compiler supports it and falls back to
+C++20 otherwise (`check_cxx_compiler_flag` in `CMakeLists.txt`; the configure
+output reports which was chosen).
+
+Accepting `-std=c++23` says nothing about which *library* pieces exist, and
+the two move independently. GCC 12 is the concrete case: it compiles as C++23
+and ships `<expected>`, but has neither `std::format` nor `std::print` nor the
+C++23 ranges adaptors. So C++23 library facilities are never used behind a
+bare `__cplusplus` check — `src/core/CxxFeatures.h` exposes one `HC_HAS_*`
+macro per facility, each testing the specific `__cpp_lib_*` macro:
+
+```cpp
+#include "core/CxxFeatures.h"
+#if HC_HAS_STD_EXPECTED
+    std::expected<Frame, DecodeError> decode();
+#else
+    // C++20 fallback
+#endif
+```
+
+### Code style
+
+`.clang-format` and `.clang-tidy` are checked in, with values derived from the
+existing tree rather than a stock preset. `.editorconfig` mirrors them for
+editors.
+
+```bash
+clang-format -i $(git ls-files '*.cpp' '*.h')   # format
+cmake --preset tidy && cmake --build --preset tidy   # static analysis
+```
+
+CI reports formatting deviations but does not yet fail on them, because the
+tree predates the config.
 
 ---
 
@@ -176,6 +232,37 @@ dpkg-buildpackage -us -uc -b -j"$(nproc)"
 
 # Install the newly built .deb package
 sudo dpkg -i ../hyggshicut_*.deb || sudo apt-get install -f
+```
+
+### AppImage (x86_64)
+
+The CI build creates an x86_64 AppImage on Ubuntu 24.04 (glibc 2.39); use it
+on Ubuntu 24.04-compatible systems or newer. Pull-request builds upload it as
+the `hyggshicut-linux-appimage` artifact, and tagged releases attach it next
+to the `.deb`. The image bundles HyggshiCut's detected Qt/native runtime
+libraries and an `ffmpeg` executable; it still uses the host's graphics driver
+and desktop display services.
+
+Download the `.AppImage`, make it executable, and launch it:
+
+```bash
+chmod +x HyggshiCut-1.0.0-x86_64.AppImage
+./HyggshiCut-1.0.0-x86_64.AppImage
+```
+
+On systems without FUSE 2, use AppImage's extraction fallback:
+
+```bash
+APPIMAGE_EXTRACT_AND_RUN=1 ./HyggshiCut-1.0.0-x86_64.AppImage
+```
+
+To build one locally, install the [build dependencies](#installing-dependencies-on-ubuntu--debian),
+then install the runtime packager dependencies and run the build script:
+
+```bash
+sudo apt-get install -y curl ffmpeg libfuse2 qt6-qpa-plugins
+./scripts/build-appimage.sh
+# Output: dist/HyggshiCut-1.0.0-x86_64.AppImage
 ```
 
 ---
@@ -204,6 +291,7 @@ HyggshiCut --render -p <project.hcproj> -o <output.mp4> [options]
 | `--height <px>` | | Output frame height |
 | `--fps <fps>` | | Frame rate |
 | `--progress` | | Show a real-time render progress bar |
+| `--check-env` | | Run the environment check, print a report and exit (see below) |
 
 ### Usage examples:
 
@@ -220,31 +308,139 @@ HyggshiCut -r -p podcast.hcproj -o podcast_audio.mp3 --preset audio-mp3
 
 ---
 
+## Autosave & Crash Recovery
+
+A video editor dies more often than most applications — GPU driver resets, an
+ffmpeg child running out of memory on a 4K export, the OOM killer on a large
+timeline — and before this HyggshiCut only ever wrote a `.hcproj` when you
+pressed Ctrl+S. Everything since the last manual save was simply gone.
+
+HyggshiCut now snapshots the open project in the background:
+
+- Snapshots go to `~/.local/share/HyggshiCut/recovery/`, **not** your project
+  folder, so they never pollute a project directory or end up in version
+  control.
+- Every 2 minutes by default, and only when the project actually has unsaved
+  changes — an untouched timeline is never rewritten.
+- A snapshot is an ordinary `.hcproj`. Recovery is just "open this file", so
+  there is no second format that can fall out of sync.
+- On a normal exit the snapshot is deleted. Anything still there at startup
+  belongs to a session that **did not** exit cleanly, so that is exactly when
+  you are offered the work back.
+- Ownership is tracked by pid, and a pid is only treated as alive if it is
+  still a running HyggshiCut. A second instance running right now is not
+  mistaken for a crash, and a recycled pid is not mistaken for a live app.
+
+After a crash, the next launch offers **Recover**, **Discard**, or **Decide
+later** (which leaves the snapshot for next time). A recovered project is
+pointed back at your original file and marked modified, so Ctrl+S writes where
+you expect — never into the recovery directory.
+
+Configure it in **Settings → Window → Autosave & crash recovery** (on/off and
+a 15 s – 30 min interval). Changes take effect immediately.
+
+### Saving is now atomic
+
+`Project::saveToFile()` previously opened your `.hcproj` with `Truncate` and
+wrote straight into it. A crash, a full disk or a power cut part-way through
+left a truncated, unparseable project — and the previous good version was
+already gone. Saving now writes to a temporary file and renames it into place,
+so the original survives any failure, and a short write (disk full) is
+reported as an error instead of being silently treated as success.
+
+---
+
+## Environment Check
+
+HyggshiCut resolves several dependencies at **run time** rather than link time,
+and each of them fails in a way that is confusing when you hit it mid-edit: a
+missing `ffmpeg` binary breaks every export, a missing encoder only breaks the
+one codec you picked, a software OpenGL renderer just makes preview mysteriously
+slow, and missing language packs show raw translation keys.
+
+The environment check probes all of them and reports what works:
+
+- **ffmpeg binary** — resolved exactly the way the exporter resolves it (PATH,
+  then `/usr/bin`, `/usr/local/bin`, `/snap/bin`, `/bin`), plus its version.
+- **ffmpeg encoders** — verifies the encoders the export presets actually use
+  (`libx264`, `aac`, `libx265`, `libvpx-vp9`, `libsvtav1`, `prores_ks`,
+  `libmp3lame`, `pcm_s16le`). H.264 and AAC are errors when missing; the rest
+  are warnings, since only some presets need them.
+- **OpenGL renderer** — the live driver strings, flagging both a shader-link
+  failure (CPU fallback) and Mesa's software rasterisers (`llvmpipe`, `softpipe`,
+  `swrast`), which work but are slow.
+- **Audio output** — opens the ALSA `default` PCM device the same way the
+  timeline preview does, so it detects an unusable device rather than merely a
+  present one.
+- **Bundled assets** — `.langhc` and `.plhc` discovery across the same search
+  path the app uses.
+- **System** — Qt and libav\* build-vs-runtime versions (a major-version
+  mismatch is flagged), CPU cores and RAM against the thresholds that trigger
+  low-memory mode, and whether the proxy cache directory is genuinely writable.
+
+### From the GUI
+
+**Settings → Check Environment…**, or **Help → Check Environment…** — then press
+**Run check**. Results are colour-coded, each problem comes with a suggested fix,
+and **Copy report** puts the whole thing on the clipboard for a bug report.
+
+### From the command line
+
+```bash
+HyggshiCut --check-env
+```
+
+Prints a plain-text report and exits **0** when everything passes, **1** if any
+check failed — so it can gate an install script or a CI job:
+
+```bash
+HyggshiCut --check-env || echo "Environment is not ready"
+```
+
+This path runs without a GUI (it never constructs a `QApplication`), so it works
+over SSH and inside containers where no display is available.
+
+---
+
 ## Keyboard Shortcuts
+
+Shortcuts marked **(timeline)** only fire while the timeline has keyboard
+focus — click the timeline first. This is deliberate: it keeps single-key and
+clipboard shortcuts from being swallowed while you are typing in the Explorer
+search box or the Text panel.
 
 | Shortcut | Action |
 |---|---|
-| `Space` | Play / Pause |
-| `S` | Split clip at playhead |
-| `Delete` / `Backspace` | Delete the selected clip |
-| `Shift + Delete` | Delete the selected layer/track |
-| `Ctrl + C` | Copy the selected clip |
-| `Ctrl + V` | Paste the copied clip at the playhead |
-| `Ctrl + D` | Duplicate the selected clip |
-| `,` / `.` | Nudge the selected clip left / right by one frame |
-| `←` / `→` | Move back / forward 1 frame |
-| `↑` / `↓` | Move back / forward 5 seconds |
-| `Home` / `End` | Jump to the start / end of the timeline |
+| `Space` | Play / Pause **(timeline)** |
+| `S` | Split clip at playhead **(timeline)** |
+| `C` | Toggle the Cut (razor) tool **(timeline)** |
+| `Delete` / `Backspace` | Delete the selected clip **(timeline)** |
+| `Shift + Delete` | Delete the selected layer/track **(timeline)** |
+| `Ctrl + C` | Copy the selected clip **(timeline)** |
+| `Ctrl + V` | Paste the copied clip at the playhead **(timeline)** |
+| `Ctrl + D` | Duplicate the selected clip **(timeline)** |
+| `Ctrl + A` | Select the first clip **(timeline)** |
+| `Esc` | Deselect all **(timeline)** |
+| `,` / `.` | Nudge the selected clip left / right by one frame **(timeline)** |
+| `←` / `→` | Move back / forward 1 frame **(timeline)** |
+| `↑` / `↓` | Move back / forward 5 seconds **(timeline)** |
+| `Home` / `End` | Jump to the start / end of the timeline **(timeline)** |
 | `Ctrl + Z` | Undo |
 | `Ctrl + Y` / `Ctrl + Shift + Z` | Redo |
+| `Ctrl + N` / `Ctrl + O` | New project / Open project |
 | `Ctrl + I` | Open the Import Media dialog |
+| `Ctrl + Shift + R` | Screen recorder |
 | `Ctrl + T` | Add a new Text layer |
 | `Ctrl + Shift + L` | Add an Effect Layer (adjustment layer for the tracks below) |
 | `Ctrl + E` | Open the Export dialog (video & audio) |
 | `Ctrl + Shift + P` | Project frame & Canvas settings |
+| `Ctrl + ,` | Preferences / Settings |
 | `Ctrl + S` | Save project |
 | `Ctrl + Shift + S` | Save project as (Save As) |
-| `+` / `-` (or `Ctrl + Scroll`) | Zoom In / Zoom Out on the Timeline |
+| `Ctrl + Q` | Quit |
+| `Ctrl + +` / `Ctrl + -` | Zoom In / Zoom Out on the Timeline |
+| `+` / `-` | Zoom In / Zoom Out on the Timeline **(timeline)** |
+| `Ctrl`/`Alt` + `Wheel` | Zoom the timeline around the cursor |
 | `Shift + Z` | Fit the whole timeline to the window (Zoom to fit) |
 | `Mouse Wheel` | Pan the timeline horizontally (`Shift + Wheel` scrolls vertically) |
 
@@ -282,14 +478,18 @@ The UI supports multiple languages with instant switching — no application res
 ```
 HyggshiCut/
 ├── CMakeLists.txt              # Main CMake build configuration
+├── Dockerfile                  # Builder (+ .deb) and GUI runtime images
+├── docker-compose.yml          # `build-deb` and `app` services
 ├── debian/                     # .deb packaging configuration for Linux
+├── docs/                       # Additional documentation (Docker, core features)
 ├── languages/                  # Language packs (.langhc)
 ├── plugins/                    # Effects and color preset packs (.plhc)
+├── scripts/                    # Docker build/run helper scripts
 ├── src/
 │   ├── main.cpp                # Application entry point & Headless CLI handling
 │   ├── audio/                  # Audio filter chain processing (EQ, Denoise, Compressor)
 │   ├── cache/                  # Data & render caching
-│   ├── core/                   # Core data models: Project, Timeline, Track, Clip, MediaAsset
+│   ├── core/                   # Core data models + EnvironmentCheck (runtime diagnostics)
 │   ├── decode/                 # FFmpeg media demuxing & decoding
 │   ├── export/                 # RAM-optimized video export engine (Single-pass Exporter)
 │   ├── i18n/                   # LanguageManager
@@ -297,7 +497,8 @@ HyggshiCut/
 │   ├── plugin/                 # PluginManager loading and management system
 │   ├── render/                 # OpenGL 3.3 Core renderer, TextRenderer, TextureCache
 │   └── ui/                     # Qt6 UI (Timeline, Transform, Effects, ColorWheel, ExportDialog...)
-└── tests/                      # Feature and export engine test suite
+├── tests/                      # Feature and export engine test suite
+└── Resources/                  # Icons and branding assets
 ```
 
 ---
@@ -307,7 +508,8 @@ HyggshiCut/
 - **Author:** Hyggshi OS Foundation / Hyggshi OS Research Technology
 - **Contact / Support:** [hyggshidev@gmail.com](mailto:hyggshidev@gmail.com)
 - **Homepage:** [https://hyggshi-os-website.pages.dev/](https://hyggshi-os-website.pages.dev/)
-- **Source code:** Released under an open-source license.
+- **Source code:** Dual-licensed — the MIT licence ([`LICENSE`](LICENSE)) and the
+  Hyggshi OS License v1.3 ([`LICENSE-HOSL-1.3.md`](LICENSE-HOSL-1.3.md)).
 
 ---
 

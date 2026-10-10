@@ -1,11 +1,13 @@
 #include "Project.h"
 #include <QFile>
+#include <QSaveFile>
 #include <QFileInfo>
 #include <QDir>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
 #include <algorithm>
+#include <ranges>
 
 namespace hc {
 
@@ -210,8 +212,9 @@ Clip clipFromJson(const QJsonObject& o) {
             kf.value.opacity = k["opacity"].toDouble(1.0);
             c.transformKeyframes.push_back(kf);
         }
-        std::sort(c.transformKeyframes.begin(), c.transformKeyframes.end(),
-                  [](const TransformKeyframe& a, const TransformKeyframe& b) { return a.time < b.time; });
+        // Sort by .time using a projection rather than a comparator lambda:
+        // there is no way to get the operands backwards.
+        std::ranges::sort(c.transformKeyframes, {}, &TransformKeyframe::time);
     }
     c.fadeInDuration = o["fadeInDuration"].toString().toLongLong();
     c.fadeOutDuration = o["fadeOutDuration"].toString().toLongLong();
@@ -291,11 +294,10 @@ MediaAssetPtr Project::findAsset(const QString& assetId) const {
 }
 
 bool Project::removeAsset(const QString& assetId) {
-    const auto before = m_assets.size();
-    m_assets.erase(std::remove_if(m_assets.begin(), m_assets.end(),
-                                   [&](const MediaAssetPtr& a) { return a->id == assetId; }),
-                   m_assets.end());
-    const bool changed = m_assets.size() != before;
+    // std::erase_if replaces the erase(remove_if(...), end()) idiom and
+    // returns the number removed, so the size comparison is unnecessary.
+    const bool changed =
+        std::erase_if(m_assets, [&](const MediaAssetPtr& a) { return a->id == assetId; }) > 0;
     if (changed) emit assetsChanged();
     return changed;
 }
@@ -435,13 +437,33 @@ bool Project::saveToFile(const QString& path, QString* errorOut) {
         return false;
     }
 
-    QFile file(path);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+    // Write atomically. The previous code opened the real file with Truncate
+    // and wrote straight into it, so an app crash, a full disk or a power cut
+    // part-way through left the user with a truncated, unparseable .hcproj —
+    // and the previous good version was already gone. QSaveFile writes to a
+    // temporary alongside the target and rename()s it into place on commit(),
+    // so the original survives any failure and readers never observe a
+    // half-written file.
+    QSaveFile file(path);
+    if (!file.open(QIODevice::WriteOnly)) {
         if (errorOut) *errorOut = QStringLiteral("Không ghi được file dự án: %1").arg(path);
         return false;
     }
-    file.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
-    file.close();
+
+    const QByteArray payload = QJsonDocument(root).toJson(QJsonDocument::Indented);
+    if (file.write(payload) != payload.size()) {
+        // Checked explicitly: a short write (disk full, quota) used to be
+        // ignored and the function still returned true, reporting success
+        // for a corrupt file.
+        if (errorOut) *errorOut = QStringLiteral("Ghi file dự án bị lỗi (đĩa đầy?): %1").arg(path);
+        file.cancelWriting();
+        return false;
+    }
+    if (!file.commit()) {
+        if (errorOut) *errorOut = QStringLiteral("Không hoàn tất ghi file dự án: %1").arg(file.errorString());
+        return false;
+    }
+
     filePath = path;
     return true;
 }

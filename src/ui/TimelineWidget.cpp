@@ -2028,10 +2028,13 @@ void TimelineWidget::mouseDoubleClickEvent(QMouseEvent* event) {
 }
 
 void TimelineWidget::keyPressEvent(QKeyEvent* event) {
-    if (event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace) {
+    // NOTE: Delete and S are NOT handled here. MainWindow registers them as
+    // QActions on this widget with Qt::WidgetWithChildrenShortcut, and Qt
+    // dispatches a matching shortcut before it ever delivers a key event, so
+    // a branch for them here would be dead code that silently diverges from
+    // the menu action. Backspace has no menu action, so it is handled below.
+    if (event->key() == Qt::Key_Backspace) {
         deleteSelectedClip();
-    } else if (event->key() == Qt::Key_S) {
-        splitAtPlayhead();
     } else if (event->key() == Qt::Key_Space) {
         emit togglePlaybackRequested();
     } else if (event->key() == Qt::Key_Left || event->key() == Qt::Key_Right ||
@@ -2058,6 +2061,16 @@ void TimelineWidget::keyPressEvent(QKeyEvent* event) {
         const Ticks end = m_project ? m_project->timeline().totalDuration() : 0;
         setPlayheadTime(end);
         emit seekRequested(m_playheadTime);
+    } else if (event->key() == Qt::Key_Plus || event->key() == Qt::Key_Equal) {
+        // Bare +/- zoom, as documented in the README's shortcut table. The
+        // menu's Ctrl++/Ctrl+- (QKeySequence::ZoomIn/ZoomOut) keep working;
+        // handling the unmodified keys here rather than as a window-level
+        // shortcut keeps them from swallowing "+"/"-" typed into a text field,
+        // since keyPressEvent only runs while the timeline has focus.
+        // Key_Equal is included because "+" is Shift+"=" on most layouts.
+        zoomBy(1.25);
+    } else if (event->key() == Qt::Key_Minus || event->key() == Qt::Key_Underscore) {
+        zoomBy(1.0 / 1.25);
     } else {
         QWidget::keyPressEvent(event);
     }

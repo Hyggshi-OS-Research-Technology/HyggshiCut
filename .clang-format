@@ -1,0 +1,75 @@
+# HyggshiCut C++ formatting.
+#
+# These values were derived from the existing tree rather than picked from a
+# preset, so applying clang-format is a near no-op on code that is already
+# written the way the project writes it:
+#
+#   indent width      4        (9664 lines at 4-space steps vs 4014 at 8)
+#   tabs              none     (0 files contain a tab)
+#   brace style       attached (553 same-line function braces vs 19 next-line)
+#   pointer alignment left     (627 "T* x" vs 10 "T *x")
+#   column limit      100      (p95 = 89 chars, p99 = 115)
+#
+# A column limit of 100 keeps the long Qt signal/slot connect() calls and the
+# ffmpeg filter-graph string builders on one line while still catching the
+# genuinely runaway ones.
+Language: Cpp
+BasedOnStyle: LLVM
+
+Standard: c++20
+ColumnLimit: 100
+
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+AccessModifierOffset: -4
+IndentCaseLabels: true
+NamespaceIndentation: None
+
+PointerAlignment: Left
+ReferenceAlignment: Left
+DerivePointerAlignment: false
+
+BreakBeforeBraces: Custom
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortLoopsOnASingleLine: true
+AllowShortCaseLabelsOnASingleLine: true
+
+# The tree indents nested #if/#define blocks (see the __has_include guards in
+# EnvironmentCheck.cpp and main.cpp); keep that instead of flattening them.
+IndentPPDirectives: AfterHash
+
+AlwaysBreakTemplateDeclarations: Yes
+BinPackArguments: true
+BinPackParameters: true
+SpaceAfterTemplateKeyword: false
+Cpp11BracedListStyle: true
+FixNamespaceComments: true
+SortUsingDeclarations: true
+
+# Qt headers first, then our own, then the C/C++ standard library. Keeping
+# the extern "C" ffmpeg block in its own group stops clang-format from
+# shuffling it into the middle of the Qt includes, which would break the
+# extern "C" wrapper in files that rely on include order.
+SortIncludes: false
+
+EmptyLineBeforeAccessModifier: LogicalBlock
+KeepEmptyLinesAtTheStartOfBlocks: false
+MaxEmptyLinesToKeep: 2
+BraceWrapping:
+  AfterClass: false
+  AfterControlStatement: Never
+  AfterEnum: false
+  AfterFunction: false
+  AfterNamespace: false
+  AfterStruct: false
+  AfterUnion: false
+  AfterExternBlock: false
+  BeforeCatch: false
+  BeforeElse: false
+  BeforeLambdaBody: false
+  BeforeWhile: false
+  SplitEmptyFunction: false
+  SplitEmptyRecord: false
+  SplitEmptyNamespace: false

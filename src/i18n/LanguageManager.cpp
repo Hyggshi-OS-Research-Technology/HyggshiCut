@@ -6,6 +6,8 @@
 #include <QStandardPaths>
 #include <QDir>
 #include <QCoreApplication>
+#include <algorithm>
+#include <ranges>
 
 namespace hc {
 
@@ -62,7 +64,9 @@ void LanguageManager::discoverBundledLanguages() {
     QStringList langDirs = {
         QDir(appDir).filePath("languages"),
         QDir(appDir).filePath("../languages"),
+        QDir(appDir).filePath("../share/hyggshicut/languages"),
         QDir::current().filePath("languages"),
+        "/usr/local/share/hyggshicut/languages",
         "/usr/share/hyggshicut/languages"
     };
 
@@ -110,9 +114,7 @@ QString LanguageManager::translate(const QString& key) const {
 
 QList<LanguagePack> LanguageManager::availableLanguages() const {
     auto values = m_packs.values();
-    std::sort(values.begin(), values.end(), [](const LanguagePack& a, const LanguagePack& b) {
-        return a.nativeName < b.nativeName;
-    });
+    std::ranges::sort(values, {}, &LanguagePack::nativeName);
     return values;
 }
 

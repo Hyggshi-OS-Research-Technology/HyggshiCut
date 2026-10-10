@@ -67,3 +67,23 @@ vcpkg_installed/
 # test output & cache
 Testing/
 .cache/
+build-tests/
+
+# Debian packaging build artefacts
+obj-*/
+debian/.debhelper/
+debian/debhelper-build-stamp
+debian/files
+debian/hyggshicut/
+debian/hyggshicut.substvars
+*.deb
+*.ddeb
+*.buildinfo
+*.changes
+
+# Release/source archives (build outputs, not sources)
+*.zip
+*.tar.gz
+
+# AppImage build outputs
+*.AppImage

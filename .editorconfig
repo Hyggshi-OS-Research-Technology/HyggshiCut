@@ -1,0 +1,33 @@
+# Editor defaults matching .clang-format, so files are already close to
+# correct before clang-format ever runs.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{cpp,h,hpp,c,cc}]
+indent_style = space
+indent_size = 4
+max_line_length = 100
+
+[*.{json,langhc,plhc,yml,yaml}]
+indent_style = space
+indent_size = 2
+
+[CMakeLists.txt]
+indent_style = space
+indent_size = 4
+
+[*.cmake]
+indent_style = space
+indent_size = 4
+
+[*.sh]
+indent_style = space
+indent_size = 4
+
+[Makefile]
+indent_style = tab
