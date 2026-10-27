@@ -347,11 +347,11 @@ QWidget* WindowSettingsDialog::createProxyTab() {
     proxyForm->addRow(m_useProxyCheck);
 
     m_proxyResolutionCombo = new QComboBox(proxyGroup);
-    m_proxyResolutionCombo->addItem("Tự động (4K/8K → 720p, HD → 480p) (Mặc định)", 0);
-    m_proxyResolutionCombo->addItem("480p (854x480) - Tiết kiệm RAM/VRAM", 854);
-    m_proxyResolutionCombo->addItem("540p (960x540) - Cân bằng", 960);
-    m_proxyResolutionCombo->addItem("720p (1280x720) - Chất lượng cao", 1280);
-    m_proxyResolutionCombo->addItem("360p (640x360) - Siêu nhanh", 640);
+    m_proxyResolutionCombo->addItem(LTR("legacy.8ebf6c710cb85987"), 0);
+    m_proxyResolutionCombo->addItem(LTR("legacy.18b1a3920702b1fe"), 854);
+    m_proxyResolutionCombo->addItem(LTR("legacy.036730cf8f462df2"), 960);
+    m_proxyResolutionCombo->addItem(LTR("legacy.e80ed951553944a5"), 1280);
+    m_proxyResolutionCombo->addItem(LTR("legacy.3951c18efb6bd2ee"), 640);
     proxyForm->addRow(LTR("settings.proxy.resolution"), m_proxyResolutionCombo);
 
     auto* dirLayout = new QHBoxLayout();
@@ -591,7 +591,7 @@ QWidget* WindowSettingsDialog::createAboutTab() {
     titleLabel->setAlignment(Qt::AlignCenter);
     tabLayout->addWidget(titleLabel);
 
-    auto* verLabel = new QLabel("Phiên bản 1.0.0 (x86_64 Linux)", tab);
+    auto* verLabel = new QLabel(LTR("legacy.cabb40dd838fcdea"), tab);
     verLabel->setStyleSheet("color: #aaa; margin-bottom: 12px;");
     verLabel->setAlignment(Qt::AlignCenter);
     tabLayout->addWidget(verLabel);

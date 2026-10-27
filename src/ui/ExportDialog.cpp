@@ -36,17 +36,17 @@ const std::vector<ExportPresetItem>& exportPresets() {
     static const std::vector<ExportPresetItem> presets = {
         { "YouTube 1080p FHD (H.264, 12 Mbps, AAC 192k)", "mp4", 1920, 1080, 30.0, "libx264", "bitrate", 12000, 21, "medium", "aac", 192, 48000, 2 },
         { "YouTube 4K UHD (H.264, 40 Mbps, AAC 320k)",   "mp4", 3840, 2160, 60.0, "libx264", "bitrate", 40000, 21, "medium", "aac", 320, 48000, 2 },
-        { "TikTok / Reels / Shorts 9:16 (1080x1920 Dọc)", "mp4", 1080, 1920, 30.0, "libx264", "bitrate", 10000, 21, "medium", "aac", 192, 48000, 2 },
-        { "Instagram Post 1:1 (1080x1080 Vuông)",         "mp4", 1080, 1080, 30.0, "libx264", "bitrate", 8000,  21, "medium", "aac", 192, 48000, 2 },
-        { "H.264 Chất lượng cao (CRF 18, Lossless-like)", "mp4", 1920, 1080, 30.0, "libx264", "crf",     8000,  18, "slow",   "aac", 256, 48000, 2 },
-        { "H.265 / HEVC Siêu nhẹ (CRF 24, AAC 128k)",     "mp4", 1920, 1080, 30.0, "libx265", "crf",     4000,  24, "medium", "aac", 128, 48000, 2 },
-        { "Apple ProRes 422 HQ (Chuyên nghiệp MOV)",      "mov", 1920, 1080, 30.0, "prores_ks", "bitrate", 0,     0,  "",       "pcm_s16le", 0, 48000, 2 },
+        { LTR("legacy.913fbca979ce2b82"), "mp4", 1080, 1920, 30.0, "libx264", "bitrate", 10000, 21, "medium", "aac", 192, 48000, 2 },
+        { LTR("legacy.9c52bd22921858cc"),         "mp4", 1080, 1080, 30.0, "libx264", "bitrate", 8000,  21, "medium", "aac", 192, 48000, 2 },
+        { LTR("legacy.478bd97c8a92860c"), "mp4", 1920, 1080, 30.0, "libx264", "crf",     8000,  18, "slow",   "aac", 256, 48000, 2 },
+        { LTR("legacy.97a9c327e0a4ce00"),     "mp4", 1920, 1080, 30.0, "libx265", "crf",     4000,  24, "medium", "aac", 128, 48000, 2 },
+        { LTR("legacy.9e63ac65324e63d2"),      "mov", 1920, 1080, 30.0, "prores_ks", "bitrate", 0,     0,  "",       "pcm_s16le", 0, 48000, 2 },
         { "WebM / VP9 Video cho Web (VP9 + Opus)",        "webm",1920, 1080, 30.0, "libvpx-vp9", "crf",   0,     28, "medium", "libopus", 128, 48000, 2 },
-        { "Chỉ xuất Âm thanh MP3 (320 kbps High Quality)","mp3", 0,    0,    0.0,  "none",    "bitrate", 0,     0,  "",       "libmp3lame", 320, 48000, 2 },
-        { "Chỉ xuất Âm thanh WAV (Lossless PCM 16-bit)",  "wav", 0,    0,    0.0,  "none",    "bitrate", 0,     0,  "",       "pcm_s16le", 0, 48000, 2 },
+        { LTR("legacy.1e09f3243360e2bf"),"mp3", 0,    0,    0.0,  "none",    "bitrate", 0,     0,  "",       "libmp3lame", 320, 48000, 2 },
+        { LTR("legacy.1ffb03ae1949db82"),  "wav", 0,    0,    0.0,  "none",    "bitrate", 0,     0,  "",       "pcm_s16le", 0, 48000, 2 },
         // Low-spec PC preset: ultrafast encode + low bitrate for stability on weak machines
-        { "Máy yếu / Nhanh (H.264 Ultrafast, 4 Mbps, 720p)", "mp4", 1280, 720, 30.0, "libx264", "bitrate", 4000, 28, "ultrafast", "aac", 128, 48000, 2 },
-        { "Tùy chỉnh (Custom)",                           "mp4", 1920, 1080, 30.0, "libx264", "bitrate", 8000,  21, "medium", "aac", 192, 48000, 2 }
+        { LTR("legacy.619e783a7fe8cb33"), "mp4", 1280, 720, 30.0, "libx264", "bitrate", 4000, 28, "ultrafast", "aac", 128, 48000, 2 },
+        { LTR("legacy.59d13a48f16c67d0"),                           "mp4", 1920, 1080, 30.0, "libx264", "bitrate", 8000,  21, "medium", "aac", 192, 48000, 2 }
     };
     return presets;
 }
@@ -55,7 +55,7 @@ const std::vector<ExportPresetItem>& exportPresets() {
 
 ExportDialog::ExportDialog(Project* project, QWidget* parent)
     : QDialog(parent), m_project(project) {
-    setWindowTitle(tr("Xuất video & âm thanh (Export Media)"));
+    setWindowTitle(LTR("legacy.6bf39d399fbdd349"));
     resize(580, 680);
     setStyleSheet(
         "QDialog { background-color: #1e1e22; color: #eee; }"
@@ -96,7 +96,7 @@ void ExportDialog::setupUi() {
     mainLayout->setContentsMargins(16, 16, 16, 16);
 
     // Preset & Destination
-    auto* topGroup = new QGroupBox(tr("Mẫu xuất & Nơi lưu"), this);
+    auto* topGroup = new QGroupBox(LTR("legacy.04a00ce9a5d7228b"), this);
     auto* topLayout = new QFormLayout(topGroup);
     topLayout->setContentsMargins(12, 16, 12, 12);
     topLayout->setSpacing(8);
@@ -107,15 +107,15 @@ void ExportDialog::setupUi() {
     }
     connect(m_presetCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &ExportDialog::onPresetChanged);
-    topLayout->addRow(tr("Mẫu định sẵn (Preset):"), m_presetCombo);
+    topLayout->addRow(LTR("legacy.e7b3bcf01bab8503"), m_presetCombo);
 
     auto* pathRow = new QHBoxLayout();
     m_pathEdit = new QLineEdit(this);
-    m_browseBtn = new QPushButton(tr("Chọn nơi lưu..."), this);
+    m_browseBtn = new QPushButton(LTR("legacy.8eef8863fe637c6a"), this);
     connect(m_browseBtn, &QPushButton::clicked, this, &ExportDialog::onBrowse);
     pathRow->addWidget(m_pathEdit, 1);
     pathRow->addWidget(m_browseBtn);
-    topLayout->addRow(tr("Đường dẫn lưu:"), pathRow);
+    topLayout->addRow(LTR("legacy.c46b7177dbb9d273"), pathRow);
 
     mainLayout->addWidget(topGroup);
 
@@ -137,18 +137,18 @@ void ExportDialog::setupUi() {
     m_formatCombo->addItem("Audio WAV (.wav)", "wav");
     connect(m_formatCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &ExportDialog::onFormatChanged);
-    vLayout->addRow(tr("Định dạng file (Format):"), m_formatCombo);
+    vLayout->addRow(LTR("legacy.f71d7e82c70e5203"), m_formatCombo);
 
     m_vCodecCombo = new QComboBox(videoTab);
-    m_vCodecCombo->addItem("H.264 (libx264 - Tương thích nhất)", "libx264");
-    m_vCodecCombo->addItem("H.265 / HEVC (libx265 - Dung lượng nhẹ)", "libx265");
-    m_vCodecCombo->addItem("VP9 (libvpx-vp9 - Dành cho web)", "libvpx-vp9");
-    m_vCodecCombo->addItem("AV1 (libsvtav1 - Thế hệ mới)", "libsvtav1");
-    m_vCodecCombo->addItem("Apple ProRes (prores_ks - Dựng phim)", "prores_ks");
-    m_vCodecCombo->addItem("Tắt Video (Chỉ xuất âm thanh)", "none");
+    m_vCodecCombo->addItem(LTR("legacy.cc10035475246fb7"), "libx264");
+    m_vCodecCombo->addItem(LTR("legacy.6efda910237c148e"), "libx265");
+    m_vCodecCombo->addItem(LTR("legacy.baaf442d34dcbf80"), "libvpx-vp9");
+    m_vCodecCombo->addItem(LTR("legacy.c85b57b295b2ca6a"), "libsvtav1");
+    m_vCodecCombo->addItem(LTR("legacy.3ece12bf0b78edf6"), "prores_ks");
+    m_vCodecCombo->addItem(LTR("legacy.1f7d5bc128994a07"), "none");
     connect(m_vCodecCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &ExportDialog::onVideoCodecChanged);
-    vLayout->addRow(tr("Bộ mã hóa Video (Codec):"), m_vCodecCombo);
+    vLayout->addRow(LTR("legacy.133fbd97b7f2bfa2"), m_vCodecCombo);
 
     // Resolution & FPS row
     auto* resRow = new QHBoxLayout();
@@ -176,7 +176,7 @@ void ExportDialog::setupUi() {
     resRow->addSpacing(10);
     resRow->addWidget(new QLabel(tr("FPS:"), videoTab));
     resRow->addWidget(m_fpsSpin);
-    vLayout->addRow(tr("Độ phân giải & FPS:"), resRow);
+    vLayout->addRow(LTR("legacy.3923cb94f033fed7"), resRow);
 
     // Quality Rate Control Mode
     auto* rateBox = new QHBoxLayout();
@@ -189,7 +189,7 @@ void ExportDialog::setupUi() {
     connect(m_bitrateRadio, &QRadioButton::toggled, this, &ExportDialog::onRateControlToggled);
     rateBox->addWidget(m_bitrateRadio);
     rateBox->addWidget(m_crfRadio);
-    vLayout->addRow(tr("Chế độ chất lượng:"), rateBox);
+    vLayout->addRow(LTR("legacy.86a55c9b41fb7bd3"), rateBox);
 
     // Video Bitrate
     m_vBitrateSpin = new QSpinBox(videoTab);
@@ -205,37 +205,37 @@ void ExportDialog::setupUi() {
     m_crfSlider = new QSlider(Qt::Horizontal, videoTab);
     m_crfSlider->setRange(0, 51);
     m_crfSlider->setValue(21);
-    m_crfLabel = new QLabel("21 (Mặc định)", videoTab);
+    m_crfLabel = new QLabel(LTR("legacy.5436e302bca22a3f"), videoTab);
     m_crfLabel->setFixedWidth(90);
     connect(m_crfSlider, &QSlider::valueChanged, this, [this](int val) {
-        QString desc = (val <= 18) ? tr("%1 (Cực nét)").arg(val)
-                     : (val <= 23) ? tr("%1 (Cân bằng)").arg(val)
-                     : tr("%1 (Nhẹ)").arg(val);
+        QString desc = (val <= 18) ? LTR("legacy.3c86e727f10020eb").arg(val)
+                     : (val <= 23) ? LTR("legacy.80c74d1da16bb3f1").arg(val)
+                     : LTR("legacy.20be1e99f8ae2b44").arg(val);
         m_crfLabel->setText(desc);
     });
     crfRow->addWidget(m_crfSlider, 1);
     crfRow->addWidget(m_crfLabel);
-    vLayout->addRow(tr("Mức CRF (0-51):"), crfRow);
+    vLayout->addRow(LTR("legacy.38ad5dadeb9a425e"), crfRow);
     m_crfSlider->setEnabled(false);
 
     // Speed / Preset
     m_speedPresetCombo = new QComboBox(videoTab);
-    m_speedPresetCombo->addItem("Ultrafast (Xuất cực nhanh)", "ultrafast");
+    m_speedPresetCombo->addItem(LTR("legacy.15394b24b863f715"), "ultrafast");
     m_speedPresetCombo->addItem("Veryfast (Nhanh)", "veryfast");
     m_speedPresetCombo->addItem("Fast", "fast");
-    m_speedPresetCombo->addItem("Medium (Cân bằng mặc định)", "medium");
-    m_speedPresetCombo->addItem("Slow (Nén tốt hơn)", "slow");
-    m_speedPresetCombo->addItem("Slower (Chất lượng tối ưu)", "slower");
+    m_speedPresetCombo->addItem(LTR("legacy.82db88b2840db33d"), "medium");
+    m_speedPresetCombo->addItem(LTR("legacy.339b027117a70c69"), "slow");
+    m_speedPresetCombo->addItem(LTR("legacy.ac29b54c9d0a8030"), "slower");
     m_speedPresetCombo->setCurrentIndex(3);
-    vLayout->addRow(tr("Tốc độ nén (Speed):"), m_speedPresetCombo);
+    vLayout->addRow(LTR("legacy.558a06b06d496289"), m_speedPresetCombo);
 
     // Pixel Format
     m_pixFmtCombo = new QComboBox(videoTab);
-    m_pixFmtCombo->addItem("YUV 4:2:0 8-bit (Tiêu chuẩn mọi thiết bị)", "yuv420p");
-    m_pixFmtCombo->addItem("YUV 4:2:0 10-bit (Màu sắc mượt mà)", "yuv420p10le");
-    m_pixFmtCombo->addItem("YUV 4:2:2 8-bit (Chất lượng cao)", "yuv422p");
-    m_pixFmtCombo->addItem("YUV 4:4:4 8-bit (Không nén chroma)", "yuv444p");
-    vLayout->addRow(tr("Định dạng màu (Pixel):"), m_pixFmtCombo);
+    m_pixFmtCombo->addItem(LTR("legacy.7da340d46dd1d901"), "yuv420p");
+    m_pixFmtCombo->addItem(LTR("legacy.f05d95b296e80e1c"), "yuv420p10le");
+    m_pixFmtCombo->addItem(LTR("legacy.8980a7f960e6749b"), "yuv422p");
+    m_pixFmtCombo->addItem(LTR("legacy.f4ca9957d2cad6ba"), "yuv444p");
+    vLayout->addRow(LTR("legacy.1f20165aa81ee324"), m_pixFmtCombo);
 
     tabs->addTab(videoTab, tr("Video"));
 
@@ -246,42 +246,42 @@ void ExportDialog::setupUi() {
     aLayout->setSpacing(8);
 
     m_aCodecCombo = new QComboBox(audioTab);
-    m_aCodecCombo->addItem("AAC (Mặc định chuẩn)", "aac");
+    m_aCodecCombo->addItem(LTR("legacy.79e46e890fcafa3d"), "aac");
     m_aCodecCombo->addItem("MP3 (libmp3lame)", "libmp3lame");
-    m_aCodecCombo->addItem("Opus (libopus - Nén hiện đại)", "libopus");
+    m_aCodecCombo->addItem(LTR("legacy.c9e070f9389033b4"), "libopus");
     m_aCodecCombo->addItem("PCM 16-bit (Lossless WAV)", "pcm_s16le");
     m_aCodecCombo->addItem("FLAC (Lossless)", "flac");
-    m_aCodecCombo->addItem("Tắt âm thanh (Mute)", "none");
-    aLayout->addRow(tr("Bộ mã hóa Audio:"), m_aCodecCombo);
+    m_aCodecCombo->addItem(LTR("legacy.946966460132bfbf"), "none");
+    aLayout->addRow(LTR("legacy.42519d04b0ba2bb2"), m_aCodecCombo);
 
     m_aBitrateCombo = new QComboBox(audioTab);
-    m_aBitrateCombo->addItem("320 kbps (Chất lượng cao nhất)", 320);
-    m_aBitrateCombo->addItem("256 kbps (Rất tốt)", 256);
-    m_aBitrateCombo->addItem("192 kbps (Chuẩn phát sóng)", 192);
-    m_aBitrateCombo->addItem("128 kbps (Cân bằng)", 128);
-    m_aBitrateCombo->addItem("96 kbps (Tiết kiệm)", 96);
+    m_aBitrateCombo->addItem(LTR("legacy.df0bfcfd7b2cf9c2"), 320);
+    m_aBitrateCombo->addItem(LTR("legacy.ebf95e337d6200d0"), 256);
+    m_aBitrateCombo->addItem(LTR("legacy.1eaf3f6f3c34d587"), 192);
+    m_aBitrateCombo->addItem(LTR("legacy.31de6e77f6e66e06"), 128);
+    m_aBitrateCombo->addItem(LTR("legacy.b6101eeb39384ae4"), 96);
     m_aBitrateCombo->setCurrentIndex(2);
     connect(m_aBitrateCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &ExportDialog::updateEstimatedSize);
     aLayout->addRow(tr("Bitrate Audio:"), m_aBitrateCombo);
 
     m_aSampleRateCombo = new QComboBox(audioTab);
-    m_aSampleRateCombo->addItem("48000 Hz (Chuẩn Video & Phim ảnh)", 48000);
-    m_aSampleRateCombo->addItem("44100 Hz (Chuẩn CD Audio)", 44100);
+    m_aSampleRateCombo->addItem(LTR("legacy.589a57f150eb8919"), 48000);
+    m_aSampleRateCombo->addItem(LTR("legacy.898a1e9921f51b46"), 44100);
     m_aSampleRateCombo->addItem("96000 Hz (High Resolution Audio)", 96000);
-    aLayout->addRow(tr("Tần số lấy mẫu:"), m_aSampleRateCombo);
+    aLayout->addRow(LTR("legacy.4fae295002dde3ef"), m_aSampleRateCombo);
 
     m_aChannelsCombo = new QComboBox(audioTab);
-    m_aChannelsCombo->addItem("Stereo (2 kênh)", 2);
-    m_aChannelsCombo->addItem("5.1 Surround (6 kênh)", 6);
-    m_aChannelsCombo->addItem("Mono (1 kênh)", 1);
-    aLayout->addRow(tr("Kênh âm thanh:"), m_aChannelsCombo);
+    m_aChannelsCombo->addItem(LTR("legacy.21d7d85f1d6b81b4"), 2);
+    m_aChannelsCombo->addItem(LTR("legacy.18201823ae74e2d2"), 6);
+    m_aChannelsCombo->addItem(LTR("legacy.9c72e0a603a67954"), 1);
+    aLayout->addRow(LTR("legacy.b81efbfb8ae56580"), m_aChannelsCombo);
 
     tabs->addTab(audioTab, tr("Audio"));
     mainLayout->addWidget(tabs);
 
     // File size estimate & Status
-    auto* infoGroup = new QGroupBox(tr("Dự tính xuất"), this);
+    auto* infoGroup = new QGroupBox(LTR("legacy.5c64ba8568f9cc14"), this);
     auto* infoLayout = new QVBoxLayout(infoGroup);
     infoLayout->setContentsMargins(12, 14, 12, 12);
     infoLayout->setSpacing(6);
@@ -290,7 +290,7 @@ void ExportDialog::setupUi() {
     m_estimateLabel->setStyleSheet("color: #ff9944; font-weight: bold;");
     infoLayout->addWidget(m_estimateLabel);
 
-    m_statusLabel = new QLabel(tr("Sẵn sàng xuất."), this);
+    m_statusLabel = new QLabel(LTR("legacy.54a2ef4a9ef6cf45"), this);
     m_statusLabel->setStyleSheet("color: #aaa; font-style: italic;");
     infoLayout->addWidget(m_statusLabel);
 
@@ -305,10 +305,10 @@ void ExportDialog::setupUi() {
     auto* btnLayout = new QHBoxLayout();
     btnLayout->addStretch(1);
 
-    m_closeBtn = new QPushButton(tr("Đóng"), this);
+    m_closeBtn = new QPushButton(LTR("legacy.5d54c2a1a341732e"), this);
     connect(m_closeBtn, &QPushButton::clicked, this, &QDialog::reject);
 
-    m_startBtn = new QPushButton(tr("Bắt đầu xuất video"), this);
+    m_startBtn = new QPushButton(LTR("legacy.2573e4c98a127133"), this);
     m_startBtn->setStyleSheet("background-color: #ff6a00; color: white; font-weight: bold; font-size: 13px; border-radius: 0px; padding: 8px 24px;");
     connect(m_startBtn, &QPushButton::clicked, this, &ExportDialog::onStartClicked);
 
@@ -326,7 +326,7 @@ void ExportDialog::applyPreset(int index) {
     const auto& presets = exportPresets();
     if (index < 0 || index >= static_cast<int>(presets.size())) return;
     const auto& p = presets[index];
-    if (p.name == "Tùy chỉnh (Custom)") return;
+    if (p.name == LTR("legacy.59d13a48f16c67d0")) return;
 
     // Adjust path extension
     QString currentPath = m_pathEdit->text();
@@ -412,7 +412,7 @@ void ExportDialog::updateEstimatedSize() {
     double totalKbps = vBitrate + aBitrate;
     double sizeMB = (totalKbps * durationSec) / (8.0 * 1024.0);
 
-    m_estimateLabel->setText(QString("Thời lượng: %1s &nbsp;|&nbsp; Tổng bitrate: ~%2 kbps &nbsp;|&nbsp; <b>Dung lượng ước tính:</b> ~%3 MB")
+    m_estimateLabel->setText(QString(LTR("legacy.3e3f6f59440b20bf"))
                              .arg(durationSec, 0, 'f', 1)
                              .arg(static_cast<int>(totalKbps))
                              .arg(sizeMB, 0, 'f', 1));
@@ -421,16 +421,16 @@ void ExportDialog::updateEstimatedSize() {
 void ExportDialog::onBrowse() {
     QString ext = m_formatCombo->currentData().toString();
     QString filter;
-    if (ext == "mp4") filter = tr("MP4 Video (*.mp4);;Tất cả (*.*)");
-    else if (ext == "mov") filter = tr("QuickTime MOV (*.mov);;Tất cả (*.*)");
-    else if (ext == "mkv") filter = tr("Matroska MKV (*.mkv);;Tất cả (*.*)");
-    else if (ext == "webm") filter = tr("WebM Video (*.webm);;Tất cả (*.*)");
-    else if (ext == "mp3") filter = tr("MP3 Audio (*.mp3);;Tất cả (*.*)");
-    else if (ext == "wav") filter = tr("WAV Audio (*.wav);;Tất cả (*.*)");
-    else filter = tr("Tất cả (*.*)");
+    if (ext == "mp4") filter = LTR("legacy.0a0c4f9186e62f97");
+    else if (ext == "mov") filter = LTR("legacy.e819c472fb8046ca");
+    else if (ext == "mkv") filter = LTR("legacy.dce0db7679364eb8");
+    else if (ext == "webm") filter = LTR("legacy.57f4b066c8c2735e");
+    else if (ext == "mp3") filter = LTR("legacy.2a7c6ae9ba24d472");
+    else if (ext == "wav") filter = LTR("legacy.20d997da7fb8902c");
+    else filter = LTR("legacy.15c72874bf4dafcb");
 
     const QString path = QFileDialog::getSaveFileName(
-        this, tr("Chọn nơi lưu video"), m_pathEdit->text(), filter);
+        this, LTR("legacy.48b92c4574ecd892"), m_pathEdit->text(), filter);
     if (!path.isEmpty()) {
         m_pathEdit->setText(path);
     }
@@ -467,22 +467,22 @@ void ExportDialog::setControlsEnabled(bool enabled) {
 void ExportDialog::onStartClicked() {
     if (m_exporter && m_exporter->isRunning()) {
         m_exporter->cancel();
-        m_startBtn->setText(tr("Bắt đầu xuất video"));
+        m_startBtn->setText(LTR("legacy.2573e4c98a127133"));
         m_startBtn->setStyleSheet("background-color: #ff6a00; color: white; font-weight: bold; border-radius: 0px; padding: 8px 24px;");
-        m_statusLabel->setText(tr("Đã hủy xuất video."));
+        m_statusLabel->setText(LTR("legacy.2baa53f1805f921f"));
         setControlsEnabled(true);
         return;
     }
 
     const QString outPath = m_pathEdit->text().trimmed();
     if (outPath.isEmpty()) {
-        m_statusLabel->setText(tr("Lỗi: Vui lòng chọn đường dẫn lưu!"));
+        m_statusLabel->setText(LTR("legacy.f68d098873e374d5"));
         return;
     }
 
     const QString outDir = QFileInfo(outPath).absolutePath();
     if (!outDir.isEmpty() && !QDir().mkpath(outDir)) {
-        m_statusLabel->setText(tr("Lỗi: Không thể tạo hoặc truy cập thư mục lưu (%1)! Vui lòng kiểm tra đường dẫn.").arg(outDir));
+        m_statusLabel->setText(LTR("legacy.8bf88fce9b4babd5").arg(outDir));
         return;
     }
 
@@ -516,8 +516,8 @@ void ExportDialog::onStartClicked() {
     connect(m_exporter, &Exporter::finished, this, &ExportDialog::onFinished);
 
     m_progressBar->setValue(0);
-    m_statusLabel->setText(tr("Đang xuất video qua FFmpeg..."));
-    m_startBtn->setText(tr("Hủy xuất"));
+    m_statusLabel->setText(LTR("legacy.85d453c72dce4474"));
+    m_startBtn->setText(LTR("legacy.9b98f9fcc9ad08f4"));
     m_startBtn->setStyleSheet("background-color: #8b2525; color: white; font-weight: bold; border-radius: 0px; padding: 8px 24px;");
     setControlsEnabled(false);
 
@@ -545,16 +545,16 @@ void ExportDialog::onProgress(double fraction, QString etaText) {
         const QString etaStr = QString("%1:%2")
             .arg(etaSec / 60, 2, 10, QChar('0'))
             .arg(etaSec % 60, 2, 10, QChar('0'));
-        m_statusLabel->setText(tr("Đang kết xuất: %1% | Đã qua: %2 | Còn lại: ~%3%4")
+        m_statusLabel->setText(LTR("legacy.90df978cc54a84c9")
                                .arg(pct).arg(elapsedStr).arg(etaStr).arg(speedPart));
     } else {
-        m_statusLabel->setText(tr("Đang kết xuất: %1% | Đã qua: %2%3")
+        m_statusLabel->setText(LTR("legacy.a95be2034411c84d")
                                .arg(pct).arg(elapsedStr).arg(speedPart));
     }
 }
 
 void ExportDialog::onFinished(bool success, QString message) {
-    m_startBtn->setText(tr("Bắt đầu xuất video"));
+    m_startBtn->setText(LTR("legacy.2573e4c98a127133"));
     m_startBtn->setStyleSheet("background-color: #ff6a00; color: white; font-weight: bold; border-radius: 0px; padding: 8px 24px;");
     m_progressBar->setValue(success ? 100 : 0);
     setControlsEnabled(true);
@@ -565,7 +565,7 @@ void ExportDialog::onFinished(bool success, QString message) {
         const QString timeStr = QString("%1:%2")
             .arg(totalSec / 60, 2, 10, QChar('0'))
             .arg(totalSec % 60, 2, 10, QChar('0'));
-        m_statusLabel->setText(tr("%1 (Thời gian xuất: %2)").arg(message).arg(timeStr));
+        m_statusLabel->setText(LTR("legacy.96601e3657279b48").arg(message).arg(timeStr));
     } else {
         m_statusLabel->setText(message);
     }
@@ -575,8 +575,8 @@ void ExportDialog::closeEvent(QCloseEvent* event) {
     if (m_exporter && m_exporter->isRunning()) {
         const auto btn = QMessageBox::question(
             this,
-            tr("Đang xuất video"),
-            tr("Quá trình xuất video đang chạy. Bạn có chắc muốn hủy và đóng?"),
+            LTR("legacy.5cc94699ffbaec06"),
+            LTR("legacy.617835e946da6bd4"),
             QMessageBox::Yes | QMessageBox::No,
             QMessageBox::No);
         if (btn != QMessageBox::Yes) {

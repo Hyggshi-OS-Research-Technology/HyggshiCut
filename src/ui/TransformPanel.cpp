@@ -223,13 +223,11 @@ void TransformPanel::setSelectedClip(Project* project, const QString& trackId, c
         // An Effect Layer has no media of its own, so transform/blend/speed do
         // not apply — point the user at the Effects tab instead of showing a
         // panel full of disabled controls with no explanation.
-        m_hintLabel->setText(tr("Đang chọn Lớp hiệu ứng (Effect Layer): lớp này không có hình ảnh riêng, "
-                                "mọi hiệu ứng trong tab \"Hiệu ứng\" sẽ áp dụng cho các clip nằm DƯỚI nó "
-                                "trong suốt khoảng thời gian của lớp."));
+        m_hintLabel->setText(LTR("legacy.5eb161b4cff52367"));
     } else if (clip->type == ClipType::Audio) {
-        m_hintLabel->setText(tr("Đang chọn clip âm thanh. Bạn có thể chỉnh Tốc độ phát (Speed), Âm lượng (Volume) và Tắt tiếng (Mute)."));
+        m_hintLabel->setText(LTR("legacy.20714b371ab23f2a"));
     } else {
-        m_hintLabel->setText(tr("Chọn một clip video/ảnh/chữ trên timeline để chỉnh vị trí, kích thước, góc xoay, tốc độ và âm lượng."));
+        m_hintLabel->setText(LTR("legacy.5ba2dd651d55d59b"));
     }
 
     applyToSpinBoxes();
@@ -320,7 +318,7 @@ void TransformPanel::setTransformExternal(const Transform& t) {
 
 void TransformPanel::updateKeyframeUi() {
     if (!m_project || m_clipId.isEmpty()) {
-        m_keyframeStatusLabel->setText(tr("Chưa có clip nào được chọn."));
+        m_keyframeStatusLabel->setText(LTR("legacy.0a9abe8710c7251f"));
         m_addKeyframeBtn->setEnabled(false);
         m_removeKeyframeBtn->setEnabled(false);
         return;
@@ -339,12 +337,12 @@ void TransformPanel::updateKeyframeUi() {
     m_removeKeyframeBtn->setEnabled(onKeyframe);
 
     if (!clip->hasTransformKeyframes()) {
-        m_keyframeStatusLabel->setText(tr("Chưa có keyframe — layer đang tĩnh (không hoạt ảnh)."));
+        m_keyframeStatusLabel->setText(LTR("legacy.cf9f3b606d9d0727"));
     } else if (onKeyframe) {
-        m_keyframeStatusLabel->setText(tr("◆ %1 keyframe — playhead đang ở đúng một keyframe.")
+        m_keyframeStatusLabel->setText(LTR("legacy.1ed702ea665e3406")
             .arg(clip->transformKeyframes.size()));
     } else {
-        m_keyframeStatusLabel->setText(tr("%1 keyframe — giá trị hiện tại là nội suy giữa hai keyframe.")
+        m_keyframeStatusLabel->setText(LTR("legacy.80e7251a7784726b")
             .arg(clip->transformKeyframes.size()));
     }
 }

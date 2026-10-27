@@ -195,8 +195,8 @@ void PluginManagerDialog::onRemovePlugin() {
     const QString pluginId = plugins[row].pluginId;
     const QString name = plugins[row].name;
 
-    if (QMessageBox::question(this, tr("Xác nhận"),
-            tr("Gỡ bỏ plugin '%1'?").arg(name)) != QMessageBox::Yes) return;
+    if (QMessageBox::question(this, LTR("legacy.1503b0d05f3d416f"),
+            LTR("legacy.5e583180dcb5fd3c").arg(name)) != QMessageBox::Yes) return;
 
     PluginManager::instance().removePlugin(pluginId);
     refresh();

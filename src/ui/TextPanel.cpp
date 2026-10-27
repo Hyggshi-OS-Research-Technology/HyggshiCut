@@ -77,17 +77,17 @@ TextPanel::TextPanel(QWidget* parent) : QWidget(parent) {
     m_alignLeftBtn = new QPushButton(QStringLiteral("L"), this);
     m_alignLeftBtn->setCheckable(true);
     m_alignLeftBtn->setFixedWidth(32);
-    m_alignLeftBtn->setToolTip(tr("Căn trái"));
+    m_alignLeftBtn->setToolTip(LTR("legacy.546522522dd85f70"));
 
     m_alignCenterBtn = new QPushButton(QStringLiteral("C"), this);
     m_alignCenterBtn->setCheckable(true);
     m_alignCenterBtn->setFixedWidth(32);
-    m_alignCenterBtn->setToolTip(tr("Căn giữa"));
+    m_alignCenterBtn->setToolTip(LTR("legacy.2c2eb3a5e12ae47f"));
 
     m_alignRightBtn = new QPushButton(QStringLiteral("R"), this);
     m_alignRightBtn->setCheckable(true);
     m_alignRightBtn->setFixedWidth(32);
-    m_alignRightBtn->setToolTip(tr("Căn phải"));
+    m_alignRightBtn->setToolTip(LTR("legacy.0408e153526bc2e2"));
 
     m_alignGroup->addButton(m_alignCenterBtn, 0);
     m_alignGroup->addButton(m_alignLeftBtn, 1);
@@ -265,7 +265,7 @@ void TextPanel::onTextColorClicked() {
     Clip* clip = getSelectedClip();
     if (!clip) return;
     QColor cur(clip->textFontColor.isEmpty() ? "#FFFFFF" : clip->textFontColor);
-    QColor picked = QColorDialog::getColor(cur, this, tr("Chọn màu chữ"), QColorDialog::ShowAlphaChannel);
+    QColor picked = QColorDialog::getColor(cur, this, LTR("legacy.dd3375ccb67a8b8f"), QColorDialog::ShowAlphaChannel);
     if (picked.isValid()) {
         clip->textFontColor = picked.name(QColor::HexRgb);
         m_textColorHex = clip->textFontColor;
@@ -318,7 +318,7 @@ void TextPanel::onOutlineColorClicked() {
     Clip* clip = getSelectedClip();
     if (!clip) return;
     QColor cur(clip->textOutlineColor.isEmpty() ? "#000000" : clip->textOutlineColor);
-    QColor picked = QColorDialog::getColor(cur, this, tr("Chọn màu viền chữ"), QColorDialog::ShowAlphaChannel);
+    QColor picked = QColorDialog::getColor(cur, this, LTR("legacy.87994ab57e75621d"), QColorDialog::ShowAlphaChannel);
     if (picked.isValid()) {
         clip->textOutlineColor = picked.name(QColor::HexRgb);
         m_outlineColorHex = clip->textOutlineColor;
@@ -347,7 +347,7 @@ void TextPanel::onBackgroundColorClicked() {
     Clip* clip = getSelectedClip();
     if (!clip) return;
     QColor cur(clip->textBackgroundColor.isEmpty() ? "#00000080" : clip->textBackgroundColor);
-    QColor picked = QColorDialog::getColor(cur, this, tr("Chọn màu nền chữ"), QColorDialog::ShowAlphaChannel);
+    QColor picked = QColorDialog::getColor(cur, this, LTR("legacy.da7da53fd2da82c7"), QColorDialog::ShowAlphaChannel);
     if (picked.isValid()) {
         clip->textBackgroundColor = picked.name(QColor::HexArgb);
         m_bgColorHex = clip->textBackgroundColor;

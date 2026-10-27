@@ -472,7 +472,7 @@ void MediaPoolWidget::refresh() {
 
     m_mediaCount->setText(shown == total
         ? tr("%1 media").arg(total)
-        : tr("Đang hiện %1/%2 media").arg(shown).arg(total));
+        : LTR("legacy.fca03d8ff08e31ec").arg(shown).arg(total));
 
     // --- Sounds page (audio assets change with the project) ---
     populateSoundsPage();
@@ -568,13 +568,11 @@ void MediaPoolWidget::populatePresetPages() {
             const QString layerName = LTR(layerKey);
             auto* item = new QListWidgetItem(
                 (layerName.isEmpty() || layerName == layerKey)
-                    ? tr("Lớp hiệu ứng (Effect Layer)") : layerName);
+                    ? LTR("legacy.2fcae99ee7feb134") : layerName);
             item->setIcon(QIcon(presetIcon(kThumbWidth, kThumbHeight, layerCol,
                                            layerCol.darker(150), QStringLiteral("FX"))));
             item->setData(Qt::UserRole, EffectsPanel::effectLayerCardId());
-            item->setToolTip(tr("Nhấp đúp để thêm một Lớp hiệu ứng trải suốt timeline, "
-                                "hoặc kéo thả vào timeline để đặt tại vị trí thả. "
-                                "Mọi hiệu ứng trên lớp này áp dụng cho các clip nằm DƯỚI nó."));
+            item->setToolTip(LTR("legacy.a55cc00ac820a65f"));
             m_effectsList->addItem(item);
         }
 

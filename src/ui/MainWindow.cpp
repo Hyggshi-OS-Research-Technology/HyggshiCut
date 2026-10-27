@@ -301,23 +301,23 @@ void MainWindow::buildMenus() {
     // would override Ctrl+C/Ctrl+V inside the Explorer search box and the Text
     // panel's editors, so copying text out of those fields silently copied the
     // selected clip instead.
-    editMenu->addAction(makeShared(tr("Sao chép clip"), QKeySequence::Copy, [this]() {
+    editMenu->addAction(makeShared(LTR("legacy.23eff04a1b692e18"), QKeySequence::Copy, [this]() {
         if (m_timelineWidget) m_timelineWidget->copySelectedClip();
     }, Qt::WidgetWithChildrenShortcut));
-    editMenu->addAction(makeShared(tr("Dán clip"), QKeySequence::Paste, [this]() {
+    editMenu->addAction(makeShared(LTR("legacy.799053df7c13d3c4"), QKeySequence::Paste, [this]() {
         if (m_timelineWidget) m_timelineWidget->pasteClip();
     }, Qt::WidgetWithChildrenShortcut));
-    editMenu->addAction(makeShared(tr("Nhân đôi clip"), QKeySequence(Qt::CTRL | Qt::Key_D), [this]() {
+    editMenu->addAction(makeShared(LTR("legacy.8121e7734b7c975c"), QKeySequence(Qt::CTRL | Qt::Key_D), [this]() {
         if (m_timelineWidget) m_timelineWidget->duplicateSelectedClip();
     }, Qt::WidgetWithChildrenShortcut));
     editMenu->addSeparator();
-    editMenu->addAction(tr("Xóa & dồn clip sau lại (Ripple delete)"), this, [this]() {
+    editMenu->addAction(LTR("legacy.66416402a17c78e5"), this, [this]() {
         if (m_timelineWidget) m_timelineWidget->rippleDeleteSelectedClip();
     });
-    editMenu->addAction(tr("Dịch clip trái 1 khung hình (,)"), this, [this]() {
+    editMenu->addAction(LTR("legacy.b1f3958eab0e2e2d"), this, [this]() {
         if (m_timelineWidget) m_timelineWidget->nudgeSelectedClip(-m_timelineWidget->frameStepTicks());
     });
-    editMenu->addAction(tr("Dịch clip phải 1 khung hình (.)"), this, [this]() {
+    editMenu->addAction(LTR("legacy.59298e4fe2fa749c"), this, [this]() {
         if (m_timelineWidget) m_timelineWidget->nudgeSelectedClip(m_timelineWidget->frameStepTicks());
     });
 
@@ -325,9 +325,9 @@ void MainWindow::buildMenus() {
     // Likewise Ctrl+A ("select first clip") must not shadow select-all in a
     // text field, and Escape must not be consumed window-wide (it is also how
     // dialogs and the search box's clear button are expected to behave).
-    editMenu->addAction(makeShared(tr("Chọn clip đầu tiên"), QKeySequence(Qt::CTRL | Qt::Key_A),
+    editMenu->addAction(makeShared(LTR("legacy.e1e72fce735799c4"), QKeySequence(Qt::CTRL | Qt::Key_A),
                                    &MainWindow::onSelectFirstClip, Qt::WidgetWithChildrenShortcut));
-    editMenu->addAction(makeShared(tr("Bỏ chọn tất cả"), QKeySequence(Qt::Key_Escape),
+    editMenu->addAction(makeShared(LTR("legacy.fa61578e9a57ba2d"), QKeySequence(Qt::Key_Escape),
                                    &MainWindow::onDeselectAll, Qt::WidgetWithChildrenShortcut));
 
     editMenu->addSeparator();
@@ -358,7 +358,7 @@ void MainWindow::buildMenus() {
     // created TimelineWidget (see rebuildProjectDependentUi).
     {
         QSettings snapPrefs("HyggshiCut", "Preferences");
-        m_snapAction = m_viewMenu->addAction(tr("Bắt dính vào mép clip / playhead (Snap)"));
+        m_snapAction = m_viewMenu->addAction(LTR("legacy.4d53640d8dbe2707"));
         m_snapAction->setCheckable(true);
         m_snapAction->setChecked(snapPrefs.value("timeline/snapEnabled", true).toBool());
         connect(m_snapAction, &QAction::toggled, this, [this](bool on) {
@@ -370,7 +370,7 @@ void MainWindow::buildMenus() {
 
     m_viewMenu->addSeparator();
 
-    auto* meterAct = m_viewMenu->addAction(tr("Đồng hồ đo âm lượng (VU Meter)"));
+    auto* meterAct = m_viewMenu->addAction(LTR("legacy.91fc73435c699939"));
     meterAct->setCheckable(true);
     meterAct->setChecked(false);
     connect(meterAct, &QAction::toggled, this, [this](bool checked) {
@@ -790,7 +790,7 @@ void MainWindow::resizeEvent(QResizeEvent* event) {
 
 void MainWindow::updateWindowTitle() {
     const QString name = m_project->name;
-    const QString path = m_project->filePath.isEmpty() ? tr("(chưa lưu)") : m_project->filePath;
+    const QString path = m_project->filePath.isEmpty() ? LTR("legacy.e445864fc0fadc1b") : m_project->filePath;
     setWindowTitle(QString("%1HyggshiCut — %2 [%3]").arg(m_modified ? "* " : "", name, path));
 }
 
@@ -813,8 +813,8 @@ void MainWindow::generateWaveform(const MediaAssetPtr& asset) {
 
 void MainWindow::onImportRequested() {
     const QStringList files = QFileDialog::getOpenFileNames(
-        this, tr("Nhập media"), QString(),
-        tr("Media files (*.mp4 *.mov *.mkv *.avi *.webm *.m4v *.mp3 *.wav *.flac *.aac *.ogg *.png *.jpg *.jpeg);;Tất cả (*.*)"));
+        this, LTR("legacy.8537b0df1d224a32"), QString(),
+        LTR("legacy.0f578b71802d774a"));
     if (files.isEmpty()) return;
 
     QStringList failures;
@@ -837,7 +837,7 @@ void MainWindow::onImportRequested() {
     updateWindowTitle();
 
     if (!failures.isEmpty()) {
-        QMessageBox::warning(this, tr("Một số file không nhập được"), failures.join("\n"));
+        QMessageBox::warning(this, LTR("legacy.9d54eb68746fae95"), failures.join("\n"));
     }
 }
 
@@ -858,7 +858,7 @@ void MainWindow::importFileAndAddToProject(const QString& filePath, bool addToTi
     QString err;
     auto asset = m_project->importMedia(filePath, &err);
     if (!asset) {
-        QMessageBox::warning(this, tr("Lỗi nhập media"), err);
+        QMessageBox::warning(this, LTR("legacy.09c8dfc1f93ed83a"), err);
         return;
     }
     generateThumbnail(asset);
@@ -954,13 +954,13 @@ void MainWindow::onProjectSettings() {
 void MainWindow::onOpenProject() {
     if (!maybeSaveUnsavedChanges()) return;
     const QString path = QFileDialog::getOpenFileName(
-        this, tr("Mở dự án"), QString(),
-        tr("Dự án HyggshiCut (*.hcproj);;Tất cả tệp (*.*)"));
+        this, LTR("legacy.f990c9d8fdb1e547"), QString(),
+        LTR("legacy.c3863be0bbedad5f"));
     if (path.isEmpty()) return;
 
     QString err;
     if (!openProjectFromFile(path, &err)) {
-        QMessageBox::critical(this, tr("Không mở được dự án"), err);
+        QMessageBox::critical(this, LTR("legacy.e35cebfb3d0bf57d"), err);
     }
 }
 
@@ -999,12 +999,12 @@ bool MainWindow::onSaveProject() {
     }
     QString err;
     if (!m_project->saveToFile(m_project->filePath, &err)) {
-        QMessageBox::critical(this, tr("Không lưu được dự án"), err);
+        QMessageBox::critical(this, LTR("legacy.3c0a5f2fe2b6e614"), err);
         return false;
     } else {
         m_modified = false;
         updateWindowTitle();
-        statusBar()->showMessage(tr("Đã lưu dự án: %1").arg(m_project->filePath), 3000);
+        statusBar()->showMessage(LTR("legacy.05e9d06f7025adaf").arg(m_project->filePath), 3000);
         return true;
     }
 }
@@ -1015,8 +1015,8 @@ bool MainWindow::onSaveProjectAs() {
         initialPath = m_project->name.isEmpty() ? "Untitled.hcproj" : (m_project->name + ".hcproj");
     }
     QString path = QFileDialog::getSaveFileName(
-        this, tr("Lưu dự án thành"), initialPath,
-        tr("Dự án HyggshiCut (*.hcproj);;Tất cả tệp (*.*)"));
+        this, LTR("legacy.29db109dc4763793"), initialPath,
+        LTR("legacy.c3863be0bbedad5f"));
     if (path.isEmpty()) return false;
 
     if (!path.endsWith(".hcproj", Qt::CaseInsensitive)) {
@@ -1026,12 +1026,12 @@ bool MainWindow::onSaveProjectAs() {
     m_project->name = QFileInfo(path).completeBaseName();
     QString err;
     if (!m_project->saveToFile(path, &err)) {
-        QMessageBox::critical(this, tr("Không lưu được dự án"), err);
+        QMessageBox::critical(this, LTR("legacy.3c0a5f2fe2b6e614"), err);
         return false;
     } else {
         m_modified = false;
         updateWindowTitle();
-        statusBar()->showMessage(tr("Đã lưu dự án: %1").arg(path), 3000);
+        statusBar()->showMessage(LTR("legacy.05e9d06f7025adaf").arg(path), 3000);
         return true;
     }
 }
@@ -1053,7 +1053,7 @@ void MainWindow::onAddImageTrack() {
     // as video); only the display name differs so the timeline reads clearly.
     m_project->pushUndoSnapshot();
     m_project->timeline().addTrack(TrackType::Visual,
-        tr("Ảnh %1").arg(m_project->timeline().tracks().size() + 1));
+        LTR("legacy.dc43f95f8cfd8f99").arg(m_project->timeline().tracks().size() + 1));
     onTimelineEdited();
 }
 
@@ -1071,11 +1071,11 @@ void MainWindow::onAddTextTrack() {
     m_project->pushUndoSnapshot();
     auto& tl = m_project->timeline();
     Track& textTrack = tl.addTrack(TrackType::Visual,
-        tr("Văn bản %1").arg(tl.tracks().size() + 1));
+        LTR("legacy.e5c0ffc31d8a7451").arg(tl.tracks().size() + 1));
 
     Clip clip;
     clip.type = ClipType::Text;
-    clip.displayLabel = tr("Tiêu đề");
+    clip.displayLabel = LTR("legacy.df5a00098bccde73");
     clip.sourceIn = 0;
     const Ticks tlDur = tl.totalDuration();
     clip.sourceOut = tlDur > 0 ? tlDur : secondsToTicks(5.0);
@@ -1091,8 +1091,7 @@ void MainWindow::onAddEffectLayer() {
     // menu and the Explorer's drag & drop all behave identically.
     if (!m_timelineWidget) return;
     m_timelineWidget->addEffectLayer();
-    statusBar()->showMessage(tr("Đã thêm Lớp hiệu ứng — thêm hiệu ứng trong tab Hiệu ứng; "
-                                "chúng sẽ áp dụng cho mọi clip nằm dưới lớp này."), 4000);
+    statusBar()->showMessage(LTR("legacy.96a0d14be2833bc0"), 4000);
 }
 
 void MainWindow::onSplitAtPlayhead() { m_timelineWidget->splitAtPlayhead(); }
@@ -1112,13 +1111,13 @@ void MainWindow::updateZoomLabel(double pixelsPerSecond) {
 void MainWindow::onToggleCutTool(bool checked) {
     if (m_timelineWidget) m_timelineWidget->setCutToolActive(checked);
     statusBar()->showMessage(checked
-        ? tr("Dao cắt đang bật — bấm vào clip trên timeline để cắt tại đó.")
+        ? LTR("legacy.7b8642e28c1f6348")
         : QString(), checked ? 0 : 1);
 }
 
 void MainWindow::onUndo() {
     if (!m_project || !m_project->canUndo()) {
-        statusBar()->showMessage(tr("Không có thao tác nào để hoàn tác (Undo)."), 2500);
+        statusBar()->showMessage(LTR("legacy.8c8cc9807e375b54"), 2500);
         return;
     }
     if (!m_project->undo()) return;
@@ -1129,12 +1128,12 @@ void MainWindow::onUndo() {
     if (m_preview) m_preview->clearTransformOverlay();
     onTimelineEdited();
     updateUndoRedoActions();
-    statusBar()->showMessage(tr("Đã hoàn tác (Undo)."), 1500);
+    statusBar()->showMessage(LTR("legacy.e2481fef88e673c5"), 1500);
 }
 
 void MainWindow::onRedo() {
     if (!m_project || !m_project->canRedo()) {
-        statusBar()->showMessage(tr("Không có thao tác nào để làm lại (Redo)."), 2500);
+        statusBar()->showMessage(LTR("legacy.0c409a1c20d0e535"), 2500);
         return;
     }
     if (!m_project->redo()) return;
@@ -1145,7 +1144,7 @@ void MainWindow::onRedo() {
     if (m_preview) m_preview->clearTransformOverlay();
     onTimelineEdited();
     updateUndoRedoActions();
-    statusBar()->showMessage(tr("Đã làm lại (Redo)."), 1500);
+    statusBar()->showMessage(LTR("legacy.2afb1a39989b71fd"), 1500);
 }
 
 void MainWindow::onSelectFirstClip() {
@@ -1155,11 +1154,11 @@ void MainWindow::onSelectFirstClip() {
             m_selectedTrackId = track.id;
             m_selectedClipId = track.clips().front().id;
             onTimelineSelectionChanged(m_selectedClipId, m_selectedTrackId);
-            statusBar()->showMessage(tr("Đã chọn clip: %1").arg(track.clips().front().displayLabel.isEmpty() ? track.clips().front().id : track.clips().front().displayLabel), 2000);
+            statusBar()->showMessage(LTR("legacy.f046d6d2331f6c12").arg(track.clips().front().displayLabel.isEmpty() ? track.clips().front().id : track.clips().front().displayLabel), 2000);
             return;
         }
     }
-    statusBar()->showMessage(tr("Chưa có clip nào trên timeline để chọn."), 2000);
+    statusBar()->showMessage(LTR("legacy.905142187382b794"), 2000);
 }
 
 void MainWindow::onDeselectAll() {
@@ -1168,7 +1167,7 @@ void MainWindow::onDeselectAll() {
     m_selectedClipId.clear();
     if (m_preview) m_preview->clearTransformOverlay();
     if (m_propertiesPanel) m_propertiesPanel->clearClipSelection();
-    statusBar()->showMessage(tr("Đã bỏ chọn tất cả."), 2000);
+    statusBar()->showMessage(LTR("legacy.4187a21497136040"), 2000);
 }
 
 void MainWindow::onRelinkMissingMedia() {
@@ -1178,7 +1177,7 @@ void MainWindow::onRelinkMissingMedia() {
         ++missingCount;
     }
     if (missingCount == 0) {
-        statusBar()->showMessage(tr("Không có media nào bị thiếu."), 2500);
+        statusBar()->showMessage(LTR("legacy.b36e84b13e29aba0"), 2500);
         return;
     }
 
@@ -1186,23 +1185,22 @@ void MainWindow::onRelinkMissingMedia() {
     for (const auto& asset : m_project->assets()) {
         if (QFileInfo::exists(asset->filePath)) continue;
         const auto choice = QMessageBox::question(this,
-            tr("Media bị mất"),
-            tr("Không tìm thấy file:\n%1\n\nChọn lại file mới cho asset này "
-               "('Có'), bỏ qua ('Không'), hoặc dừng lại ('Hủy').")
+            LTR("legacy.3031c0b077cf595f"),
+            LTR("legacy.7faf9cf1a5b52c0b")
                 .arg(asset->filePath),
             QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel);
         if (choice == QMessageBox::Cancel) return;
         if (choice == QMessageBox::No) continue;
 
         const QString newPath = QFileDialog::getOpenFileName(
-            this, tr("Chọn file cho media bị mất"), QFileInfo(asset->filePath).path(),
-            tr("Media files (*.mp4 *.mov *.mkv *.avi *.webm *.m4v *.mp3 *.wav *.flac *.aac *.ogg *.png *.jpg *.jpeg);;Tất cả (*.*)"));
+            this, LTR("legacy.f7ba07122e5db49b"), QFileInfo(asset->filePath).path(),
+            LTR("legacy.0f578b71802d774a"));
         if (newPath.isEmpty()) continue;
 
         QString err;
         auto relinked = m_project->relinkAsset(asset->id, newPath, &err);
         if (!relinked) {
-            QMessageBox::warning(this, tr("Không liên kết được"), err);
+            QMessageBox::warning(this, LTR("legacy.7b47bc01e3e8765d"), err);
             continue;
         }
         generateThumbnail(relinked);
@@ -1211,7 +1209,7 @@ void MainWindow::onRelinkMissingMedia() {
     m_mediaPool->refresh();
     m_modified = true;
     updateWindowTitle();
-    statusBar()->showMessage(tr("Đã cập nhật liên kết media."), 2500);
+    statusBar()->showMessage(LTR("legacy.df8823b2e7a3d45b"), 2500);
 }
 
 void MainWindow::onMediaAssetSelected(QString assetId) {
@@ -1286,7 +1284,7 @@ void MainWindow::onTextPresetRequested(QString presetId) {
     m_project->pushUndoSnapshot();
     auto& tl = m_project->timeline();
     Track& textTrack = tl.addTrack(TrackType::Visual,
-        tr("Văn bản %1").arg(tl.tracks().size() + 1));
+        LTR("legacy.e5c0ffc31d8a7451").arg(tl.tracks().size() + 1));
 
     Clip clip;
     clip.type = ClipType::Text;
@@ -1312,7 +1310,7 @@ void MainWindow::onTextPresetRequested(QString presetId) {
         m_timelineWidget->selectClip(textTrack.id, added->id);
     }
     if (m_playback) m_playback->seek(added ? added->timelineStart : 0);
-    statusBar()->showMessage(tr("Đã thêm văn bản: %1").arg(LTR(preset->nameKey)), 2500);
+    statusBar()->showMessage(LTR("legacy.36a9b9cb37590e45").arg(LTR(preset->nameKey)), 2500);
 }
 
 void MainWindow::onEffectPresetRequested(QString effectTypeId) {
@@ -1332,7 +1330,7 @@ void MainWindow::onEffectPresetRequested(QString effectTypeId) {
     // exactly what it is for.
     if (!clip || (clip->type != ClipType::Video && clip->type != ClipType::Image &&
                   clip->type != ClipType::Text && !clip->isEffectLayer())) {
-        statusBar()->showMessage(tr("Chọn một clip video/ảnh/chữ (hoặc một Lớp hiệu ứng) trên timeline trước."), 3000);
+        statusBar()->showMessage(LTR("legacy.ebd3ca9a26ed5d9c"), 3000);
         return;
     }
 
@@ -1345,7 +1343,7 @@ void MainWindow::onEffectPresetRequested(QString effectTypeId) {
     if (m_propertiesPanel) m_propertiesPanel->showEffectsEditor();
 
     onEffectsEdited();
-    statusBar()->showMessage(tr("Đã thêm hiệu ứng: %1").arg(EffectsPanel::effectTypeName(effectTypeId)), 2500);
+    statusBar()->showMessage(LTR("legacy.0157c30eac77925a").arg(EffectsPanel::effectTypeName(effectTypeId)), 2500);
 }
 
 void MainWindow::onTransitionPresetRequested(QString transitionId) {
@@ -1355,12 +1353,12 @@ void MainWindow::onTransitionPresetRequested(QString transitionId) {
 
     Track* track = m_project->timeline().findTrack(m_selectedTrackId);
     if (!track || track->type != TrackType::Visual) {
-        statusBar()->showMessage(tr("Chọn clip video/ảnh trên track hình trước."), 3000);
+        statusBar()->showMessage(LTR("legacy.18f84020cc750c21"), 3000);
         return;
     }
     Clip* cur = track->findClip(m_selectedClipId);
     if (!cur) {
-        statusBar()->showMessage(tr("Chọn clip trên timeline để thêm transition trước clip đó."), 3000);
+        statusBar()->showMessage(LTR("legacy.695b929226fed4ad"), 3000);
         return;
     }
 
@@ -1392,13 +1390,13 @@ void MainWindow::onTransitionPresetRequested(QString transitionId) {
         cur->transitionDirection = preset->direction;
         cur->transitionColor = preset->color;
     } else {
-        statusBar()->showMessage(tr("Transition cần một clip liền trước trên cùng track."), 3000);
+        statusBar()->showMessage(LTR("legacy.8280c14d849d66bf"), 3000);
         return;
     }
 
     m_project->timeline().notifyClipChanged(m_selectedTrackId);
     onTimelineEdited();
-    statusBar()->showMessage(tr("Đã áp dụng transition: %1").arg(LTR(preset->nameKey)), 2500);
+    statusBar()->showMessage(LTR("legacy.699ab1a882293984").arg(LTR(preset->nameKey)), 2500);
 }
 
 void MainWindow::onSoundPresetRequested(QString sfxId) {
@@ -1410,7 +1408,7 @@ void MainWindow::onSoundPresetRequested(QString sfxId) {
         + QStringLiteral("/hyggshicut/sfx");
     const QString path = ensureSfxFile(*sfx, dir);
     if (path.isEmpty()) {
-        statusBar()->showMessage(tr("Không tạo được file âm thanh mẫu."), 3000);
+        statusBar()->showMessage(LTR("legacy.bb65512c7a628d1f"), 3000);
         return;
     }
 
@@ -1423,7 +1421,7 @@ void MainWindow::onSoundPresetRequested(QString sfxId) {
         QString err;
         asset = m_project->importMedia(path, &err);
         if (!asset) {
-            statusBar()->showMessage(tr("Không nhập được âm thanh: %1").arg(err), 4000);
+            statusBar()->showMessage(LTR("legacy.8851462e5643d40d").arg(err), 4000);
             return;
         }
         generateThumbnail(asset);   // no-op for audio
@@ -1444,7 +1442,7 @@ void MainWindow::onSoundPresetRequested(QString sfxId) {
     }
     onTimelineEdited();
     if (m_playback) m_playback->seek(added ? added->timelineStart : 0);
-    statusBar()->showMessage(tr("Đã thêm âm thanh: %1").arg(LTR(sfx->nameKey)), 2500);
+    statusBar()->showMessage(LTR("legacy.ed5a917457e5c151").arg(LTR(sfx->nameKey)), 2500);
 }
 
 void MainWindow::onTimelineEdited() {
@@ -1634,12 +1632,12 @@ void MainWindow::onGenerateProxiesForAll() {
     if (queued == 0) {
         statusBar()->showMessage(
             alreadyReady > 0
-                ? tr("Toàn bộ %1 media video đã có proxy.").arg(alreadyReady)
-                : tr("Không có media video nào để tạo proxy."),
+                ? LTR("legacy.7950a21f9aaae273").arg(alreadyReady)
+                : LTR("legacy.a7d5f12df3146be6"),
             3000);
     } else {
         statusBar()->showMessage(
-            tr("Đang tạo proxy cho %1 media (đã có sẵn %2)...").arg(queued).arg(alreadyReady));
+            LTR("legacy.d151e1bcccec0a69").arg(queued).arg(alreadyReady));
     }
     if (m_mediaPool) m_mediaPool->refresh();
 }
@@ -1647,8 +1645,8 @@ void MainWindow::onGenerateProxiesForAll() {
 void MainWindow::onToggleUseProxy(bool checked) {
     if (m_playback) m_playback->setUseProxy(checked);
     statusBar()->showMessage(
-        checked ? tr("Đã bật dùng proxy khi xem trước.")
-                : tr("Đã tắt proxy — xem trước dùng file gốc."),
+        checked ? LTR("legacy.fe8ee1d07eafa9f5")
+                : LTR("legacy.9038420e86a777c1"),
         2500);
 }
 
@@ -1669,16 +1667,16 @@ void MainWindow::onProxyReady(QString assetId, QString proxyPath) {
 void MainWindow::onProxyFailed(QString assetId, QString error) {
     auto asset = m_project->findAsset(assetId);
     const QString name = asset ? asset->displayName : assetId;
-    statusBar()->showMessage(tr("Tạo proxy thất bại cho %1: %2").arg(name, error), 5000);
+    statusBar()->showMessage(LTR("legacy.0ce99e4e164725e9").arg(name, error), 5000);
     if (m_mediaPool) m_mediaPool->refresh();
 }
 
 void MainWindow::onProxyQueueProgress(int done, int total) {
     if (total <= 0) return;
     if (done >= total) {
-        statusBar()->showMessage(tr("Đã tạo xong proxy cho %1 media.").arg(total), 3000);
+        statusBar()->showMessage(LTR("legacy.9678dd1722e704d8").arg(total), 3000);
     } else {
-        statusBar()->showMessage(tr("Đang tạo proxy: %1/%2...").arg(done).arg(total));
+        statusBar()->showMessage(LTR("legacy.8adfa092a7e9b8cc").arg(done).arg(total));
     }
 }
 
@@ -1686,17 +1684,17 @@ void MainWindow::updateUndoRedoActions() {
     if (m_undoAction) {
         m_undoAction->setEnabled(true);
         if (m_project && m_project->canUndo()) {
-            m_undoAction->setToolTip(tr("Hoàn tác thao tác trước đó (Ctrl+Z)"));
+            m_undoAction->setToolTip(LTR("legacy.3ba7755c60ab78be"));
         } else {
-            m_undoAction->setToolTip(tr("Chưa có thao tác nào để hoàn tác"));
+            m_undoAction->setToolTip(LTR("legacy.7e1f7bd39931652a"));
         }
     }
     if (m_redoAction) {
         m_redoAction->setEnabled(true);
         if (m_project && m_project->canRedo()) {
-            m_redoAction->setToolTip(tr("Làm lại thao tác vừa hoàn tác (Ctrl+Shift+Z hoặc Ctrl+Y)"));
+            m_redoAction->setToolTip(LTR("legacy.e308648b59e3663c"));
         } else {
-            m_redoAction->setToolTip(tr("Chưa có thao tác nào để làm lại"));
+            m_redoAction->setToolTip(LTR("legacy.757c03c0fa66eb6b"));
         }
     }
 }
@@ -1710,8 +1708,8 @@ void MainWindow::refreshTextPreview() {
 
 bool MainWindow::maybeSaveUnsavedChanges() {
     if (!m_modified) return true;
-    const auto choice = QMessageBox::question(this, tr("Lưu thay đổi?"),
-        tr("Dự án có thay đổi chưa được lưu. Bạn có muốn lưu trước không?"),
+    const auto choice = QMessageBox::question(this, LTR("legacy.fb901ddd265b87e5"),
+        LTR("legacy.5e7aa154be467553"),
         QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel, QMessageBox::Save);
     if (choice == QMessageBox::Cancel) return false;
     if (choice == QMessageBox::Save) {
@@ -1744,7 +1742,7 @@ void MainWindow::onLoadCustomLanguage() {
         statusBar()->showMessage(LTR("lang.loadSuccess") + fi.fileName(), 3000);
         updateUiTexts();
     } else {
-        QMessageBox::warning(this, tr("Lỗi"), LTR("lang.loadFail") + err);
+        QMessageBox::warning(this, LTR("legacy.e68991b7854214b0"), LTR("lang.loadFail") + err);
     }
 }
 
@@ -1758,7 +1756,7 @@ void MainWindow::onGraphicsBackendSelected(const QString& backend) {
     prefSettings.setValue("graphicsBackend", backend);
 
     QString name = "OpenGL 3.3 Core";
-    if (backend == "opengl_latest") name = "OpenGL Mới nhất (Latest Core Profile)";
+    if (backend == "opengl_latest") name = LTR("legacy.5d79269a79b21f2d");
     else if (backend == "vulkan") name = "Vulkan (Experimental)";
 
     QString msg = LTR("menu.settings.backend.restartNotice").arg(name);
@@ -1812,7 +1810,7 @@ void MainWindow::openSettingsDialog(SettingsTab tab) {
 void MainWindow::onThemeSelected(const QString& theme) {
     ThemeManager::setTheme(theme);
     updateUiTexts();
-    statusBar()->showMessage(QString("Đã áp dụng giao diện: %1").arg(theme), 2500);
+    statusBar()->showMessage(QString(LTR("legacy.30f26446e234f2d8")).arg(theme), 2500);
 }
 
 void MainWindow::onAbout() {
