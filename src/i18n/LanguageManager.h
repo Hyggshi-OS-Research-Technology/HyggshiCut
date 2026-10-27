@@ -50,7 +50,7 @@ private:
     LanguageManager() = default;
 
     QMap<QString, LanguagePack> m_packs; // code → pack
-    QString m_currentLang = "vi";
+    QString m_currentLang = "en";
 
     bool parseJsonPack(const QJsonObject& root, LanguagePack& out, QString* errorOut);
 };

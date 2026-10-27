@@ -81,7 +81,10 @@ private:
     QProcess* m_process = nullptr;
     Ticks m_totalDurationTicks = 0;
     QByteArray m_stdoutBuffer;
-    QByteArray m_stderrBuffer;
+    QByteArray m_stderrBuffer; // bounded tail only (FFmpeg may emit huge diagnostic logs)
+    QString m_requestedVideoCodec;
+    QString m_requestedAudioCodec;
+    static constexpr qsizetype kMaxStderrBytes = 256 * 1024;
     QTemporaryDir m_tempDir; // PNG rasters for text overlays
     bool m_finishedEmitted = false; // guards against duplicate finished() emissions
     // Accumulated from the most-recent ffmpeg -progress block for UI display.

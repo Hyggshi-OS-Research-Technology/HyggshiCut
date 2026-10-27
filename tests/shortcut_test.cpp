@@ -143,14 +143,17 @@ int main(int argc, char** argv) {
     {
         const QList<QAction*> actions = allMenuActions(&window);
         auto countFor = [&](const QKeySequence& seq) {
-            int n = 0;
+            // A shared QAction may be reachable from more than one menu.
+            // Count action instances, not menu appearances; otherwise the
+            // same intentionally shared shortcut is falsely reported twice.
+            QSet<QAction*> matching;
             for (QAction* a : actions) {
                 const auto shortcuts = a->shortcuts();
                 for (const QKeySequence& s : shortcuts) {
-                    if (s == seq) { ++n; break; }
+                    if (s == seq) { matching.insert(a); break; }
                 }
             }
-            return n;
+            return matching.size();
         };
 
         struct Expect { QKeySequence seq; const char* name; };

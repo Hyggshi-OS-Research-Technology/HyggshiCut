@@ -52,7 +52,7 @@ jobs:
           # what the .deb actually declares. Also installs ninja, which the
           # CMake presets use as their generator.
           ./scripts/install-build-deps.sh
-          sudo apt-get install -y --no-install-recommends ninja-build qt6-qpa-plugins
+          sudo apt-get install -y --no-install-recommends ninja-build qt6-qpa-plugins ffmpeg
 
       - name: Build Debian package (.deb)
         run: |
@@ -70,18 +70,52 @@ jobs:
           dpkg-deb --info "${deb_file}"
           dpkg-deb --contents "${deb_file}" | head -40
 
-      - name: Build & run the offline core tests
+      - name: Build & run the core and export tests
         run: |
-          # Tests are opt-in (HYGGSHICUT_BUILD_TESTS) and the .deb build above
-          # does not touch them, so compile and run them here to keep them
-          # from rotting. They need no display and no real media.
+          # Tests are opt-in and the .deb build above does not compile them.
+          # CTest generates tiny synthetic media locally for integration tests;
+          # no downloads or checked-in binary fixtures are needed. GUI tests
+          # use Qt's offscreen platform plugin.
           #
-          # Every test is registered with CTest in CMakeLists.txt, so this
-          # runs the whole suite rather than a hand-maintained list that
-          # silently omitted tests as they were added.
+          # Every test is registered with CTest, including the synthetic-media
+          # setup fixture, so the suite runs from a clean checkout.
           cmake -S . -B build-tests -DCMAKE_BUILD_TYPE=Release -DHYGGSHICUT_BUILD_TESTS=ON
           cmake --build build-tests -j"$(nproc)"
-          ctest --test-dir build-tests --output-on-failure
+          if ctest --test-dir build-tests --output-on-failure; then
+            echo "CTest suite passed." >> "$GITHUB_STEP_SUMMARY"
+          else
+            python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          failed_file = Path("build-tests/Testing/Temporary/LastTestsFailed.log")
+          log_file = Path("build-tests/Testing/Temporary/LastTest.log")
+          failed = []
+          if failed_file.exists():
+              failed = [line.split(":", 1)[1].strip() for line in failed_file.read_text().splitlines()
+                        if ":" in line]
+          log = log_file.read_text(errors="replace") if log_file.exists() else ""
+          chunks = re.split(r"\n-{10,}\n", log)
+          summary = ["### Failed CTest cases", ""]
+          for name in failed:
+              chunk = next((item for item in chunks if re.search(
+                  rf"(?:Testing|Test):\s*{re.escape(name)}(?:\s|$)", item)), "")
+              detail_lines = [line.strip() for line in chunk.splitlines()
+                              if line.strip() and not line.strip().startswith(("Command:", "Directory:"))]
+              detail = " | ".join(detail_lines[-12:]) or "No failure output in LastTest.log"
+              detail = detail[:1800]
+              escaped = detail.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+              print(f"::error title=CTest {name}::{escaped}")
+              summary.append(f"- **{name}**: {detail}")
+          if not failed:
+              print("::error title=CTest failures::See CTest output above; LastTestsFailed.log was empty")
+              summary.append("- Could not parse LastTestsFailed.log; see the CTest log.")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as output:
+              output.write("\n".join(summary) + "\n")
+          PY
+            exit 1
+          fi
 
       - name: Upload .deb artifact
         uses: actions/upload-artifact@v4

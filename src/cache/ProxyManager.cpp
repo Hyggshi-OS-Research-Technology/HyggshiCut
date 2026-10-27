@@ -11,11 +11,19 @@
 #include <QSettings>
 #include <algorithm>
 #include "../core/EnvironmentCheck.h"
+#include "../i18n/LanguageManager.h"
 
 namespace hc {
 
 namespace {
 constexpr const char* kIndexFileName = "index.json";
+constexpr qsizetype kMaxDiagnosticBytes = 128 * 1024;
+
+void appendDiagnosticTail(QByteArray& tail, const QByteArray& chunk) {
+    tail += chunk;
+    if (tail.size() > kMaxDiagnosticBytes)
+        tail.remove(0, tail.size() - kMaxDiagnosticBytes);
+}
 }
 
 ProxyManager::ProxyManager(QObject* parent) : QObject(parent) {
@@ -232,6 +240,7 @@ void ProxyManager::startNextInQueue() {
     qDebug().noquote() << "[ProxyManager] ffmpeg" << args.join(' ');
 
     m_stdoutBuffer.clear();
+    m_stderrBuffer.clear();
     m_process = new QProcess(this);
     // Resolve ffmpeg the same way Exporter does (PATH, then the usual install
     // prefixes). Previously this hard-coded "ffmpeg", so proxy generation
@@ -241,6 +250,9 @@ void ProxyManager::startNextInQueue() {
     m_process->setProgram(ffmpegProg.isEmpty() ? QStringLiteral("ffmpeg") : ffmpegProg);
     m_process->setArguments(args);
     connect(m_process, &QProcess::readyReadStandardOutput, this, &ProxyManager::onReadyReadStandardOutput);
+    connect(m_process, &QProcess::readyReadStandardError, this, [this]() {
+        if (m_process) appendDiagnosticTail(m_stderrBuffer, m_process->readAllStandardError());
+    });
     connect(m_process, &QProcess::finished, this, &ProxyManager::onProcessFinished);
     connect(m_process, &QProcess::errorOccurred, this, &ProxyManager::onProcessErrorOccurred);
     m_process->start();
@@ -268,7 +280,8 @@ void ProxyManager::onReadyReadStandardOutput() {
     }
 }
 
-void ProxyManager::finishCurrentJob(bool success, const QString& finalPathOnSuccess) {
+void ProxyManager::finishCurrentJob(bool success, const QString& finalPathOnSuccess,
+                                    const QString& failureReason) {
     if (!m_hasCurrentJob) return;
     const QString assetId = m_currentJob.asset->id;
     const QString key = m_currentJob.identityKey;
@@ -282,7 +295,8 @@ void ProxyManager::finishCurrentJob(bool success, const QString& finalPathOnSucc
     } else {
         m_statusByKey[key] = ProxyStatus::Failed;
         emit proxyStatusChanged(assetId, ProxyStatus::Failed);
-        emit proxyFailed(assetId, tr("ffmpeg loi khi tao proxy"));
+        emit proxyFailed(assetId, failureReason.isEmpty()
+            ? LTR("proxy.error.failed") : failureReason);
     }
 
     m_queueDone++;
@@ -298,6 +312,7 @@ void ProxyManager::finishCurrentJob(bool success, const QString& finalPathOnSucc
 }
 
 void ProxyManager::onProcessFinished(int exitCode, QProcess::ExitStatus status) {
+    if (m_process) appendDiagnosticTail(m_stderrBuffer, m_process->readAllStandardError());
     const bool success = (status == QProcess::NormalExit && exitCode == 0);
     QString finalPath;
     if (success && m_hasCurrentJob) {
@@ -310,8 +325,40 @@ void ProxyManager::onProcessFinished(int exitCode, QProcess::ExitStatus status) 
     if (!success || finalPath.isEmpty()) {
         if (!m_currentJobTempPath.isEmpty()) QFile::remove(m_currentJobTempPath);
     }
+    QString failureReason;
+    if (!success || finalPath.isEmpty()) {
+        const QString rawDetails = QString::fromLocal8Bit(m_stderrBuffer).trimmed();
+        const QString lower = rawDetails.toLower();
+        QString details;
+        const QStringList lines = rawDetails.split('\n', Qt::SkipEmptyParts);
+        for (auto it = lines.crbegin(); it != lines.crend(); ++it) {
+            const QString line = it->trimmed();
+            if (line.isEmpty() || line.startsWith(QStringLiteral("frame="))) continue;
+            if (details.isEmpty()) details = line;
+            const QString lowerLine = line.toLower();
+            if (lowerLine.contains(QStringLiteral("error")) ||
+                lowerLine.contains(QStringLiteral("failed")) ||
+                lowerLine.contains(QStringLiteral("unknown")) ||
+                lowerLine.contains(QStringLiteral("cannot")) ||
+                lowerLine.contains(QStringLiteral("not found"))) {
+                details = line;
+                break;
+            }
+        }
+        if (details.size() > 1800) details = details.right(1800);
+        if (lower.contains(QStringLiteral("unknown encoder")) ||
+            lower.contains(QStringLiteral("encoder not found"))) {
+            failureReason = LTR("proxy.error.codecUnavailable").arg(details);
+        } else if (lower.contains(QStringLiteral("cannot allocate memory")) ||
+                   lower.contains(QStringLiteral("out of memory")) ||
+                   lower.contains(QStringLiteral("failed to allocate"))) {
+            failureReason = LTR("proxy.error.lowMemory").arg(details);
+        } else if (!details.isEmpty()) {
+            failureReason = LTR("proxy.error.ffmpeg").arg(details);
+        }
+    }
     if (m_process) { m_process->deleteLater(); m_process = nullptr; }
-    finishCurrentJob(success && !finalPath.isEmpty(), finalPath);
+    finishCurrentJob(success && !finalPath.isEmpty(), finalPath, failureReason);
 }
 
 void ProxyManager::onProcessErrorOccurred(QProcess::ProcessError error) {
@@ -319,7 +366,7 @@ void ProxyManager::onProcessErrorOccurred(QProcess::ProcessError error) {
         qWarning() << "[ProxyManager] khong the chay ffmpeg (kiem tra ffmpeg co trong PATH khong)";
         if (m_process) { m_process->deleteLater(); m_process = nullptr; }
         if (!m_currentJobTempPath.isEmpty()) QFile::remove(m_currentJobTempPath);
-        finishCurrentJob(false, QString());
+        finishCurrentJob(false, QString(), LTR("proxy.error.start"));
     }
 }
 

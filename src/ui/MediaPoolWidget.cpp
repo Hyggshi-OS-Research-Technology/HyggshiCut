@@ -97,12 +97,10 @@ QPixmap presetIcon(int w, int h, const QColor& c1, const QColor& c2, const QStri
     pm.fill(Qt::transparent);
     QPainter p(&pm);
     p.setRenderHint(QPainter::Antialiasing);
-    QLinearGradient g(0, 0, w, h);
-    g.setColorAt(0.0, c1);
-    g.setColorAt(1.0, c2);
-    p.setBrush(g);
+    Q_UNUSED(c2);
+    p.setBrush(c1);
     p.setPen(Qt::NoPen);
-    p.drawRoundedRect(2, 2, w - 4, h - 4, 8, 8);
+    p.drawRect(2, 2, w - 4, h - 4);
 
     QFont f = p.font();
     f.setBold(true);
@@ -181,7 +179,7 @@ void MediaPoolWidget::buildCategoryRail() {
     m_categories->setFocusPolicy(Qt::NoFocus);
     m_categories->setStyleSheet(
         "QListWidget { background-color: #16161a; border: none; }"
-        "QListWidget::item { padding: 12px 6px; border-radius: 4px; }"
+        "QListWidget::item { padding: 12px 6px; border-radius: 0px; }"
         "QListWidget::item:selected { background-color: #2b5b84; color: white; font-weight: bold; }");
 
     const QStringList keys = {
@@ -228,7 +226,7 @@ void MediaPoolWidget::buildMediaPage() {
     btnLayout->addWidget(m_importBtn);
 
     m_recordBtn = new QPushButton(page);
-    m_recordBtn->setStyleSheet("QPushButton { background-color: #3b2525; color: #ff7777; font-weight: bold; border-radius: 4px; padding: 4px 8px; } QPushButton:hover { background-color: #4a2e2e; color: #ff9999; }");
+    m_recordBtn->setStyleSheet("QPushButton { background-color: #3b2525; color: #ff7777; font-weight: bold; border-radius: 0px; padding: 4px 8px; } QPushButton:hover { background-color: #4a2e2e; color: #ff9999; }");
     connect(m_recordBtn, &QPushButton::clicked, this, &MediaPoolWidget::recordScreenRequested);
     btnLayout->addWidget(m_recordBtn);
 
@@ -474,7 +472,7 @@ void MediaPoolWidget::refresh() {
 
     m_mediaCount->setText(shown == total
         ? tr("%1 media").arg(total)
-        : tr("Đang hiện %1/%2 media").arg(shown).arg(total));
+        : LTR("legacy.fca03d8ff08e31ec").arg(shown).arg(total));
 
     // --- Sounds page (audio assets change with the project) ---
     populateSoundsPage();
@@ -570,13 +568,11 @@ void MediaPoolWidget::populatePresetPages() {
             const QString layerName = LTR(layerKey);
             auto* item = new QListWidgetItem(
                 (layerName.isEmpty() || layerName == layerKey)
-                    ? tr("Lớp hiệu ứng (Effect Layer)") : layerName);
+                    ? LTR("legacy.2fcae99ee7feb134") : layerName);
             item->setIcon(QIcon(presetIcon(kThumbWidth, kThumbHeight, layerCol,
                                            layerCol.darker(150), QStringLiteral("FX"))));
             item->setData(Qt::UserRole, EffectsPanel::effectLayerCardId());
-            item->setToolTip(tr("Nhấp đúp để thêm một Lớp hiệu ứng trải suốt timeline, "
-                                "hoặc kéo thả vào timeline để đặt tại vị trí thả. "
-                                "Mọi hiệu ứng trên lớp này áp dụng cho các clip nằm DƯỚI nó."));
+            item->setToolTip(LTR("legacy.a55cc00ac820a65f"));
             m_effectsList->addItem(item);
         }
 

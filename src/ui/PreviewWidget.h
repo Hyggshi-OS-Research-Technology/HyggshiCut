@@ -30,6 +30,7 @@ public:
 
     void setAudioMeterVisible(bool visible);
     bool isAudioMeterVisible() const;
+    void retranslateUi();
 
     // Show/hide the bounding-box overlay for the currently selected clip.
     // srcW/srcH = source media pixel dimensions.

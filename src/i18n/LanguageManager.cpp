@@ -128,7 +128,7 @@ void LanguageManager::loadPreference() {
         discoverBundledLanguages();
     }
     QSettings settings("HyggshiCut", "Language");
-    const QString saved = settings.value("language", "vi").toString();
+    const QString saved = settings.value("language", "en").toString();
     if (m_packs.contains(saved)) {
         m_currentLang = saved;
     }
