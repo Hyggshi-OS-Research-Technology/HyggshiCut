@@ -102,15 +102,15 @@ void WindowSettingsDialog::setupUi() {
     };
 
     m_okBtn = new QPushButton(getLabel("dialog.ok", "btn.ok", "OK"), this);
-    m_okBtn->setStyleSheet("QPushButton { background-color: #e06c1b; color: #ffffff; font-weight: bold; border-radius: 4px; padding: 6px 22px; font-size: 13px; } QPushButton:hover { background-color: #ff7f2a; }");
+    m_okBtn->setStyleSheet("QPushButton { background-color: #e06c1b; color: #ffffff; font-weight: bold; border-radius: 0px; padding: 6px 22px; font-size: 13px; } QPushButton:hover { background-color: #ff7f2a; }");
     connect(m_okBtn, &QPushButton::clicked, this, &WindowSettingsDialog::onOkClicked);
 
     m_applyBtn = new QPushButton(getLabel("dialog.apply", "btn.apply", "Apply"), this);
-    m_applyBtn->setStyleSheet("QPushButton { background-color: #383844; color: #eeeeee; border-radius: 4px; padding: 6px 18px; font-size: 13px; } QPushButton:hover { background-color: #4a4a58; }");
+    m_applyBtn->setStyleSheet("QPushButton { background-color: #383844; color: #eeeeee; border-radius: 0px; padding: 6px 18px; font-size: 13px; } QPushButton:hover { background-color: #4a4a58; }");
     connect(m_applyBtn, &QPushButton::clicked, this, &WindowSettingsDialog::onApplyClicked);
 
     m_cancelBtn = new QPushButton(getLabel("dialog.cancel", "btn.cancel", "Cancel"), this);
-    m_cancelBtn->setStyleSheet("QPushButton { background-color: #2c2c34; color: #cccccc; border-radius: 4px; padding: 6px 18px; font-size: 13px; } QPushButton:hover { background-color: #3c3c46; color: #ffffff; }");
+    m_cancelBtn->setStyleSheet("QPushButton { background-color: #2c2c34; color: #cccccc; border-radius: 0px; padding: 6px 18px; font-size: 13px; } QPushButton:hover { background-color: #3c3c46; color: #ffffff; }");
     connect(m_cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
 
     bottomLayout->addWidget(m_okBtn);
@@ -527,7 +527,7 @@ void WindowSettingsDialog::onRunEnvironmentCheck() {
             badge->setFixedWidth(26);
             badge->setAlignment(Qt::AlignCenter);
             badge->setStyleSheet(
-                QStringLiteral("background: %1; color: #fff; border-radius: 3px; "
+                QStringLiteral("background: %1; color: #fff; border-radius: 0px; "
                                "font-weight: bold; font-size: 10px; padding: 2px 0;")
                     .arg(envStatusColor(res.status)));
             rowLayout->addWidget(badge, 0, Qt::AlignTop);

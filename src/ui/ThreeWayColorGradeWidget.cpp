@@ -78,17 +78,17 @@ ThreeWayColorGradeWidget::ThreeWayColorGradeWidget(QWidget* parent) : QWidget(pa
     topBar->addWidget(m_presetCombo, 1);
 
     m_saveBtn = new QPushButton(LTR("effects.savePreset"), this);
-    m_saveBtn->setStyleSheet("background-color: #3b3b44; color: white; padding: 3px 8px; border-radius: 4px;");
+    m_saveBtn->setStyleSheet("background-color: #3b3b44; color: white; padding: 3px 8px; border-radius: 0px;");
     connect(m_saveBtn, &QPushButton::clicked, this, &ThreeWayColorGradeWidget::onSavePreset);
     topBar->addWidget(m_saveBtn);
 
     m_deleteBtn = new QPushButton(LTR("effects.deletePreset"), this);
-    m_deleteBtn->setStyleSheet("background-color: #4a2a2a; color: white; padding: 3px 8px; border-radius: 4px;");
+    m_deleteBtn->setStyleSheet("background-color: #4a2a2a; color: white; padding: 3px 8px; border-radius: 0px;");
     connect(m_deleteBtn, &QPushButton::clicked, this, &ThreeWayColorGradeWidget::onDeletePreset);
     topBar->addWidget(m_deleteBtn);
 
     m_resetBtn = new QPushButton(LTR("effects.resetAll"), this);
-    m_resetBtn->setStyleSheet("background-color: #2b3b55; color: white; padding: 3px 8px; border-radius: 4px; font-weight: bold;");
+    m_resetBtn->setStyleSheet("background-color: #2b3b55; color: white; padding: 3px 8px; border-radius: 0px; font-weight: bold;");
     connect(m_resetBtn, &QPushButton::clicked, this, &ThreeWayColorGradeWidget::resetAll);
     topBar->addWidget(m_resetBtn);
 

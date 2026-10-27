@@ -34,10 +34,10 @@ ProjectSettingsDialog::ProjectSettingsDialog(Project* project, bool isNewProject
     setStyleSheet(
         "QDialog { background-color: #1e1e22; color: #eee; }"
         "QLabel { color: #ddd; }"
-        "QGroupBox { border: 1px solid #3d3d45; border-radius: 6px; margin-top: 1.2em; font-weight: bold; color: #ff9944; }"
+        "QGroupBox { border: 1px solid #3d3d45; border-radius: 0px; margin-top: 1.2em; font-weight: bold; color: #ff9944; }"
         "QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 4px; }"
-        "QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox { background-color: #2b2b32; color: #fff; border: 1px solid #444; border-radius: 4px; padding: 4px 8px; }"
-        "QPushButton { background-color: #3b3b44; color: white; border-radius: 4px; padding: 6px 16px; font-weight: bold; }"
+        "QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox { background-color: #2b2b32; color: #fff; border: 1px solid #444; border-radius: 0px; padding: 4px 8px; }"
+        "QPushButton { background-color: #3b3b44; color: white; border-radius: 0px; padding: 6px 16px; font-weight: bold; }"
         "QPushButton:hover { background-color: #4a4a56; }"
     );
 
@@ -136,7 +136,7 @@ void ProjectSettingsDialog::setupUi(bool isNewProject) {
     m_ratioPreviewLabel = new QLabel(this);
     m_ratioPreviewLabel->setAlignment(Qt::AlignCenter);
     m_ratioPreviewLabel->setFixedHeight(80);
-    m_ratioPreviewLabel->setStyleSheet("background-color: #141417; border: 1px dashed #444; border-radius: 4px; padding: 6px;");
+    m_ratioPreviewLabel->setStyleSheet("background-color: #141417; border: 1px dashed #444; border-radius: 0px; padding: 6px;");
     ratioLayout->addWidget(m_ratioPreviewLabel);
 
     mainLayout->addWidget(ratioGroup);
@@ -149,7 +149,7 @@ void ProjectSettingsDialog::setupUi(bool isNewProject) {
     connect(m_cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
 
     m_okBtn = new QPushButton(isNewProject ? tr("Bắt đầu dựng video") : tr("Áp dụng"), this);
-    m_okBtn->setStyleSheet("background-color: #ff6a00; color: white; font-weight: bold; border-radius: 4px; padding: 6px 20px;");
+    m_okBtn->setStyleSheet("background-color: #ff6a00; color: white; font-weight: bold; border-radius: 0px; padding: 6px 20px;");
     connect(m_okBtn, &QPushButton::clicked, this, &QDialog::accept);
 
     btnLayout->addWidget(m_cancelBtn);

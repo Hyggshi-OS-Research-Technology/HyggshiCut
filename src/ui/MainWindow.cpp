@@ -513,8 +513,10 @@ void MainWindow::buildToolbar() {
         m_mainToolbar->setMovable(false);
     }
     m_mainToolbar->clear();
-    m_mainToolbar->setIconSize(QSize(18, 18));
+    m_mainToolbar->setIconSize(QSize(16, 16));
     m_mainToolbar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    m_mainToolbar->setMinimumHeight(40);
+    m_mainToolbar->setMaximumHeight(44);
 
     const bool wasCutChecked = m_cutToolAction ? m_cutToolAction->isChecked() : false;
 

@@ -216,6 +216,13 @@
     "timeline.track.text": "Văn bản",
     "timeline.effectLayer": "Lớp hiệu ứng",
     "timeline.effectLayerHint": "Áp dụng hiệu ứng của lớp này cho mọi clip nằm DƯỚI nó",
+    "timeline.context.addVisualLayer": "Thêm layer video/ảnh",
+    "timeline.context.addAudioLayer": "Thêm layer audio",
+    "timeline.context.addEffectLayer": "Thêm lớp hiệu ứng",
+    "timeline.trackCount": "%1 lớp",
+    "preview.play": "Phát",
+    "preview.pause": "Tạm dừng",
+    "preview.meter.tooltip": "Bật hoặc tắt đồng hồ đo mức âm thanh",
 
     "transform.group": "Transform / Free Transform",
     "transform.posX": "Vị trí X",

@@ -60,16 +60,16 @@ ExportDialog::ExportDialog(Project* project, QWidget* parent)
     setStyleSheet(
         "QDialog { background-color: #1e1e22; color: #eee; }"
         "QLabel { color: #ddd; }"
-        "QGroupBox { border: 1px solid #3d3d45; border-radius: 6px; margin-top: 1.2em; font-weight: bold; color: #ff9944; }"
+        "QGroupBox { border: 1px solid #3d3d45; border-radius: 0px; margin-top: 1.2em; font-weight: bold; color: #ff9944; }"
         "QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 4px; }"
-        "QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox { background-color: #2b2b32; color: #fff; border: 1px solid #444; border-radius: 4px; padding: 4px 8px; }"
-        "QTabWidget::pane { border: 1px solid #3d3d45; background-color: #24242a; border-radius: 6px; }"
+        "QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox { background-color: #2b2b32; color: #fff; border: 1px solid #444; border-radius: 0px; padding: 4px 8px; }"
+        "QTabWidget::pane { border: 1px solid #3d3d45; background-color: #24242a; border-radius: 0px; }"
         "QTabBar::tab { background-color: #1a1a1e; color: #aaa; padding: 8px 16px; margin-right: 2px; border-top-left-radius: 4px; border-top-right-radius: 4px; }"
         "QTabBar::tab:selected { background-color: #24242a; color: #ff9944; font-weight: bold; }"
-        "QPushButton { background-color: #3b3b44; color: white; border-radius: 4px; padding: 6px 16px; font-weight: bold; }"
+        "QPushButton { background-color: #3b3b44; color: white; border-radius: 0px; padding: 6px 16px; font-weight: bold; }"
         "QPushButton:hover { background-color: #4a4a56; }"
-        "QProgressBar { border: 1px solid #444; border-radius: 4px; text-align: center; background-color: #141418; color: white; }"
-        "QProgressBar::chunk { background-color: #ff6a00; border-radius: 3px; }"
+        "QProgressBar { border: 1px solid #444; border-radius: 0px; text-align: center; background-color: #141418; color: white; }"
+        "QProgressBar::chunk { background-color: #ff6a00; border-radius: 0px; }"
     );
 
     setupUi();
@@ -309,7 +309,7 @@ void ExportDialog::setupUi() {
     connect(m_closeBtn, &QPushButton::clicked, this, &QDialog::reject);
 
     m_startBtn = new QPushButton(tr("Bắt đầu xuất video"), this);
-    m_startBtn->setStyleSheet("background-color: #ff6a00; color: white; font-weight: bold; font-size: 13px; border-radius: 4px; padding: 8px 24px;");
+    m_startBtn->setStyleSheet("background-color: #ff6a00; color: white; font-weight: bold; font-size: 13px; border-radius: 0px; padding: 8px 24px;");
     connect(m_startBtn, &QPushButton::clicked, this, &ExportDialog::onStartClicked);
 
     btnLayout->addWidget(m_closeBtn);
@@ -468,7 +468,7 @@ void ExportDialog::onStartClicked() {
     if (m_exporter && m_exporter->isRunning()) {
         m_exporter->cancel();
         m_startBtn->setText(tr("Bắt đầu xuất video"));
-        m_startBtn->setStyleSheet("background-color: #ff6a00; color: white; font-weight: bold; border-radius: 4px; padding: 8px 24px;");
+        m_startBtn->setStyleSheet("background-color: #ff6a00; color: white; font-weight: bold; border-radius: 0px; padding: 8px 24px;");
         m_statusLabel->setText(tr("Đã hủy xuất video."));
         setControlsEnabled(true);
         return;
@@ -518,7 +518,7 @@ void ExportDialog::onStartClicked() {
     m_progressBar->setValue(0);
     m_statusLabel->setText(tr("Đang xuất video qua FFmpeg..."));
     m_startBtn->setText(tr("Hủy xuất"));
-    m_startBtn->setStyleSheet("background-color: #8b2525; color: white; font-weight: bold; border-radius: 4px; padding: 8px 24px;");
+    m_startBtn->setStyleSheet("background-color: #8b2525; color: white; font-weight: bold; border-radius: 0px; padding: 8px 24px;");
     setControlsEnabled(false);
 
     m_exportTimer.restart();
@@ -555,7 +555,7 @@ void ExportDialog::onProgress(double fraction, QString etaText) {
 
 void ExportDialog::onFinished(bool success, QString message) {
     m_startBtn->setText(tr("Bắt đầu xuất video"));
-    m_startBtn->setStyleSheet("background-color: #ff6a00; color: white; font-weight: bold; border-radius: 4px; padding: 8px 24px;");
+    m_startBtn->setStyleSheet("background-color: #ff6a00; color: white; font-weight: bold; border-radius: 0px; padding: 8px 24px;");
     m_progressBar->setValue(success ? 100 : 0);
     setControlsEnabled(true);
 

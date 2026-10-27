@@ -24,17 +24,17 @@ PluginManagerDialog::PluginManagerDialog(QWidget* parent)
         QListWidget {
             background-color: #12121a;
             border: 1px solid #333340;
-            border-radius: 5px;
+            border-radius: 0px;
             color: #ddd;
         }
-        QListWidget::item { padding: 7px 8px; border-radius: 3px; }
+        QListWidget::item { padding: 7px 8px; border-radius: 0px; }
         QListWidget::item:selected { background-color: #2b5b84; color: white; font-weight: bold; }
         QLabel { color: #ccc; }
         QPushButton {
             background-color: #2b2b35;
             color: #eee;
             padding: 5px 14px;
-            border-radius: 4px;
+            border-radius: 0px;
             border: 1px solid #444;
         }
         QPushButton:hover { background-color: #38384a; }

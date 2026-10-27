@@ -216,6 +216,13 @@
     "timeline.track.text": "Text",
     "timeline.effectLayer": "Effect Layer",
     "timeline.effectLayerHint": "Applies its effects to every clip below it",
+    "timeline.context.addVisualLayer": "Add video/image layer",
+    "timeline.context.addAudioLayer": "Add audio layer",
+    "timeline.context.addEffectLayer": "Add effect layer",
+    "timeline.trackCount": "%1 layers",
+    "preview.play": "Play",
+    "preview.pause": "Pause",
+    "preview.meter.tooltip": "Show or hide the audio level meter",
 
     "transform.group": "Transform / Free Transform",
     "transform.posX": "Position X",

@@ -72,7 +72,7 @@ void drawControlButton(QPainter& p, const QRect& r, int ctrlIndex, bool active, 
 
     p.setBrush(bgColor);
     p.setPen(QPen(borderColor, 1.0));
-    p.drawRoundedRect(r, 4.0, 4.0);
+    p.drawRect(r);
 
     const int cx = r.center().x();
     const int cy = r.center().y();
@@ -154,7 +154,7 @@ void drawControlButton(QPainter& p, const QRect& r, int ctrlIndex, bool active, 
         // Lock body
         p.setPen(QPen(bodyColor.darker(120), 0.8));
         p.setBrush(bodyColor);
-        p.drawRoundedRect(QRect(cx - 5, cy - 1, 10, 8), 2.0, 2.0);
+        p.drawRect(QRect(cx - 5, cy - 1, 10, 8));
         // Keyhole dot
         p.setPen(Qt::NoPen);
         p.setBrush(active ? QColor(120, 53, 15) : QColor(30, 41, 59));
@@ -1005,13 +1005,13 @@ void TimelineWidget::paintEvent(QPaintEvent* event) {
             const QRect badgeRect(m_headerWidth - 66, (m_rulerHeight - 18) / 2, 56, 18);
             p.setBrush(QColor(255, 255, 255, 12));
             p.setPen(QPen(QColor(255, 255, 255, 25), 1.0));
-            p.drawRoundedRect(badgeRect, 4.0, 4.0);
+            p.drawRect(badgeRect);
             QFont badgeFont = p.font();
             badgeFont.setPointSize(7);
             badgeFont.setBold(false);
             p.setFont(badgeFont);
             p.setPen(QColor(148, 163, 184));
-            p.drawText(badgeRect, Qt::AlignCenter, QString("%1 %2").arg(trackCount).arg(tr("Lớp")));
+            p.drawText(badgeRect, Qt::AlignCenter, LTR("timeline.trackCount").arg(trackCount));
             p.restore();
         }
 
@@ -1138,7 +1138,7 @@ void TimelineWidget::paintEvent(QPaintEvent* event) {
                 const QColor badgeFg = (track.type == TrackType::Visual) ? QColor(147, 197, 253) : QColor(110, 231, 183);
                 p.setBrush(badgeBg);
                 p.setPen(QPen(badgeBorder, 1.0));
-                p.drawRoundedRect(badgeRect, 4.0, 4.0);
+                p.drawRect(badgeRect);
                 QFont bFont = p.font();
                 bFont.setPointSize(8);
                 bFont.setBold(true);
@@ -1188,7 +1188,7 @@ void TimelineWidget::paintEvent(QPaintEvent* event) {
                 const QColor badgeFg = (track.type == TrackType::Visual) ? QColor(147, 197, 253) : QColor(110, 231, 183);
                 p.setBrush(badgeBg);
                 p.setPen(QPen(badgeBorder, 1.0));
-                p.drawRoundedRect(badgeRect, 3.0, 3.0);
+                p.drawRect(badgeRect);
                 QFont bFont = p.font();
                 bFont.setPointSize(7);
                 bFont.setBold(true);
@@ -1231,40 +1231,30 @@ void TimelineWidget::paintEvent(QPaintEvent* event) {
             p.save();
             p.setRenderHint(QPainter::Antialiasing, true);
 
-            QLinearGradient clipGrad(0, r.top(), 0, r.bottom());
+            // Flat, solid clip colors are easier to scan at a glance and
+            // avoid glossy gradients competing with thumbnails/waveforms.
+            QColor clipColor;
             if (clip.type == ClipType::Audio) {
-                clipGrad.setColorAt(0.0, QColor(16, 145, 105));
-                clipGrad.setColorAt(1.0, QColor(10, 100, 72));
+                clipColor = QColor("#176b5b");
             } else if (clip.isEffectLayer()) {
-                // Effect Layer: warm orange (same family as the "Fx" badge) so
-                // it reads as "effects carrier", not as media.
-                clipGrad.setColorAt(0.0, QColor(217, 110, 24));
-                clipGrad.setColorAt(1.0, QColor(146, 62, 18));
+                clipColor = QColor("#8c4d1d");
             } else if (clip.type == ClipType::Text) {
-                clipGrad.setColorAt(0.0, QColor(139, 92, 246));
-                clipGrad.setColorAt(1.0, QColor(109, 40, 217));
+                clipColor = QColor("#5a478f");
             } else {
-                clipGrad.setColorAt(0.0, QColor(49, 115, 222));
-                clipGrad.setColorAt(1.0, QColor(29, 78, 175));
+                clipColor = QColor("#285f98");
             }
 
             if (track.locked || track.hidden) {
                 p.setOpacity(0.6);
             }
 
-            p.setBrush(clipGrad);
+            p.setBrush(clipColor);
             if (selected) {
                 p.setPen(QPen(QColor(251, 191, 36), 1.8));
             } else {
                 p.setPen(QPen(QColor(255, 255, 255, 40), 1.0));
             }
-            p.drawRoundedRect(r.adjusted(0, 0, -1, -1), 4.0, 4.0);
-
-            if (r.width() > 6 && r.height() > 8) {
-                p.setPen(Qt::NoPen);
-                p.setBrush(QColor(255, 255, 255, 45));
-                p.drawRoundedRect(QRect(r.left() + 2, r.top() + 1, r.width() - 4, 2), 1.0, 1.0);
-            }
+            p.drawRect(r.adjusted(0, 0, -1, -1));
 
             // Effect Layer: diagonal hatch across the block. It has no media
             // of its own (no thumbnail, no waveform), so the hatch is what
@@ -1273,7 +1263,7 @@ void TimelineWidget::paintEvent(QPaintEvent* event) {
             if (clip.isEffectLayer() && r.width() > 6 && r.height() > 6) {
                 p.save();
                 QPainterPath blockPath;
-                blockPath.addRoundedRect(QRectF(r.adjusted(1, 1, -2, -2)), 3.5, 3.5);
+                blockPath.addRect(QRectF(r.adjusted(1, 1, -2, -2)));
                 p.setClipPath(blockPath);
                 p.setPen(QPen(QColor(255, 255, 255, 34), 1.0));
                 const int step = 10;
@@ -1396,7 +1386,7 @@ void TimelineWidget::paintEvent(QPaintEvent* event) {
                 // Dark pill on the orange Effect Layer block, amber-orange pill
                 // everywhere else (where the clip body is blue/green/violet).
                 p.setBrush(clip.isEffectLayer() ? QColor(20, 20, 24, 165) : QColor(249, 115, 22, 235));
-                p.drawRoundedRect(badge, 3.0, 3.0);
+                p.drawRect(badge);
                 p.setPen(Qt::white);
                 p.drawText(badge, Qt::AlignCenter, badgeText);
                 p.setFont(clipFont);
@@ -2376,19 +2366,19 @@ void TimelineWidget::contextMenuEvent(QContextMenuEvent* event) {
             });
 
             menu.addSeparator();
-            menu.addAction(tr("Thêm layer video/ảnh"), [this]() {
+            menu.addAction(LTR("timeline.context.addVisualLayer"), [this]() {
                 pushUndo();
                 m_project->timeline().addTrack(TrackType::Visual, QString("Visual %1").arg(m_project->timeline().tracks().size() + 1));
                 refresh();
                 emit timelineEdited();
             });
-            menu.addAction(tr("Thêm layer audio"), [this]() {
+            menu.addAction(LTR("timeline.context.addAudioLayer"), [this]() {
                 pushUndo();
                 m_project->timeline().addTrack(TrackType::Audio, QString("Audio %1").arg(m_project->timeline().tracks().size() + 1));
                 refresh();
                 emit timelineEdited();
             });
-            menu.addAction(tr("Thêm lớp hiệu ứng (Effect Layer)"), this,
+            menu.addAction(LTR("timeline.context.addEffectLayer"), this,
                              &TimelineWidget::addEffectLayer);
 
             menu.exec(event->globalPos());
@@ -2452,19 +2442,19 @@ void TimelineWidget::contextMenuEvent(QContextMenuEvent* event) {
     }
 
     // Default right-click menu for empty timeline area
-    menu.addAction(tr("Thêm layer video/ảnh"), [this]() {
+    menu.addAction(LTR("timeline.context.addVisualLayer"), [this]() {
         pushUndo();
         m_project->timeline().addTrack(TrackType::Visual, QString("Visual %1").arg(m_project->timeline().tracks().size() + 1));
         refresh();
         emit timelineEdited();
     });
-    menu.addAction(tr("Thêm layer audio"), [this]() {
+    menu.addAction(LTR("timeline.context.addAudioLayer"), [this]() {
         pushUndo();
         m_project->timeline().addTrack(TrackType::Audio, QString("Audio %1").arg(m_project->timeline().tracks().size() + 1));
         refresh();
         emit timelineEdited();
     });
-    menu.addAction(tr("Thêm lớp hiệu ứng (Effect Layer)"), this,
+    menu.addAction(LTR("timeline.context.addEffectLayer"), this,
                      &TimelineWidget::addEffectLayer);
     if (!m_selectedTrackId.isEmpty()) {
         menu.addSeparator();

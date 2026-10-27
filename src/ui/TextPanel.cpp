@@ -173,7 +173,7 @@ TextPanel::TextPanel(QWidget* parent) : QWidget(parent) {
 void TextPanel::updateColorButton(QPushButton* btn, const QString& hexColor) {
     QColor col(hexColor);
     if (!col.isValid()) col = Qt::white;
-    btn->setStyleSheet(QString("background-color: %1; border: 1px solid #666; border-radius: 3px;").arg(col.name(QColor::HexArgb)));
+    btn->setStyleSheet(QString("background-color: %1; border: 1px solid #666; border-radius: 0px;").arg(col.name(QColor::HexArgb)));
 }
 
 Clip* TextPanel::getSelectedClip() {
