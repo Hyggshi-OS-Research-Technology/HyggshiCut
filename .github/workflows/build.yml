@@ -81,7 +81,15 @@ jobs:
           # setup fixture, so the suite runs from a clean checkout.
           cmake -S . -B build-tests -DCMAKE_BUILD_TYPE=Release -DHYGGSHICUT_BUILD_TESTS=ON
           cmake --build build-tests -j"$(nproc)"
-          ctest --test-dir build-tests --output-on-failure
+          if ctest --test-dir build-tests --output-on-failure; then
+            echo "CTest suite passed." >> "$GITHUB_STEP_SUMMARY"
+          else
+            failed_tests="$(sed -n 's/^[0-9][0-9]*:\(.*\)$/\1/p' \
+              build-tests/Testing/Temporary/LastTestsFailed.log 2>/dev/null | paste -sd ', ' -)"
+            echo "::error title=CTest failures::${failed_tests:-See CTest output above}"
+            printf 'CTest failures: %s\n' "${failed_tests:-See CTest output above}" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
 
       - name: Upload .deb artifact
         uses: actions/upload-artifact@v4
