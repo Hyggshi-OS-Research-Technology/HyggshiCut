@@ -84,10 +84,36 @@ jobs:
           if ctest --test-dir build-tests --output-on-failure; then
             echo "CTest suite passed." >> "$GITHUB_STEP_SUMMARY"
           else
-            failed_tests="$(sed -n 's/^[0-9][0-9]*:\(.*\)$/\1/p' \
-              build-tests/Testing/Temporary/LastTestsFailed.log 2>/dev/null | paste -sd ', ' -)"
-            echo "::error title=CTest failures::${failed_tests:-See CTest output above}"
-            printf 'CTest failures: %s\n' "${failed_tests:-See CTest output above}" >> "$GITHUB_STEP_SUMMARY"
+            python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          failed_file = Path("build-tests/Testing/Temporary/LastTestsFailed.log")
+          log_file = Path("build-tests/Testing/Temporary/LastTest.log")
+          failed = []
+          if failed_file.exists():
+              failed = [line.split(":", 1)[1].strip() for line in failed_file.read_text().splitlines()
+                        if ":" in line]
+          log = log_file.read_text(errors="replace") if log_file.exists() else ""
+          chunks = re.split(r"\n-{10,}\n", log)
+          summary = ["### Failed CTest cases", ""]
+          for name in failed:
+              chunk = next((item for item in chunks if re.search(
+                  rf"(?:Testing|Test):\s*{re.escape(name)}(?:\s|$)", item)), "")
+              detail_lines = [line.strip() for line in chunk.splitlines()
+                              if line.strip() and not line.strip().startswith(("Command:", "Directory:"))]
+              detail = " | ".join(detail_lines[-12:]) or "No failure output in LastTest.log"
+              detail = detail[:1800]
+              escaped = detail.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+              print(f"::error title=CTest {name}::{escaped}")
+              summary.append(f"- **{name}**: {detail}")
+          if not failed:
+              print("::error title=CTest failures::See CTest output above; LastTestsFailed.log was empty")
+              summary.append("- Could not parse LastTestsFailed.log; see the CTest log.")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as output:
+              output.write("\n".join(summary) + "\n")
+          PY
             exit 1
           fi
 
