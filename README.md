@@ -169,7 +169,7 @@ remember the flag combinations:
 ```bash
 cmake --preset tests
 cmake --build --preset tests
-ctest --preset tests            # runs all 14 test binaries
+ctest --preset tests            # runs the complete engine / export test suite
 ```
 
 Presets use the Ninja generator (`sudo apt install ninja-build`). To build

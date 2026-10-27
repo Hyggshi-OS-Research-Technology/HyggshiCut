@@ -126,17 +126,14 @@ if(HYGGSHICUT_BUILD_TESTS)
 
     # add_engine_test(<target> <source> [EXTRA_SOURCES...])
     #
-    # Registers the executable with CTest as well as building it, so `ctest`
-    # actually runs the suite. Previously every test had to be named by hand
-    # in CI and in the Dockerfile, which is why some of them were built but
-    # never executed.
+    # Builds a common engine-test target. CTest commands are registered
+    # below with explicit media fixtures where the test is an integration run.
     function(add_engine_test target source)
         add_executable(${target} ${source} ${HC_ENGINE_SOURCES} ${ARGN})
         target_include_directories(${target} PRIVATE
             src src/core src/decode src/render src/export)
         target_link_libraries(${target} PRIVATE
             Qt6::Core Qt6::Gui OpenGL::GL PkgConfig::FFMPEG)
-        add_test(NAME ${target} COMMAND ${target})
     endfunction()
 
     add_engine_test(HyggshiCutExportSmokeTest tests/export_smoke_test.cpp)
@@ -159,6 +156,10 @@ if(HYGGSHICUT_BUILD_TESTS)
     # them (full-cover vs time-gated). Generates its own tiny PNG and SKIPs
     # the export checks if that cannot be probed.
     add_engine_test(EffectLayerTest tests/effect_layer_test.cpp)
+
+    add_test(NAME SegmentBoundTest COMMAND SegmentBoundTest)
+    add_test(NAME AutosaveTest COMMAND AutosaveTest)
+    add_test(NAME EffectLayerTest COMMAND EffectLayerTest)
 
     # Needs the widget stack too, for the CPU-fallback path in GLVideoWidget.
     add_executable(TextCacheAndCpuFallbackTest
@@ -184,7 +185,60 @@ if(HYGGSHICUT_BUILD_TESTS)
     target_include_directories(HyggshiCutAudioProjectTest PRIVATE src src/core src/decode)
     target_link_libraries(HyggshiCutAudioProjectTest PRIVATE
         Qt6::Core Qt6::Gui PkgConfig::FFMPEG)
-    add_test(NAME HyggshiCutAudioProjectTest COMMAND HyggshiCutAudioProjectTest)
+
+    # CTest integration tests use short synthetic media, created locally by
+    # FFmpeg (no downloads or checked-in binary assets). This also creates a
+    # small .hcproj used by UserProjectExportTest.
+    add_executable(TestProjectFixture
+        tests/create_test_project.cpp
+        src/core/MediaAsset.cpp
+        src/core/Project.cpp
+        src/decode/Decoder.cpp
+    )
+    target_include_directories(TestProjectFixture PRIVATE src src/core src/decode)
+    target_link_libraries(TestProjectFixture PRIVATE
+        Qt6::Core Qt6::Gui PkgConfig::FFMPEG)
+
+    add_test(NAME TestMediaFixture
+        COMMAND bash ${CMAKE_SOURCE_DIR}/scripts/generate-test-fixtures.sh
+                ${CMAKE_BINARY_DIR} $<TARGET_FILE:TestProjectFixture>)
+    set_tests_properties(TestMediaFixture PROPERTIES
+        FIXTURES_SETUP HCVideoFixture
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+    # Real export tests receive short generated media and unique output paths.
+    add_test(NAME HyggshiCutExportSmokeTest
+        COMMAND HyggshiCutExportSmokeTest
+                ${CMAKE_BINARY_DIR}/build/test_sample.mp4
+                ${CMAKE_BINARY_DIR}/build/export_smoke.mp4)
+    add_test(NAME PipTransformSmokeTest
+        COMMAND PipTransformSmokeTest
+                ${CMAKE_BINARY_DIR}/build/test_sample.mp4
+                ${CMAKE_BINARY_DIR}/build/pip_transform.mp4)
+    add_test(NAME KeyframeExportSmokeTest
+        COMMAND KeyframeExportSmokeTest
+                ${CMAKE_BINARY_DIR}/build/test_sample.mp4
+                ${CMAKE_BINARY_DIR}/build/keyframe_export.mp4)
+    add_test(NAME TextAndImageExportTest
+        COMMAND TextAndImageExportTest
+                ${CMAKE_BINARY_DIR}/build/test_sample.mp4
+                ${CMAKE_BINARY_DIR}/build/test_image.png
+                ${CMAKE_BINARY_DIR}/build/text_image_export.mp4)
+    add_test(NAME MixedEffectsExportTest COMMAND MixedEffectsExportTest)
+    add_test(NAME UserProjectExportTest COMMAND UserProjectExportTest)
+    add_test(NAME HyggshiCutAudioProjectTest
+        COMMAND HyggshiCutAudioProjectTest ${CMAKE_BINARY_DIR}/build/test_sample.mp4)
+
+    set_tests_properties(
+        HyggshiCutExportSmokeTest PipTransformSmokeTest KeyframeExportSmokeTest
+        TextAndImageExportTest MixedEffectsExportTest UserProjectExportTest
+        HyggshiCutAudioProjectTest PROPERTIES
+        FIXTURES_REQUIRED HCVideoFixture
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+    set_tests_properties(TextAndImageExportTest UserProjectExportTest PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+    set_tests_properties(TextCacheAndCpuFallbackTest PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
     # Runtime environment diagnostics (ffmpeg/codecs/audio/assets/proxy cache).
     # Needs no display: QCoreApplication only.

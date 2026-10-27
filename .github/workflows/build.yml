@@ -52,7 +52,7 @@ jobs:
           # what the .deb actually declares. Also installs ninja, which the
           # CMake presets use as their generator.
           ./scripts/install-build-deps.sh
-          sudo apt-get install -y --no-install-recommends ninja-build qt6-qpa-plugins
+          sudo apt-get install -y --no-install-recommends ninja-build qt6-qpa-plugins ffmpeg
 
       - name: Build Debian package (.deb)
         run: |
@@ -70,15 +70,15 @@ jobs:
           dpkg-deb --info "${deb_file}"
           dpkg-deb --contents "${deb_file}" | head -40
 
-      - name: Build & run the offline core tests
+      - name: Build & run the core and export tests
         run: |
-          # Tests are opt-in (HYGGSHICUT_BUILD_TESTS) and the .deb build above
-          # does not touch them, so compile and run them here to keep them
-          # from rotting. They need no display and no real media.
+          # Tests are opt-in and the .deb build above does not compile them.
+          # CTest generates tiny synthetic media locally for integration tests;
+          # no downloads or checked-in binary fixtures are needed. GUI tests
+          # use Qt's offscreen platform plugin.
           #
-          # Every test is registered with CTest in CMakeLists.txt, so this
-          # runs the whole suite rather than a hand-maintained list that
-          # silently omitted tests as they were added.
+          # Every test is registered with CTest, including the synthetic-media
+          # setup fixture, so the suite runs from a clean checkout.
           cmake -S . -B build-tests -DCMAKE_BUILD_TYPE=Release -DHYGGSHICUT_BUILD_TESTS=ON
           cmake --build build-tests -j"$(nproc)"
           ctest --test-dir build-tests --output-on-failure
