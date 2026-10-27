@@ -10,6 +10,7 @@ namespace hc {
 
 struct PluginEffectDef {
     QString id;          // unique id within the plugin
+    QString pluginId;
     QString name;        // display name (translated)
     QString effectType;  // maps to Clip::Effect::type (e.g. "color_grade")
     QMap<QString, double> defaultParams;

@@ -30,6 +30,7 @@
 [**Packaging**](#packaging--installing-the-deb-package-debian--ubuntu) •
 [**Headless CLI Render**](#headless-cli-render-guide) •
 [**Autosave & Recovery**](#autosave--crash-recovery) •
+[**Daily Workflow & Low-RAM Export**](docs/DAILY_WORKFLOW.md) •
 [**Environment Check**](#environment-check) •
 [**Keyboard Shortcuts**](#keyboard-shortcuts) •
 [**Plugins & Languages**](#plugin-system--multi-language-support)
@@ -460,7 +461,7 @@ HyggshiCut supports an extensible color-preset and effects plugin system using `
 - *Moonlight Blue*
 - *Forest Green*
 
-You can manage and load additional custom plugins from `Settings` → `Manage Plugins (.plhc)...`.
+You can manage and load additional custom plugins from `Settings` → `Manage Plugins (.plhc)...`. For the manifest schema, supported effect parameters, validation rules and end-to-end verification steps, see the bilingual [Effect-Pack Developer Guide](docs/PLUGIN_DEVELOPMENT.md).
 
 ### Multi-Language Support (`.langhc`)
 The UI supports multiple languages with instant switching — no application restart required:

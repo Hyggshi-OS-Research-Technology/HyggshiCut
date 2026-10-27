@@ -37,6 +37,7 @@
 #include <QSettings>
 #include <QResizeEvent>
 #include <QCloseEvent>
+#include <QStyle>
 #include <QFileInfo>
 #include <QTimer>
 #include <QDir>
@@ -74,6 +75,7 @@ private:
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     setWindowTitle("HyggshiCut");
+    setMinimumSize(1024, 640);
     resize(1400, 900);
 
     setCorner(Qt::BottomLeftCorner, Qt::BottomDockWidgetArea);
@@ -127,7 +129,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         startAutosaveForCurrentProject();
     });
 
-    statusBar()->showMessage(tr("Sẵn sàng. Kéo media vào timeline để bắt đầu dựng."));
+    statusBar()->showMessage(LTR("status.ready"));
 }
 
 void MainWindow::startAutosaveForCurrentProject() {
@@ -261,7 +263,7 @@ void MainWindow::buildMenus() {
     fileMenu->addSeparator();
     fileMenu->addAction(canvasAction);
     fileMenu->addSeparator();
-    fileMenu->addAction(tr("Nhập media..."), QKeySequence(Qt::CTRL | Qt::Key_I), this, &MainWindow::onImportRequested);
+    fileMenu->addAction(LTR("menu.file.import"), QKeySequence(Qt::CTRL | Qt::Key_I), this, &MainWindow::onImportRequested);
     fileMenu->addAction(LTR("menu.file.screenRecord"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_R), this, &MainWindow::onScreenRecord);
     fileMenu->addAction(LTR("menu.file.relinkMedia"), this, &MainWindow::onRelinkMissingMedia);
     fileMenu->addSeparator();
@@ -348,7 +350,7 @@ void MainWindow::buildMenus() {
     m_viewMenu = menuBar()->addMenu(LTR("menu.view"));
     m_viewMenu->addAction(LTR("menu.view.zoomin"), QKeySequence::ZoomIn, this, &MainWindow::onZoomIn);
     m_viewMenu->addAction(LTR("menu.view.zoomout"), QKeySequence::ZoomOut, this, &MainWindow::onZoomOut);
-    m_viewMenu->addAction(tr("Vừa khớp toàn bộ timeline (Zoom to fit)"), QKeySequence(Qt::SHIFT | Qt::Key_Z), this, &MainWindow::onZoomToFit);
+    m_viewMenu->addAction(LTR("menu.view.zoomfit"), QKeySequence(Qt::SHIFT | Qt::Key_Z), this, &MainWindow::onZoomToFit);
     m_viewMenu->addSeparator();
 
     // Snap toggle: when on (default), clip edges/keyframes/playhead magnetize
@@ -511,8 +513,18 @@ void MainWindow::buildToolbar() {
         m_mainToolbar->setMovable(false);
     }
     m_mainToolbar->clear();
+    m_mainToolbar->setIconSize(QSize(18, 18));
+    m_mainToolbar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
 
     const bool wasCutChecked = m_cutToolAction ? m_cutToolAction->isChecked() : false;
+
+    m_mainToolbar->addAction(style()->standardIcon(QStyle::SP_DialogSaveButton),
+                             LTR("toolbar.save"), this, [this]() { onSaveProject(); });
+    m_mainToolbar->addAction(style()->standardIcon(QStyle::SP_DialogApplyButton),
+                             LTR("toolbar.export"), this, &MainWindow::onExport);
+    m_mainToolbar->addAction(style()->standardIcon(QStyle::SP_FileDialogNewFolder),
+                             LTR("toolbar.import"), this, &MainWindow::onImportRequested);
+    m_mainToolbar->addSeparator();
 
     m_cutToolAction = new QAction(LTR("menu.edit.cutTool"), this);
     m_cutToolAction->setText(LTR("menu.edit.cutTool"));
@@ -534,7 +546,7 @@ void MainWindow::buildToolbar() {
     m_mainToolbar->addSeparator();
     m_mainToolbar->addAction(LTR("menu.view.zoomin"), this, &MainWindow::onZoomIn);
     m_mainToolbar->addAction(LTR("menu.view.zoomout"), this, &MainWindow::onZoomOut);
-    m_mainToolbar->addAction(tr("Vừa khớp"), this, &MainWindow::onZoomToFit);
+    m_mainToolbar->addAction(LTR("menu.view.zoomfit"), this, &MainWindow::onZoomToFit);
 }
 
 QMenu* MainWindow::buildAddLayerMenu() {
@@ -719,7 +731,7 @@ void MainWindow::rebuildProjectDependentUi() {
     });
 
     // Proportional initial sizing for docks
-    resizeDocks({m_mediaDock, m_propertiesDock}, {340, 320}, Qt::Horizontal);
+    resizeDocks({m_mediaDock, m_propertiesDock}, {250, 310}, Qt::Horizontal);
     const int initTimelineH = std::clamp(height() * 35 / 100, 240, 420);
     resizeDocks({m_timelineDock}, {initTimelineH}, Qt::Vertical);
 
@@ -758,7 +770,7 @@ void MainWindow::showEvent(QShowEvent* event) {
                 resizeDocks({m_timelineDock}, {timelineH}, Qt::Vertical);
             }
             if (m_mediaDock && m_propertiesDock) {
-                resizeDocks({m_mediaDock, m_propertiesDock}, {340, 320}, Qt::Horizontal);
+                resizeDocks({m_mediaDock, m_propertiesDock}, {250, 310}, Qt::Horizontal);
             }
         });
     }
@@ -1092,7 +1104,7 @@ void MainWindow::updateZoomLabel(double pixelsPerSecond) {
     if (!m_zoomLabel) return;
     // Report zoom relative to the default (60 px/s = 100%).
     const int pct = static_cast<int>(std::lround(pixelsPerSecond / 60.0 * 100.0));
-    m_zoomLabel->setText(tr("Thu phóng: %1%").arg(pct));
+    m_zoomLabel->setText(LTR("status.zoom").arg(pct));
 }
 
 void MainWindow::onToggleCutTool(bool checked) {
@@ -1849,7 +1861,7 @@ void MainWindow::resetDockLayout() {
 
     const int timelineH = std::clamp(height() * 35 / 100, 240, 450);
     resizeDocks({m_timelineDock}, {timelineH}, Qt::Vertical);
-    resizeDocks({m_mediaDock, m_propertiesDock}, {340, 320}, Qt::Horizontal);
+    resizeDocks({m_mediaDock, m_propertiesDock}, {250, 310}, Qt::Horizontal);
 }
 
 void MainWindow::closeEvent(QCloseEvent* event) {

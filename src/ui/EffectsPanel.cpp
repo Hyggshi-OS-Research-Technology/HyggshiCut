@@ -204,7 +204,8 @@ void EffectsPanel::refreshFilterList(int selectIndex) {
 
     for (size_t i = 0; i < m_clip->effects.size(); ++i) {
         const auto& eff = m_clip->effects[i];
-        const QString displayName = getEffectTypeName(eff.type);
+        const QString displayName = eff.displayName.isEmpty()
+            ? getEffectTypeName(eff.type) : eff.displayName;
 
         auto* item = new QListWidgetItem(displayName, m_filterList);
         item->setFlags(item->flags() | Qt::ItemIsUserCheckable);

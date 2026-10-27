@@ -121,6 +121,7 @@ if(HYGGSHICUT_BUILD_TESTS)
         src/render/TextureCache.cpp
         src/render/TextRenderer.cpp
         src/export/Exporter.cpp
+        src/i18n/LanguageManager.cpp
     )
 
     # add_engine_test(<target> <source> [EXTRA_SOURCES...])
@@ -203,6 +204,23 @@ if(HYGGSHICUT_BUILD_TESTS)
     target_include_directories(ScreenRecorderTest PRIVATE src src/capture)
     target_link_libraries(ScreenRecorderTest PRIVATE Qt6::Core Qt6::DBus)
     add_test(NAME ScreenRecorderTest COMMAND ScreenRecorderTest)
+
+    # Validate the declarative plugin contract and effect provenance round-trip.
+    add_executable(PluginManifestTest
+        tests/plugin_manifest_test.cpp
+        src/plugin/PluginManager.cpp
+    )
+    target_include_directories(PluginManifestTest PRIVATE src src/core src/plugin)
+    target_link_libraries(PluginManifestTest PRIVATE Qt6::Core Qt6::Gui)
+    add_test(NAME PluginManifestTest COMMAND PluginManifestTest)
+
+    # Keep the two primary UI language packs truly complete in both
+    # directions; missing keys otherwise leak raw translation IDs into UI.
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME ViEnTranslationParity
+                 COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/check-vi-en-translations.py)
+    endif()
     set_tests_properties(ScreenRecorderTest PROPERTIES
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 

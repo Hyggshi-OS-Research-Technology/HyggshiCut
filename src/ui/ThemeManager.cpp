@@ -57,8 +57,8 @@ void ThemeManager::applyDarkTheme() {
     dark.setColor(QPalette::Button, QColor(44, 44, 52));
     dark.setColor(QPalette::ButtonText, Qt::white);
     dark.setColor(QPalette::BrightText, Qt::red);
-    dark.setColor(QPalette::Link, QColor(255, 153, 68));
-    dark.setColor(QPalette::Highlight, QColor(255, 153, 68));
+    dark.setColor(QPalette::Link, QColor(22, 139, 240));
+    dark.setColor(QPalette::Highlight, QColor(22, 139, 240));
     dark.setColor(QPalette::HighlightedText, Qt::black);
     dark.setColor(QPalette::Disabled, QPalette::Text, QColor(125, 125, 130));
     dark.setColor(QPalette::Disabled, QPalette::ButtonText, QColor(125, 125, 130));
@@ -78,7 +78,7 @@ void ThemeManager::applyDarkTheme() {
         }
         QMenuBar::item:selected {
             background-color: #2b2b35;
-            color: #ff9944;
+            color: #168bf0;
         }
         QMenu {
             background-color: #222228;
@@ -87,7 +87,7 @@ void ThemeManager::applyDarkTheme() {
             padding: 4px;
         }
         QMenu::item:selected {
-            background-color: #ff9944;
+            background-color: #168bf0;
             color: #111;
             border-radius: 3px;
         }
@@ -101,6 +101,32 @@ void ThemeManager::applyDarkTheme() {
             border-bottom: 1px solid #33333d;
             spacing: 6px;
             padding: 4px;
+        }
+        QToolButton {
+            color: #d9e3ef;
+            background: transparent;
+            border: 1px solid transparent;
+            border-radius: 5px;
+            padding: 5px 9px;
+        }
+        QToolButton:hover {
+            background: #292d34;
+            border-color: #3b414a;
+        }
+        QToolButton:pressed, QToolButton:checked {
+            background: #153858;
+            color: #66b6ff;
+            border-color: #23649a;
+        }
+        QMainWindow::separator {
+            background: #35383f;
+            width: 3px;
+            height: 3px;
+        }
+        QStatusBar {
+            background: #191a1e;
+            border-top: 1px solid #303238;
+            color: #aeb6c2;
         }
         QToolTip {
             background-color: #2a2a32;
@@ -130,7 +156,7 @@ void ThemeManager::applyDarkTheme() {
         }
         QTabBar::tab:selected {
             background: #2c2c36;
-            color: #ff9944;
+            color: #168bf0;
             font-weight: bold;
         }
         QScrollBar:vertical {

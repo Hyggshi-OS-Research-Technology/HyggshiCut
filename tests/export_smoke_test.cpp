@@ -82,6 +82,26 @@ int main(int argc, char* argv[]) {
     settings.videoBitrateKbps = 2000;
     settings.audioBitrateKbps = 128;
 
+    // Force the conservative profile independently of the CI machine's RAM,
+    // then inspect its real FFmpeg argv before the end-to-end export. This
+    // verifies that low-memory behavior remains testable on developer PCs
+    // with abundant memory without pretending to emulate kernel OOM behavior.
+    const bool hadLowMemoryOverride = qEnvironmentVariableIsSet("HYGGSHICUT_FORCE_LOW_MEMORY");
+    const QByteArray previousLowMemoryOverride = qgetenv("HYGGSHICUT_FORCE_LOW_MEMORY");
+    qputenv("HYGGSHICUT_FORCE_LOW_MEMORY", "1");
+    const QStringList conservativeArgs = exporter.buildFfmpegArgs(settings);
+    if (hadLowMemoryOverride) qputenv("HYGGSHICUT_FORCE_LOW_MEMORY", previousLowMemoryOverride);
+    else qunsetenv("HYGGSHICUT_FORCE_LOW_MEMORY");
+    const int maxAllocIndex = conservativeArgs.indexOf("-max_alloc");
+    const int threadsIndex = conservativeArgs.indexOf("-threads");
+    if (maxAllocIndex < 0 || conservativeArgs.value(maxAllocIndex + 1) != "134217728" ||
+        threadsIndex < 0 || conservativeArgs.value(threadsIndex + 1) != "1" ||
+        !conservativeArgs.join(' ').contains("threads=1:lookahead_threads=1")) {
+        std::cerr << "FAIL: conservative low-memory export arguments were not applied\n";
+        return 1;
+    }
+    std::cout << "Verified conservative low-memory FFmpeg arguments\n";
+
     bool ok = false;
     QString message;
     QObject::connect(&exporter, &Exporter::progress, [](double frac, QString) {

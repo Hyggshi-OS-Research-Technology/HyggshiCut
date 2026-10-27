@@ -2,6 +2,7 @@
 #include "../audio/AudioFilterDesc.h"
 #include "../render/TextRenderer.h"
 #include "../core/SystemInfo.h"
+#include "../i18n/LanguageManager.h"
 #include <QElapsedTimer>
 #include <QMap>
 #include <QRegularExpression>
@@ -23,6 +24,59 @@ namespace hc {
 namespace {
 QString secStr(Ticks t) {
     return QString::number(ticksToSeconds(t), 'f', 6);
+}
+
+void appendDiagnosticTail(QByteArray& tail, const QByteArray& chunk) {
+    constexpr qsizetype kLimit = 256 * 1024;
+    tail += chunk;
+    if (tail.size() > kLimit) tail.remove(0, tail.size() - kLimit);
+}
+
+QString failureSummary(const QString& raw, const QString& videoCodec,
+                       const QString& audioCodec, int exitCode) {
+    const QString text = raw.toLower();
+    QString detail;
+    const QStringList lines = raw.split('\n', Qt::SkipEmptyParts);
+    // FFmpeg emits stream summaries and progress before the real diagnostic.
+    // Keep the dialog short and point at the most actionable line in the
+    // bounded log tail rather than dumping hundreds of kilobytes at users.
+    for (auto it = lines.crbegin(); it != lines.crend(); ++it) {
+        const QString line = it->trimmed();
+        const QString lower = line.toLower();
+        if (line.isEmpty() || lower.startsWith("frame=") || lower.startsWith("size=") ||
+            lower.startsWith("video:") || lower.startsWith("last message repeated")) continue;
+        if (detail.isEmpty()) detail = line;
+        if (lower.contains("error") || lower.contains("failed") ||
+            lower.contains("unknown") || lower.contains("not found") ||
+            lower.contains("cannot") || lower.contains("invalid")) {
+            detail = line;
+            break;
+        }
+    }
+    if (detail.size() > 1800) detail = detail.right(1800);
+
+    if (text.contains(QStringLiteral("unknown encoder")) ||
+        text.contains(QStringLiteral("encoder not found")) ||
+        text.contains(QStringLiteral("requested output format"))) {
+        const QString lowerDetail = detail.toLower();
+        const bool audioFailure = (!audioCodec.isEmpty() &&
+            lowerDetail.contains(audioCodec.toLower())) ||
+            lowerDetail.contains(QStringLiteral("audio encoder"));
+        const QString codec = audioFailure ? audioCodec : videoCodec;
+        return LTR("export.error.codecUnavailable").arg(codec, detail);
+    }
+    if (text.contains(QStringLiteral("cannot allocate memory")) ||
+        text.contains(QStringLiteral("out of memory")) ||
+        text.contains(QStringLiteral("failed to allocate"))) {
+        return LTR("export.error.lowMemory").arg(detail);
+    }
+    if (text.contains(QStringLiteral("error while opening encoder")) ||
+        text.contains(QStringLiteral("error initializing output stream"))) {
+        return LTR("export.error.encoderConfig").arg(detail);
+    }
+    return detail.isEmpty()
+        ? LTR("export.error.exitCode").arg(exitCode)
+        : LTR("export.error.details").arg(detail);
 }
 
 // Builds a nested FFmpeg `if(lte(var, t), ...)` piecewise linear interpolation expression
@@ -361,6 +415,13 @@ static QString buildVideoEffectsFilterChain(const std::vector<Effect>& effects, 
 }
 
 bool lowMemoryExportMode() {
+    // Deterministic opt-in for CI/QA on high-memory machines. Never enable
+    // this implicitly in production; the normal policy below remains
+    // capability-driven and can still be exercised on a weak workstation.
+    if (qEnvironmentVariable("HYGGSHICUT_FORCE_LOW_MEMORY") == QStringLiteral("1")) {
+        return true;
+    }
+
     // Read /proc/meminfo once (via systeminfo) and capture both
     // MemAvailable and MemTotal. This is the same signal the exporter uses
     // to decide whether to drop to a single encode thread and cap
@@ -1098,6 +1159,8 @@ void Exporter::start(const Settings& settings) {
     m_finishedEmitted = false;
     m_stdoutBuffer.clear();
     m_stderrBuffer.clear();
+    m_requestedVideoCodec = settings.videoCodec.isEmpty() ? QStringLiteral("libx264") : settings.videoCodec;
+    m_requestedAudioCodec = settings.audioCodec.isEmpty() ? QStringLiteral("aac") : settings.audioCodec;
     m_lastFps = 0.0f;
     m_lastSpeed = 0.0f;
 
@@ -1131,7 +1194,7 @@ void Exporter::start(const Settings& settings) {
         if (!m_process) return;
         const QByteArray err = m_process->readAllStandardError();
         if (!err.isEmpty()) {
-            m_stderrBuffer += err;
+            appendDiagnosticTail(m_stderrBuffer, err);
             qWarning().noquote() << "[Exporter][ffmpeg]" << QString::fromLocal8Bit(err).trimmed();
         }
     });
@@ -1205,27 +1268,14 @@ void Exporter::onReadyReadStandardOutput() {
 
 void Exporter::onProcessFinished(int exitCode, QProcess::ExitStatus status) {
     if (m_finishedEmitted) return;
+    if (m_process) appendDiagnosticTail(m_stderrBuffer, m_process->readAllStandardError());
     m_finishedEmitted = true;
     const bool success = (status == QProcess::NormalExit && exitCode == 0);
 
-    QString lastErrorLine;
-    if (!success && !m_stderrBuffer.isEmpty()) {
-        const QString errStr = QString::fromLocal8Bit(m_stderrBuffer);
-        const QStringList lines = errStr.split('\n', Qt::SkipEmptyParts);
-        for (auto it = lines.rbegin(); it != lines.rend(); ++it) {
-            const QString l = it->trimmed();
-            if (!l.isEmpty() && !l.startsWith("frame=") && !l.startsWith("video:") && !l.startsWith("size=") && !l.startsWith("Last message repeated")) {
-                lastErrorLine = l;
-                break;
-            }
-        }
-    }
-
     const QString message = success
-        ? QStringLiteral("Xuất video thành công")
-        : (lastErrorLine.isEmpty()
-            ? QStringLiteral("FFmpeg thoát với mã lỗi %1").arg(exitCode)
-            : QStringLiteral("Lỗi FFmpeg: %1").arg(lastErrorLine));
+        ? LTR("export.success")
+        : failureSummary(QString::fromLocal8Bit(m_stderrBuffer),
+                         m_requestedVideoCodec, m_requestedAudioCodec, exitCode);
 
     if (m_process) { m_process->deleteLater(); m_process = nullptr; }
     emit progress(success ? 1.0 : 0.0, QString());
@@ -1237,7 +1287,7 @@ void Exporter::onProcessErrorOccurred(QProcess::ProcessError error) {
     m_finishedEmitted = true;
     const QString errStr = m_process ? m_process->errorString() : QStringLiteral("Unknown");
     if (m_process) { m_process->deleteLater(); m_process = nullptr; }
-    emit finished(false, QStringLiteral("Không thể khởi chạy FFmpeg: %1 (Error code %2)").arg(errStr).arg(error));
+    emit finished(false, LTR("export.error.launch").arg(errStr).arg(static_cast<int>(error)));
 }
 
 } // namespace hc
