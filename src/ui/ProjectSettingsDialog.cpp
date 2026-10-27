@@ -9,11 +9,11 @@ namespace hc {
 
 namespace {
 
-const std::vector<AspectPreset>& aspectPresets() {
-    static const std::vector<AspectPreset> presets = {
-        { "16:9 Ngang - 1080p Full HD", "16:9", 1920, 1080, LTR("legacy.d28d512eb97f33cc") },
-        { "16:9 Ngang - 4K Ultra HD",   "16:9", 3840, 2160, LTR("legacy.da0f33060878a75f") },
-        { "16:9 Ngang - 720p HD",        "16:9", 1280, 720,  LTR("legacy.3524cf2d585fa786") },
+std::vector<AspectPreset> aspectPresets() {
+    return {
+        { LTR("legacy.ae33d57b946518dd"), "16:9", 1920, 1080, LTR("legacy.d28d512eb97f33cc") },
+        { LTR("legacy.6439d66bc2124b2a"), "16:9", 3840, 2160, LTR("legacy.da0f33060878a75f") },
+        { LTR("legacy.f1368a9ebdd29edd"), "16:9", 1280, 720, LTR("legacy.3524cf2d585fa786") },
         { LTR("legacy.99b215e965a16375"),   "9:16", 1080, 1920, LTR("legacy.7cba18e89827c913") },
         { LTR("legacy.9824381f6ca16720"),          "9:16", 720,  1280, LTR("legacy.a75c7f50b0add8ef") },
         { LTR("legacy.b6d479ec2d8f3709"),       "1:1",  1080, 1080, LTR("legacy.6d6610d8f35015ce") },
@@ -22,7 +22,6 @@ const std::vector<AspectPreset>& aspectPresets() {
         { LTR("legacy.ee215b25e970fc3d"),     "4:3",  1440, 1080, LTR("legacy.0f51af58dfd1454f") },
         { LTR("legacy.59d13a48f16c67d0"),          "Custom", 1920, 1080, LTR("legacy.f4a97dc460028553") }
     };
-    return presets;
 }
 
 } // namespace

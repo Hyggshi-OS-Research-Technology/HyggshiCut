@@ -32,8 +32,8 @@ struct ExportPresetItem {
     int aChannels;
 };
 
-const std::vector<ExportPresetItem>& exportPresets() {
-    static const std::vector<ExportPresetItem> presets = {
+std::vector<ExportPresetItem> exportPresets() {
+    return {
         { "YouTube 1080p FHD (H.264, 12 Mbps, AAC 192k)", "mp4", 1920, 1080, 30.0, "libx264", "bitrate", 12000, 21, "medium", "aac", 192, 48000, 2 },
         { "YouTube 4K UHD (H.264, 40 Mbps, AAC 320k)",   "mp4", 3840, 2160, 60.0, "libx264", "bitrate", 40000, 21, "medium", "aac", 320, 48000, 2 },
         { LTR("legacy.913fbca979ce2b82"), "mp4", 1080, 1920, 30.0, "libx264", "bitrate", 10000, 21, "medium", "aac", 192, 48000, 2 },
@@ -41,14 +41,13 @@ const std::vector<ExportPresetItem>& exportPresets() {
         { LTR("legacy.478bd97c8a92860c"), "mp4", 1920, 1080, 30.0, "libx264", "crf",     8000,  18, "slow",   "aac", 256, 48000, 2 },
         { LTR("legacy.97a9c327e0a4ce00"),     "mp4", 1920, 1080, 30.0, "libx265", "crf",     4000,  24, "medium", "aac", 128, 48000, 2 },
         { LTR("legacy.9e63ac65324e63d2"),      "mov", 1920, 1080, 30.0, "prores_ks", "bitrate", 0,     0,  "",       "pcm_s16le", 0, 48000, 2 },
-        { "WebM / VP9 Video cho Web (VP9 + Opus)",        "webm",1920, 1080, 30.0, "libvpx-vp9", "crf",   0,     28, "medium", "libopus", 128, 48000, 2 },
+        { LTR("legacy.38c32c5d6b75d890"), "webm", 1920, 1080, 30.0, "libvpx-vp9", "crf", 0, 28, "medium", "libopus", 128, 48000, 2 },
         { LTR("legacy.1e09f3243360e2bf"),"mp3", 0,    0,    0.0,  "none",    "bitrate", 0,     0,  "",       "libmp3lame", 320, 48000, 2 },
         { LTR("legacy.1ffb03ae1949db82"),  "wav", 0,    0,    0.0,  "none",    "bitrate", 0,     0,  "",       "pcm_s16le", 0, 48000, 2 },
         // Low-spec PC preset: ultrafast encode + low bitrate for stability on weak machines
         { LTR("legacy.619e783a7fe8cb33"), "mp4", 1280, 720, 30.0, "libx264", "bitrate", 4000, 28, "ultrafast", "aac", 128, 48000, 2 },
         { LTR("legacy.59d13a48f16c67d0"),                           "mp4", 1920, 1080, 30.0, "libx264", "bitrate", 8000,  21, "medium", "aac", 192, 48000, 2 }
     };
-    return presets;
 }
 
 } // namespace
