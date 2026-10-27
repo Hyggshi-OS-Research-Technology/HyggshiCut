@@ -187,21 +187,11 @@ if(HYGGSHICUT_BUILD_TESTS)
         Qt6::Core Qt6::Gui PkgConfig::FFMPEG)
 
     # CTest integration tests use short synthetic media, created locally by
-    # FFmpeg (no downloads or checked-in binary assets). This also creates a
-    # small .hcproj used by UserProjectExportTest.
-    add_executable(TestProjectFixture
-        tests/create_test_project.cpp
-        src/core/MediaAsset.cpp
-        src/core/Project.cpp
-        src/decode/Decoder.cpp
-    )
-    target_include_directories(TestProjectFixture PRIVATE src src/core src/decode)
-    target_link_libraries(TestProjectFixture PRIVATE
-        Qt6::Core Qt6::Gui PkgConfig::FFMPEG)
-
+    # FFmpeg (no downloads or checked-in binary assets). The fixture script
+    # also writes a small .hcproj used by UserProjectExportTest.
     add_test(NAME TestMediaFixture
         COMMAND bash ${CMAKE_SOURCE_DIR}/scripts/generate-test-fixtures.sh
-                ${CMAKE_BINARY_DIR} $<TARGET_FILE:TestProjectFixture>)
+                ${CMAKE_BINARY_DIR})
     set_tests_properties(TestMediaFixture PROPERTIES
         FIXTURES_SETUP HCVideoFixture
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
