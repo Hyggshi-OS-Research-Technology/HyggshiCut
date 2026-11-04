@@ -165,6 +165,9 @@ QJsonObject clipToJson(const Clip& c) {
             QJsonObject eo;
             eo["type"] = eff.type;
             eo["enabled"] = eff.enabled;
+            if (!eff.pluginId.isEmpty()) eo["pluginId"] = eff.pluginId;
+            if (!eff.pluginEffectId.isEmpty()) eo["pluginEffectId"] = eff.pluginEffectId;
+            if (!eff.displayName.isEmpty()) eo["displayName"] = eff.displayName;
             QJsonObject po;
             for (const auto& p : eff.params) {
                 po[p.name] = p.value;
@@ -262,6 +265,9 @@ Clip clipFromJson(const QJsonObject& o) {
             Effect eff;
             eff.type = eo["type"].toString();
             eff.enabled = eo["enabled"].toBool(true);
+            eff.pluginId = eo["pluginId"].toString();
+            eff.pluginEffectId = eo["pluginEffectId"].toString();
+            eff.displayName = eo["displayName"].toString();
             if (eo.contains("params")) {
                 const QJsonObject po = eo["params"].toObject();
                 for (auto it = po.begin(); it != po.end(); ++it) {

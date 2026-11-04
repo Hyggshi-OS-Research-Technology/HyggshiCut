@@ -14,15 +14,15 @@ namespace hc {
 
 SourcePreviewDialog::SourcePreviewDialog(const QString& filePath, const QString& displayName, QWidget* parent)
     : QDialog(parent) {
-    setWindowTitle(tr("Xem trước nguồn — %1").arg(displayName));
+    setWindowTitle(LTR("legacy.e6873cb777828ea5").arg(displayName));
     setAttribute(Qt::WA_DeleteOnClose);
     resize(900, 560);
 
     try {
         m_player = std::make_unique<MpvPlayer>(this);
     } catch (const std::exception& e) {
-        QMessageBox::critical(this, tr("Lỗi mpv"),
-            tr("Không khởi tạo được libmpv: %1").arg(QString::fromUtf8(e.what())));
+        QMessageBox::critical(this, LTR("legacy.4721b3406b56be50"),
+            LTR("legacy.5f6b0cfd648b11ae").arg(QString::fromUtf8(e.what())));
         return;
     }
 
@@ -34,7 +34,7 @@ SourcePreviewDialog::SourcePreviewDialog(const QString& filePath, const QString&
     layout->addWidget(m_gl, 1);
 
     auto* transport = new QHBoxLayout();
-    m_playBtn = new QPushButton(tr("Phát"), this);
+    m_playBtn = new QPushButton(LTR("legacy.343e7e486c7a028d"), this);
     m_playBtn->setFixedWidth(80);
     connect(m_playBtn, &QPushButton::clicked, this, [this]() { m_player->togglePause(); });
     transport->addWidget(m_playBtn);
@@ -84,7 +84,7 @@ void SourcePreviewDialog::onDurationChanged(double seconds) {
 }
 
 void SourcePreviewDialog::onPausedChanged(bool paused) {
-    m_playBtn->setText(paused ? tr("Phát") : tr("Tạm dừng"));
+    m_playBtn->setText(paused ? LTR("legacy.343e7e486c7a028d") : LTR("legacy.6763581534939faa"));
 }
 
 } // namespace hc

@@ -35,7 +35,7 @@ constexpr Ticks kDefaultTransitionTicks = 500'000; // 0.5s
 QString effectLayerName() {
     const QString key = QStringLiteral("timeline.effectLayer");
     const QString translated = LTR(key);
-    return (translated == key || translated.isEmpty()) ? QStringLiteral("Lớp hiệu ứng") : translated;
+    return (translated == key || translated.isEmpty()) ? LTR("legacy.3fc9182a4b96301e") : translated;
 }
 
 // --- Sleek vector button rendering for the per-track control cards ---
@@ -72,7 +72,7 @@ void drawControlButton(QPainter& p, const QRect& r, int ctrlIndex, bool active, 
 
     p.setBrush(bgColor);
     p.setPen(QPen(borderColor, 1.0));
-    p.drawRoundedRect(r, 4.0, 4.0);
+    p.drawRect(r);
 
     const int cx = r.center().x();
     const int cy = r.center().y();
@@ -154,7 +154,7 @@ void drawControlButton(QPainter& p, const QRect& r, int ctrlIndex, bool active, 
         // Lock body
         p.setPen(QPen(bodyColor.darker(120), 0.8));
         p.setBrush(bodyColor);
-        p.drawRoundedRect(QRect(cx - 5, cy - 1, 10, 8), 2.0, 2.0);
+        p.drawRect(QRect(cx - 5, cy - 1, 10, 8));
         // Keyhole dot
         p.setPen(Qt::NoPen);
         p.setBrush(active ? QColor(120, 53, 15) : QColor(30, 41, 59));
@@ -880,7 +880,7 @@ QMenu* TimelineWidget::buildEffectLayerMenu(const QString& trackId, const QStrin
         update();
     };
 
-    QAction* addHeader = menu->addAction(tr("Thêm hiệu ứng vào lớp này:"));
+    QAction* addHeader = menu->addAction(LTR("legacy.583eb4fb63825272"));
     addHeader->setEnabled(false);
     const QStringList effectIds = EffectsPanel::effectTypeIds();
     for (const QString& typeId : effectIds) {
@@ -890,7 +890,7 @@ QMenu* TimelineWidget::buildEffectLayerMenu(const QString& trackId, const QStrin
 
     if (!clip->effects.empty()) {
         menu->addSeparator();
-        menu->addAction(tr("Xóa toàn bộ hiệu ứng trên lớp này"), this, [this, trackId, clipId]() {
+        menu->addAction(LTR("legacy.a64fd33e5eeb5fda"), this, [this, trackId, clipId]() {
             if (!m_project) return;
             Track* t = m_project->timeline().findTrack(trackId);
             Clip* c = t ? t->findClip(clipId) : nullptr;
@@ -905,14 +905,14 @@ QMenu* TimelineWidget::buildEffectLayerMenu(const QString& trackId, const QStrin
     }
 
     menu->addSeparator();
-    menu->addAction(tr("Đổi tên lớp hiệu ứng..."), this, [this, trackId, clipId]() {
+    menu->addAction(LTR("legacy.78ae8c673362796f"), this, [this, trackId, clipId]() {
         if (!m_project) return;
         Track* t = m_project->timeline().findTrack(trackId);
         Clip* c = t ? t->findClip(clipId) : nullptr;
         if (!c) return;
         bool ok = false;
         const QString newName = QInputDialog::getText(this, effectLayerName(),
-            tr("Tên lớp hiệu ứng:"), QLineEdit::Normal,
+            LTR("legacy.cb628c7b2fd0df45"), QLineEdit::Normal,
             c->displayLabel.isEmpty() ? effectLayerName() : c->displayLabel, &ok);
         if (!ok) return;
         pushUndo();
@@ -1005,13 +1005,13 @@ void TimelineWidget::paintEvent(QPaintEvent* event) {
             const QRect badgeRect(m_headerWidth - 66, (m_rulerHeight - 18) / 2, 56, 18);
             p.setBrush(QColor(255, 255, 255, 12));
             p.setPen(QPen(QColor(255, 255, 255, 25), 1.0));
-            p.drawRoundedRect(badgeRect, 4.0, 4.0);
+            p.drawRect(badgeRect);
             QFont badgeFont = p.font();
             badgeFont.setPointSize(7);
             badgeFont.setBold(false);
             p.setFont(badgeFont);
             p.setPen(QColor(148, 163, 184));
-            p.drawText(badgeRect, Qt::AlignCenter, QString("%1 %2").arg(trackCount).arg(tr("Lớp")));
+            p.drawText(badgeRect, Qt::AlignCenter, LTR("timeline.trackCount").arg(trackCount));
             p.restore();
         }
 
@@ -1138,7 +1138,7 @@ void TimelineWidget::paintEvent(QPaintEvent* event) {
                 const QColor badgeFg = (track.type == TrackType::Visual) ? QColor(147, 197, 253) : QColor(110, 231, 183);
                 p.setBrush(badgeBg);
                 p.setPen(QPen(badgeBorder, 1.0));
-                p.drawRoundedRect(badgeRect, 4.0, 4.0);
+                p.drawRect(badgeRect);
                 QFont bFont = p.font();
                 bFont.setPointSize(8);
                 bFont.setBold(true);
@@ -1188,7 +1188,7 @@ void TimelineWidget::paintEvent(QPaintEvent* event) {
                 const QColor badgeFg = (track.type == TrackType::Visual) ? QColor(147, 197, 253) : QColor(110, 231, 183);
                 p.setBrush(badgeBg);
                 p.setPen(QPen(badgeBorder, 1.0));
-                p.drawRoundedRect(badgeRect, 3.0, 3.0);
+                p.drawRect(badgeRect);
                 QFont bFont = p.font();
                 bFont.setPointSize(7);
                 bFont.setBold(true);
@@ -1231,40 +1231,30 @@ void TimelineWidget::paintEvent(QPaintEvent* event) {
             p.save();
             p.setRenderHint(QPainter::Antialiasing, true);
 
-            QLinearGradient clipGrad(0, r.top(), 0, r.bottom());
+            // Flat, solid clip colors are easier to scan at a glance and
+            // avoid glossy gradients competing with thumbnails/waveforms.
+            QColor clipColor;
             if (clip.type == ClipType::Audio) {
-                clipGrad.setColorAt(0.0, QColor(16, 145, 105));
-                clipGrad.setColorAt(1.0, QColor(10, 100, 72));
+                clipColor = QColor("#176b5b");
             } else if (clip.isEffectLayer()) {
-                // Effect Layer: warm orange (same family as the "Fx" badge) so
-                // it reads as "effects carrier", not as media.
-                clipGrad.setColorAt(0.0, QColor(217, 110, 24));
-                clipGrad.setColorAt(1.0, QColor(146, 62, 18));
+                clipColor = QColor("#8c4d1d");
             } else if (clip.type == ClipType::Text) {
-                clipGrad.setColorAt(0.0, QColor(139, 92, 246));
-                clipGrad.setColorAt(1.0, QColor(109, 40, 217));
+                clipColor = QColor("#5a478f");
             } else {
-                clipGrad.setColorAt(0.0, QColor(49, 115, 222));
-                clipGrad.setColorAt(1.0, QColor(29, 78, 175));
+                clipColor = QColor("#285f98");
             }
 
             if (track.locked || track.hidden) {
                 p.setOpacity(0.6);
             }
 
-            p.setBrush(clipGrad);
+            p.setBrush(clipColor);
             if (selected) {
                 p.setPen(QPen(QColor(251, 191, 36), 1.8));
             } else {
                 p.setPen(QPen(QColor(255, 255, 255, 40), 1.0));
             }
-            p.drawRoundedRect(r.adjusted(0, 0, -1, -1), 4.0, 4.0);
-
-            if (r.width() > 6 && r.height() > 8) {
-                p.setPen(Qt::NoPen);
-                p.setBrush(QColor(255, 255, 255, 45));
-                p.drawRoundedRect(QRect(r.left() + 2, r.top() + 1, r.width() - 4, 2), 1.0, 1.0);
-            }
+            p.drawRect(r.adjusted(0, 0, -1, -1));
 
             // Effect Layer: diagonal hatch across the block. It has no media
             // of its own (no thumbnail, no waveform), so the hatch is what
@@ -1273,7 +1263,7 @@ void TimelineWidget::paintEvent(QPaintEvent* event) {
             if (clip.isEffectLayer() && r.width() > 6 && r.height() > 6) {
                 p.save();
                 QPainterPath blockPath;
-                blockPath.addRoundedRect(QRectF(r.adjusted(1, 1, -2, -2)), 3.5, 3.5);
+                blockPath.addRect(QRectF(r.adjusted(1, 1, -2, -2)));
                 p.setClipPath(blockPath);
                 p.setPen(QPen(QColor(255, 255, 255, 34), 1.0));
                 const int step = 10;
@@ -1361,7 +1351,7 @@ void TimelineWidget::paintEvent(QPaintEvent* event) {
                 if (asset && asset->kind != MediaKind::Unknown) {
                     label = asset->displayName;
                 } else {
-                    label = tr("(media bị mất)");
+                    label = LTR("legacy.72733a363f6cdb5e");
                 }
             }
             const QString fullLabel = label;
@@ -1396,7 +1386,7 @@ void TimelineWidget::paintEvent(QPaintEvent* event) {
                 // Dark pill on the orange Effect Layer block, amber-orange pill
                 // everywhere else (where the clip body is blue/green/violet).
                 p.setBrush(clip.isEffectLayer() ? QColor(20, 20, 24, 165) : QColor(249, 115, 22, 235));
-                p.drawRoundedRect(badge, 3.0, 3.0);
+                p.drawRect(badge);
                 p.setPen(Qt::white);
                 p.drawText(badge, Qt::AlignCenter, badgeText);
                 p.setFont(clipFont);
@@ -1716,16 +1706,16 @@ void TimelineWidget::mouseMoveEvent(QMouseEvent* event) {
             ctrl = trackControlAtPosition(event->pos(), &hoverRow);
             if (ctrl == TrackControl::Delete) {
                 setCursor(Qt::PointingHandCursor);
-                setToolTip(tr("Xóa layer"));
+                setToolTip(LTR("legacy.fffdf8eacce98f08"));
             } else if (ctrl == TrackControl::Lock) {
                 setCursor(Qt::PointingHandCursor);
-                setToolTip(tr("Khóa / Mở khóa layer"));
+                setToolTip(LTR("legacy.ce3cca3f35939f93"));
             } else if (ctrl == TrackControl::Hidden) {
                 setCursor(Qt::PointingHandCursor);
-                setToolTip(tr("Ẩn / Hiện layer"));
+                setToolTip(LTR("legacy.f54d706c8f6d119c"));
             } else if (ctrl == TrackControl::Mute) {
                 setCursor(Qt::PointingHandCursor);
-                setToolTip(tr("Tắt / Bật tiếng layer"));
+                setToolTip(LTR("legacy.bb5ebb8698a50b42"));
             } else {
                 setCursor(Qt::ArrowCursor);
                 setToolTip(QString());
@@ -1737,20 +1727,20 @@ void TimelineWidget::mouseMoveEvent(QMouseEvent* event) {
 
             if (overPlayheadShield || overPlayheadNeedle) {
                 setCursor(Qt::SizeHorCursor);
-                setToolTip(tr("Kéo để tua video (Playhead)"));
+                setToolTip(LTR("legacy.3d5cb4ef3c3794be"));
             } else if (event->pos().y() < m_rulerHeight && event->pos().x() >= m_headerWidth - 6) {
                 setCursor(Qt::PointingHandCursor);
-                setToolTip(tr("Nhấp để di chuyển con trỏ phát"));
+                setToolTip(LTR("legacy.f73bdfd2c73dee6d"));
             } else {
                 QString trackId, clipId;
                 DragMode hitMode = DragMode::None;
                 hitTest(event->pos(), &trackId, &clipId, &hitMode);
                 if (hitMode == DragMode::TrimLeft || hitMode == DragMode::TrimRight) {
                     setCursor(Qt::SizeHorCursor);
-                    setToolTip(tr("Kéo để cắt / mở rộng clip"));
+                    setToolTip(LTR("legacy.c25c099b974b145b"));
                 } else if (hitMode == DragMode::FadeIn || hitMode == DragMode::FadeOut) {
                     setCursor(Qt::PointingHandCursor);
-                    setToolTip(tr("Kéo để chỉnh Fade"));
+                    setToolTip(LTR("legacy.6ef53509dfa2c503"));
                 } else if (hitMode == DragMode::MoveClip) {
                     setCursor(Qt::SizeAllCursor);
                     setToolTip(QString());
@@ -1839,7 +1829,7 @@ void TimelineWidget::mouseMoveEvent(QMouseEvent* event) {
                               : m_dragRightBound - duration;
         newStart = std::clamp<Ticks>(newStart, m_dragLeftBound, std::max(m_dragLeftBound, maxStart));
         clip->timelineStart = newStart;
-        tooltip = tr("Bắt đầu: %1").arg(formatTimecode(clip->timelineStart).left(11));
+        tooltip = LTR("legacy.56415e79feb1378e").arg(formatTimecode(clip->timelineStart).left(11));
     } else if (m_dragMode == DragMode::TrimLeft) {
         Ticks newIn = std::clamp<Ticks>(m_dragClipOrigIn + delta, 0, m_dragClipOrigOut - kMinClipDuration);
         if (m_dragModifier & Qt::ControlModifier) {
@@ -1856,7 +1846,7 @@ void TimelineWidget::mouseMoveEvent(QMouseEvent* event) {
         appliedDelta = newStart - m_dragClipOrigStart;
         clip->sourceIn = m_dragClipOrigIn + appliedDelta;
         clip->timelineStart = newStart;
-        tooltip = tr("Thời lượng: %1").arg(formatDurationShort(clip->timelineDuration()));
+        tooltip = LTR("legacy.8e317898ccd52420").arg(formatDurationShort(clip->timelineDuration()));
     } else if (m_dragMode == DragMode::TrimRight) {
         // Don't let a trim run past the *source media* length (for video/audio),
         // or past the start of the next clip on this track.
@@ -1886,7 +1876,7 @@ void TimelineWidget::mouseMoveEvent(QMouseEvent* event) {
             m_lastSnapTarget = -1;
         }
         clip->sourceOut = newOut;
-        tooltip = tr("Thời lượng: %1").arg(formatDurationShort(clip->timelineDuration()));
+        tooltip = LTR("legacy.8e317898ccd52420").arg(formatDurationShort(clip->timelineDuration()));
     }
     // sortClips() is deferred to mouseReleaseEvent — clips don't truly change
     // order during a single-track drag, so sorting mid-drag is unnecessary work.
@@ -2015,8 +2005,8 @@ void TimelineWidget::mouseDoubleClickEvent(QMouseEvent* event) {
     // Double-clicking a Text clip renames its label (the actual title).
     if (clip && clip->type == ClipType::Text && !track->locked) {
         bool ok = false;
-        const QString newLabel = QInputDialog::getText(this, tr("Tiêu đề"),
-            tr("Nội dung văn bản:"), QLineEdit::Normal, clip->displayLabel, &ok);
+        const QString newLabel = QInputDialog::getText(this, LTR("legacy.df5a00098bccde73"),
+            LTR("legacy.d171a9c6ee851161"), QLineEdit::Normal, clip->displayLabel, &ok);
         if (ok && !newLabel.isEmpty()) {
             pushUndo();
             clip->displayLabel = newLabel;
@@ -2270,8 +2260,8 @@ void TimelineWidget::deleteTrack(const QString& trackId) {
     if (!track->clips().empty()) {
         const auto res = QMessageBox::question(
             this,
-            tr("Xóa layer"),
-            tr("Layer \"%1\" đang chứa %2 clip.\nBạn có chắc chắn muốn xóa layer này không?")
+            LTR("legacy.fffdf8eacce98f08"),
+            LTR("legacy.da5968ac46f07e26")
                 .arg(track->name)
                 .arg(track->clips().size()),
             QMessageBox::Yes | QMessageBox::No,
@@ -2343,13 +2333,13 @@ void TimelineWidget::contextMenuEvent(QContextMenuEvent* event) {
             titleAct->setEnabled(false);
             menu.addSeparator();
 
-            menu.addAction(tr("Xóa layer \"%1\"").arg(track.name), [this, trackId = track.id]() {
+            menu.addAction(LTR("legacy.dc74bfd75775a7a4").arg(track.name), [this, trackId = track.id]() {
                 deleteTrack(trackId);
             });
 
-            menu.addAction(tr("Đổi tên layer..."), [this, trackId = track.id, curName = track.name]() {
+            menu.addAction(LTR("legacy.a9e6c433d7d763f8"), [this, trackId = track.id, curName = track.name]() {
                 bool ok = false;
-                QString newName = QInputDialog::getText(this, tr("Đổi tên layer"), tr("Tên layer mới:"), QLineEdit::Normal, curName, &ok);
+                QString newName = QInputDialog::getText(this, LTR("legacy.cbe70d029e517c61"), LTR("legacy.40329a83b5bd7ed5"), QLineEdit::Normal, curName, &ok);
                 if (ok && !newName.trimmed().isEmpty()) {
                     Track* t = m_project->timeline().findTrack(trackId);
                     if (t) {
@@ -2363,32 +2353,32 @@ void TimelineWidget::contextMenuEvent(QContextMenuEvent* event) {
 
             menu.addSeparator();
 
-            menu.addAction(track.locked ? tr("Mở khóa layer") : tr("Khóa layer"), [this, row]() {
+            menu.addAction(track.locked ? LTR("legacy.25838944dcf1f257") : LTR("legacy.493a625b5026974e"), [this, row]() {
                 toggleTrackControl(row, TrackControl::Lock);
             });
 
-            menu.addAction(track.hidden ? tr("Hiện layer") : tr("Ẩn layer"), [this, row]() {
+            menu.addAction(track.hidden ? LTR("legacy.82aa11e0065b5bdf") : LTR("legacy.b991299d81a937e3"), [this, row]() {
                 toggleTrackControl(row, TrackControl::Hidden);
             });
 
-            menu.addAction(track.muted ? tr("Bật tiếng layer") : tr("Tắt tiếng layer"), [this, row]() {
+            menu.addAction(track.muted ? LTR("legacy.403ddcb04bfd1c05") : LTR("legacy.ea669d705ec0d86a"), [this, row]() {
                 toggleTrackControl(row, TrackControl::Mute);
             });
 
             menu.addSeparator();
-            menu.addAction(tr("Thêm layer video/ảnh"), [this]() {
+            menu.addAction(LTR("timeline.context.addVisualLayer"), [this]() {
                 pushUndo();
                 m_project->timeline().addTrack(TrackType::Visual, QString("Visual %1").arg(m_project->timeline().tracks().size() + 1));
                 refresh();
                 emit timelineEdited();
             });
-            menu.addAction(tr("Thêm layer audio"), [this]() {
+            menu.addAction(LTR("timeline.context.addAudioLayer"), [this]() {
                 pushUndo();
                 m_project->timeline().addTrack(TrackType::Audio, QString("Audio %1").arg(m_project->timeline().tracks().size() + 1));
                 refresh();
                 emit timelineEdited();
             });
-            menu.addAction(tr("Thêm lớp hiệu ứng (Effect Layer)"), this,
+            menu.addAction(LTR("timeline.context.addEffectLayer"), this,
                              &TimelineWidget::addEffectLayer);
 
             menu.exec(event->globalPos());
@@ -2421,28 +2411,28 @@ void TimelineWidget::contextMenuEvent(QContextMenuEvent* event) {
             // (same menu the double-click popup shows).
             if (clip && clip->isEffectLayer() && !track.locked) {
                 QMenu* fxMenu = buildEffectLayerMenu(trackId, clipId);
-                fxMenu->setTitle(tr("Hiệu ứng của lớp này"));
+                fxMenu->setTitle(LTR("legacy.003edc1cb5d98e90"));
                 fxMenu->setParent(&menu); // destroyed together with `menu`
                 menu.addMenu(fxMenu);
                 menu.addSeparator();
             }
 
-            menu.addAction(tr("Cắt tại playhead (S)"), this, &TimelineWidget::splitAtPlayhead);
-            menu.addAction(tr("Xóa clip này (Delete)"), this, &TimelineWidget::deleteSelectedClip);
-            menu.addAction(tr("Xóa & dồn clip sau lại (Ripple delete)"), this, &TimelineWidget::rippleDeleteSelectedClip);
+            menu.addAction(LTR("legacy.188b408a25ddf0bf"), this, &TimelineWidget::splitAtPlayhead);
+            menu.addAction(LTR("legacy.14e2038eff1bdb42"), this, &TimelineWidget::deleteSelectedClip);
+            menu.addAction(LTR("legacy.66416402a17c78e5"), this, &TimelineWidget::rippleDeleteSelectedClip);
             menu.addSeparator();
-            menu.addAction(tr("Sao chép clip (Ctrl+C)"), this, &TimelineWidget::copySelectedClip);
-            menu.addAction(tr("Dán clip (Ctrl+V)"), this, &TimelineWidget::pasteClip);
-            menu.addAction(tr("Nhân đôi clip (Ctrl+D)"), this, &TimelineWidget::duplicateSelectedClip);
+            menu.addAction(LTR("legacy.19ff50718e53d65e"), this, &TimelineWidget::copySelectedClip);
+            menu.addAction(LTR("legacy.fe1d50961e2aafb3"), this, &TimelineWidget::pasteClip);
+            menu.addAction(LTR("legacy.341ccb3ac36b3e80"), this, &TimelineWidget::duplicateSelectedClip);
             menu.addSeparator();
-            menu.addAction(tr("Dịch clip trái 1 khung hình (,)"), this, [this]() {
+            menu.addAction(LTR("legacy.b1f3958eab0e2e2d"), this, [this]() {
                 nudgeSelectedClip(-frameStepTicks());
             });
-            menu.addAction(tr("Dịch clip phải 1 khung hình (.)"), this, [this]() {
+            menu.addAction(LTR("legacy.59298e4fe2fa749c"), this, [this]() {
                 nudgeSelectedClip(frameStepTicks());
             });
             menu.addSeparator();
-            menu.addAction(tr("Xóa layer chứa clip này"), [this, trackId]() {
+            menu.addAction(LTR("legacy.aaf3aa3e056959c6"), [this, trackId]() {
                 deleteTrack(trackId);
             });
 
@@ -2452,23 +2442,23 @@ void TimelineWidget::contextMenuEvent(QContextMenuEvent* event) {
     }
 
     // Default right-click menu for empty timeline area
-    menu.addAction(tr("Thêm layer video/ảnh"), [this]() {
+    menu.addAction(LTR("timeline.context.addVisualLayer"), [this]() {
         pushUndo();
         m_project->timeline().addTrack(TrackType::Visual, QString("Visual %1").arg(m_project->timeline().tracks().size() + 1));
         refresh();
         emit timelineEdited();
     });
-    menu.addAction(tr("Thêm layer audio"), [this]() {
+    menu.addAction(LTR("timeline.context.addAudioLayer"), [this]() {
         pushUndo();
         m_project->timeline().addTrack(TrackType::Audio, QString("Audio %1").arg(m_project->timeline().tracks().size() + 1));
         refresh();
         emit timelineEdited();
     });
-    menu.addAction(tr("Thêm lớp hiệu ứng (Effect Layer)"), this,
+    menu.addAction(LTR("timeline.context.addEffectLayer"), this,
                      &TimelineWidget::addEffectLayer);
     if (!m_selectedTrackId.isEmpty()) {
         menu.addSeparator();
-        menu.addAction(tr("Xóa layer đang chọn"), this, &TimelineWidget::deleteSelectedTrack);
+        menu.addAction(LTR("legacy.46bec372511b4754"), this, &TimelineWidget::deleteSelectedTrack);
     }
     menu.exec(event->globalPos());
 }

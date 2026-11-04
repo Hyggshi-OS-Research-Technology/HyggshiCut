@@ -76,6 +76,12 @@ struct EffectParameter {
 struct Effect {
     QString type;
     bool enabled = true;
+    // Optional provenance/display name for declarative .plhc presets. The
+    // renderer still evaluates the built-in `type`; metadata survives save,
+    // load and timeline copies so plugin presets remain identifiable.
+    QString pluginId;
+    QString pluginEffectId;
+    QString displayName;
     std::vector<EffectParameter> params;
 
     double paramValue(const QString& name, double fallback = 0.0) const {

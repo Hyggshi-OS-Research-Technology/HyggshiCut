@@ -102,15 +102,15 @@ void WindowSettingsDialog::setupUi() {
     };
 
     m_okBtn = new QPushButton(getLabel("dialog.ok", "btn.ok", "OK"), this);
-    m_okBtn->setStyleSheet("QPushButton { background-color: #e06c1b; color: #ffffff; font-weight: bold; border-radius: 4px; padding: 6px 22px; font-size: 13px; } QPushButton:hover { background-color: #ff7f2a; }");
+    m_okBtn->setStyleSheet("QPushButton { background-color: #e06c1b; color: #ffffff; font-weight: bold; border-radius: 0px; padding: 6px 22px; font-size: 13px; } QPushButton:hover { background-color: #ff7f2a; }");
     connect(m_okBtn, &QPushButton::clicked, this, &WindowSettingsDialog::onOkClicked);
 
     m_applyBtn = new QPushButton(getLabel("dialog.apply", "btn.apply", "Apply"), this);
-    m_applyBtn->setStyleSheet("QPushButton { background-color: #383844; color: #eeeeee; border-radius: 4px; padding: 6px 18px; font-size: 13px; } QPushButton:hover { background-color: #4a4a58; }");
+    m_applyBtn->setStyleSheet("QPushButton { background-color: #383844; color: #eeeeee; border-radius: 0px; padding: 6px 18px; font-size: 13px; } QPushButton:hover { background-color: #4a4a58; }");
     connect(m_applyBtn, &QPushButton::clicked, this, &WindowSettingsDialog::onApplyClicked);
 
     m_cancelBtn = new QPushButton(getLabel("dialog.cancel", "btn.cancel", "Cancel"), this);
-    m_cancelBtn->setStyleSheet("QPushButton { background-color: #2c2c34; color: #cccccc; border-radius: 4px; padding: 6px 18px; font-size: 13px; } QPushButton:hover { background-color: #3c3c46; color: #ffffff; }");
+    m_cancelBtn->setStyleSheet("QPushButton { background-color: #2c2c34; color: #cccccc; border-radius: 0px; padding: 6px 18px; font-size: 13px; } QPushButton:hover { background-color: #3c3c46; color: #ffffff; }");
     connect(m_cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
 
     bottomLayout->addWidget(m_okBtn);
@@ -347,11 +347,11 @@ QWidget* WindowSettingsDialog::createProxyTab() {
     proxyForm->addRow(m_useProxyCheck);
 
     m_proxyResolutionCombo = new QComboBox(proxyGroup);
-    m_proxyResolutionCombo->addItem("Tự động (4K/8K → 720p, HD → 480p) (Mặc định)", 0);
-    m_proxyResolutionCombo->addItem("480p (854x480) - Tiết kiệm RAM/VRAM", 854);
-    m_proxyResolutionCombo->addItem("540p (960x540) - Cân bằng", 960);
-    m_proxyResolutionCombo->addItem("720p (1280x720) - Chất lượng cao", 1280);
-    m_proxyResolutionCombo->addItem("360p (640x360) - Siêu nhanh", 640);
+    m_proxyResolutionCombo->addItem(LTR("legacy.8ebf6c710cb85987"), 0);
+    m_proxyResolutionCombo->addItem(LTR("legacy.18b1a3920702b1fe"), 854);
+    m_proxyResolutionCombo->addItem(LTR("legacy.036730cf8f462df2"), 960);
+    m_proxyResolutionCombo->addItem(LTR("legacy.e80ed951553944a5"), 1280);
+    m_proxyResolutionCombo->addItem(LTR("legacy.3951c18efb6bd2ee"), 640);
     proxyForm->addRow(LTR("settings.proxy.resolution"), m_proxyResolutionCombo);
 
     auto* dirLayout = new QHBoxLayout();
@@ -527,7 +527,7 @@ void WindowSettingsDialog::onRunEnvironmentCheck() {
             badge->setFixedWidth(26);
             badge->setAlignment(Qt::AlignCenter);
             badge->setStyleSheet(
-                QStringLiteral("background: %1; color: #fff; border-radius: 3px; "
+                QStringLiteral("background: %1; color: #fff; border-radius: 0px; "
                                "font-weight: bold; font-size: 10px; padding: 2px 0;")
                     .arg(envStatusColor(res.status)));
             rowLayout->addWidget(badge, 0, Qt::AlignTop);
@@ -591,7 +591,7 @@ QWidget* WindowSettingsDialog::createAboutTab() {
     titleLabel->setAlignment(Qt::AlignCenter);
     tabLayout->addWidget(titleLabel);
 
-    auto* verLabel = new QLabel("Phiên bản 1.0.0 (x86_64 Linux)", tab);
+    auto* verLabel = new QLabel(LTR("legacy.cabb40dd838fcdea"), tab);
     verLabel->setStyleSheet("color: #aaa; margin-bottom: 12px;");
     verLabel->setAlignment(Qt::AlignCenter);
     tabLayout->addWidget(verLabel);

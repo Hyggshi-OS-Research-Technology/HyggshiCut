@@ -97,12 +97,12 @@ EffectsPanel::EffectsPanel(QWidget* parent) : QWidget(parent) {
         "QListWidget {"
         "  background-color: #1a1a1e;"
         "  border: 1px solid #33333a;"
-        "  border-radius: 4px;"
+        "  border-radius: 0px;"
         "  padding: 2px;"
         "}"
         "QListWidget::item {"
         "  padding: 5px 6px;"
-        "  border-radius: 3px;"
+        "  border-radius: 0px;"
         "}"
         "QListWidget::item:selected {"
         "  background-color: #2b5b84;"
@@ -120,11 +120,11 @@ EffectsPanel::EffectsPanel(QWidget* parent) : QWidget(parent) {
     btnBar->setSpacing(4);
 
     m_addBtn = new QPushButton(LTR("effects.addBtn"), leftWidget);
-    m_addBtn->setStyleSheet("background-color: #255d36; color: white; font-weight: bold; padding: 4px 8px; border-radius: 3px;");
+    m_addBtn->setStyleSheet("background-color: #255d36; color: white; font-weight: bold; padding: 4px 8px; border-radius: 0px;");
     connect(m_addBtn, &QPushButton::clicked, this, &EffectsPanel::onAddEffectMenuRequested);
 
     m_removeBtn = new QPushButton(LTR("effects.removeBtn"), leftWidget);
-    m_removeBtn->setStyleSheet("background-color: #5d2525; color: white; font-weight: bold; padding: 4px 8px; border-radius: 3px;");
+    m_removeBtn->setStyleSheet("background-color: #5d2525; color: white; font-weight: bold; padding: 4px 8px; border-radius: 0px;");
     connect(m_removeBtn, &QPushButton::clicked, this, &EffectsPanel::onRemoveSelectedEffect);
 
     btnBar->addWidget(m_addBtn);
@@ -204,7 +204,8 @@ void EffectsPanel::refreshFilterList(int selectIndex) {
 
     for (size_t i = 0; i < m_clip->effects.size(); ++i) {
         const auto& eff = m_clip->effects[i];
-        const QString displayName = getEffectTypeName(eff.type);
+        const QString displayName = eff.displayName.isEmpty()
+            ? getEffectTypeName(eff.type) : eff.displayName;
 
         auto* item = new QListWidgetItem(displayName, m_filterList);
         item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
@@ -335,14 +336,14 @@ QWidget* EffectsPanel::buildGenericEditor(Effect& effect) {
 
         layout->addLayout(form);
     } else {
-        auto* noParamLabel = new QLabel(tr("Hiệu ứng này không cần điều chỉnh tham số."), container);
+        auto* noParamLabel = new QLabel(LTR("legacy.4d11f6601a7f93e5"), container);
         noParamLabel->setStyleSheet("color: #888; font-style: italic;");
         layout->addWidget(noParamLabel);
     }
 
     // Reset button
-    auto* resetBtn = new QPushButton(tr("Đặt lại mặc định"), container);
-    resetBtn->setStyleSheet("background-color: #33333c; color: #ddd; padding: 4px 10px; border-radius: 4px;");
+    auto* resetBtn = new QPushButton(LTR("legacy.d153cbe80e4bdb79"), container);
+    resetBtn->setStyleSheet("background-color: #33333c; color: #ddd; padding: 4px 10px; border-radius: 0px;");
     connect(resetBtn, &QPushButton::clicked, this, [this, &effect, info]() {
         if (!info) return;
         effect.params.clear();
@@ -385,7 +386,7 @@ void EffectsPanel::onAddEffectMenuRequested() {
         "QMenu::item {"
         "  padding: 6px 18px;"
         "  color: #eee;"
-        "  border-radius: 3px;"
+        "  border-radius: 0px;"
         "}"
         "QMenu::item:selected {"
         "  background-color: #2b5b84;"

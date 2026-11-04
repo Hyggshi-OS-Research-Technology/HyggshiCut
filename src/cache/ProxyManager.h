@@ -120,7 +120,8 @@ private:
     void saveIndex() const;
 
     void startNextInQueue();
-    void finishCurrentJob(bool success, const QString& proxyFilePathOnSuccess);
+    void finishCurrentJob(bool success, const QString& proxyFilePathOnSuccess,
+                          const QString& failureReason = {});
 
     QString m_cacheDir;
     std::unordered_map<QString, QString> m_readyProxyPaths; // identityKey -> absolute proxy file path
@@ -134,6 +135,7 @@ private:
 
     QProcess* m_process = nullptr;
     QByteArray m_stdoutBuffer;
+    QByteArray m_stderrBuffer; // bounded tail for actionable codec/process errors
     Ticks m_currentJobDuration = 0;
     QString m_currentJobTempPath;
 

@@ -2,6 +2,7 @@
 #include "TransformOverlay.h"
 #include "AudioMeterWidget.h"
 #include "../render/GLVideoWidget.h"
+#include "../i18n/LanguageManager.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QPushButton>
@@ -43,7 +44,7 @@ PreviewWidget::PreviewWidget(QWidget* parent) : QWidget(parent) {
     relayoutOverlays();
 
     auto* transport = new QHBoxLayout();
-    m_playBtn = new QPushButton(tr("Phát"), this);
+    m_playBtn = new QPushButton(this);
     m_playBtn->setFixedWidth(80);
     connect(m_playBtn, &QPushButton::clicked, this, &PreviewWidget::playPauseClicked);
     transport->addWidget(m_playBtn);
@@ -84,7 +85,7 @@ PreviewWidget::PreviewWidget(QWidget* parent) : QWidget(parent) {
     m_meterToggleBtn = new QPushButton(tr("VU"), this);
     m_meterToggleBtn->setCheckable(true);
     m_meterToggleBtn->setChecked(false);
-    m_meterToggleBtn->setToolTip(tr("Bật/tắt thanh đo âm lượng (Digital Audio Volume Meter)"));
+    m_meterToggleBtn->setToolTip(LTR("preview.meter.tooltip"));
     m_meterToggleBtn->setFixedWidth(56);
     connect(m_meterToggleBtn, &QPushButton::toggled, this, [this](bool checked) {
         if (m_audioMeter) m_audioMeter->setVisible(checked);
@@ -92,10 +93,19 @@ PreviewWidget::PreviewWidget(QWidget* parent) : QWidget(parent) {
     transport->addWidget(m_meterToggleBtn);
 
     layout->addLayout(transport);
+
+    retranslateUi();
+    connect(&LanguageManager::instance(), &LanguageManager::languageChanged,
+            this, &PreviewWidget::retranslateUi);
 }
 
 QSize PreviewWidget::sizeHint() const {
     return QSize(720, 420);
+}
+
+void PreviewWidget::retranslateUi() {
+    if (m_playBtn) m_playBtn->setText(LTR(m_playing ? "preview.pause" : "preview.play"));
+    if (m_meterToggleBtn) m_meterToggleBtn->setToolTip(LTR("preview.meter.tooltip"));
 }
 
 void PreviewWidget::setAudioMeterVisible(bool visible) {
@@ -126,7 +136,7 @@ void PreviewWidget::clearTransformOverlay() {
 
 void PreviewWidget::setPlaying(bool playing) {
     m_playing = playing;
-    m_playBtn->setText(playing ? tr("Tạm dừng") : tr("Phát"));
+    m_playBtn->setText(LTR(playing ? "preview.pause" : "preview.play"));
 }
 
 void PreviewWidget::updateTimeLabel(Ticks t) {

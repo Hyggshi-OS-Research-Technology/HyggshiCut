@@ -78,17 +78,17 @@ ThreeWayColorGradeWidget::ThreeWayColorGradeWidget(QWidget* parent) : QWidget(pa
     topBar->addWidget(m_presetCombo, 1);
 
     m_saveBtn = new QPushButton(LTR("effects.savePreset"), this);
-    m_saveBtn->setStyleSheet("background-color: #3b3b44; color: white; padding: 3px 8px; border-radius: 4px;");
+    m_saveBtn->setStyleSheet("background-color: #3b3b44; color: white; padding: 3px 8px; border-radius: 0px;");
     connect(m_saveBtn, &QPushButton::clicked, this, &ThreeWayColorGradeWidget::onSavePreset);
     topBar->addWidget(m_saveBtn);
 
     m_deleteBtn = new QPushButton(LTR("effects.deletePreset"), this);
-    m_deleteBtn->setStyleSheet("background-color: #4a2a2a; color: white; padding: 3px 8px; border-radius: 4px;");
+    m_deleteBtn->setStyleSheet("background-color: #4a2a2a; color: white; padding: 3px 8px; border-radius: 0px;");
     connect(m_deleteBtn, &QPushButton::clicked, this, &ThreeWayColorGradeWidget::onDeletePreset);
     topBar->addWidget(m_deleteBtn);
 
     m_resetBtn = new QPushButton(LTR("effects.resetAll"), this);
-    m_resetBtn->setStyleSheet("background-color: #2b3b55; color: white; padding: 3px 8px; border-radius: 4px; font-weight: bold;");
+    m_resetBtn->setStyleSheet("background-color: #2b3b55; color: white; padding: 3px 8px; border-radius: 0px; font-weight: bold;");
     connect(m_resetBtn, &QPushButton::clicked, this, &ThreeWayColorGradeWidget::resetAll);
     topBar->addWidget(m_resetBtn);
 
@@ -262,8 +262,8 @@ void ThreeWayColorGradeWidget::onPresetSelected(int index) {
 
 void ThreeWayColorGradeWidget::onSavePreset() {
     bool ok = false;
-    const QString name = QInputDialog::getText(this, tr("Lưu Color Grading Preset"),
-                                              tr("Nhập tên Preset:"), QLineEdit::Normal, QString(), &ok);
+    const QString name = QInputDialog::getText(this, LTR("legacy.887c3b6a463ef95b"),
+                                              LTR("legacy.ce6bec59f8212b8d"), QLineEdit::Normal, QString(), &ok);
     if (!ok || name.trimmed().isEmpty()) return;
 
     const QString key = name.trimmed();
@@ -296,15 +296,15 @@ void ThreeWayColorGradeWidget::onSavePreset() {
 void ThreeWayColorGradeWidget::onDeletePreset() {
     const int idx = m_presetCombo->currentIndex();
     if (idx <= static_cast<int>(builtinPresets().size())) {
-        QMessageBox::information(this, tr("Thông báo"), tr("Không thể xóa các preset mặc định của hệ thống."));
+        QMessageBox::information(this, LTR("legacy.a9b656f50b4edb64"), LTR("legacy.c60c936400cf6547"));
         return;
     }
 
     const QString customKey = m_presetCombo->itemData(idx).toString();
     if (customKey.isEmpty()) return;
 
-    if (QMessageBox::question(this, tr("Xác nhận xóa"),
-                              tr("Bạn có chắc muốn xóa preset \"%1\" không?").arg(customKey)) == QMessageBox::Yes) {
+    if (QMessageBox::question(this, LTR("legacy.55e209a25b78826f"),
+                              LTR("legacy.7dc386467901b723").arg(customKey)) == QMessageBox::Yes) {
         QSettings settings("HyggshiCut", "ColorGradePresets");
         settings.remove(customKey);
         populatePresets();

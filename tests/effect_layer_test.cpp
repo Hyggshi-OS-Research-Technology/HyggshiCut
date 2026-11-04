@@ -214,6 +214,9 @@ bool testProjectRoundTrip() {
     Track& fx = project.timeline().addTrack(TrackType::Visual, "FX");
     Clip layer = Clip::makeEffectLayer(secondsToTicks(1.0), secondsToTicks(2.0));
     layer.effects.push_back(makeEffect("sepia", "amount", 0.75));
+    layer.effects[0].pluginId = "test_pack";
+    layer.effects[0].pluginEffectId = "warm_sepia";
+    layer.effects[0].displayName = "Warm Sepia";
     layer.effects.push_back(makeEffect("brightness", "amount", -0.2));
     fx.addClip(std::move(layer));
 
@@ -240,6 +243,10 @@ bool testProjectRoundTrip() {
         check(back.effects[0].type == QStringLiteral("sepia") &&
                   std::abs(back.effects[0].paramValue("amount", 0.0) - 0.75) < 1e-9,
               "effect parameters survive the round-trip");
+        check(back.effects[0].pluginId == QStringLiteral("test_pack") &&
+                  back.effects[0].pluginEffectId == QStringLiteral("warm_sepia") &&
+                  back.effects[0].displayName == QStringLiteral("Warm Sepia"),
+              "plugin preset provenance and display name survive save/reload");
         check(back.effects[1].type == QStringLiteral("brightness") &&
                   std::abs(back.effects[1].paramValue("amount", 0.0) + 0.2) < 1e-9,
               "the second effect survives the round-trip");

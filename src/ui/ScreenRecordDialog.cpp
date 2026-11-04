@@ -24,11 +24,11 @@ ScreenRecordDialog::ScreenRecordDialog(QWidget* parent)
     setStyleSheet(
         "QDialog { background-color: #1e1e22; color: #eee; }"
         "QLabel { color: #ddd; }"
-        "QGroupBox { border: 1px solid #3d3d45; border-radius: 6px; margin-top: 1.2em; font-weight: bold; color: #ff9944; }"
+        "QGroupBox { border: 1px solid #3d3d45; border-radius: 0px; margin-top: 1.2em; font-weight: bold; color: #ff9944; }"
         "QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 4px; }"
-        "QLineEdit, QSpinBox, QComboBox { background-color: #2b2b32; color: #fff; border: 1px solid #444; border-radius: 4px; padding: 5px 8px; }"
+        "QLineEdit, QSpinBox, QComboBox { background-color: #2b2b32; color: #fff; border: 1px solid #444; border-radius: 0px; padding: 5px 8px; }"
         "QCheckBox { color: #eee; spacing: 8px; }"
-        "QPushButton { background-color: #3b3b44; color: white; border-radius: 4px; padding: 6px 16px; font-weight: bold; }"
+        "QPushButton { background-color: #3b3b44; color: white; border-radius: 0px; padding: 6px 16px; font-weight: bold; }"
         "QPushButton:hover { background-color: #4a4a56; }"
     );
 
@@ -186,7 +186,7 @@ void ScreenRecordDialog::setupConfigPage() {
 
     m_startBtn = new QPushButton(LTR("screenRecord.start"), m_configPage);
     m_startBtn->setStyleSheet(
-        "QPushButton { background-color: #d32f2f; color: white; border-radius: 4px; padding: 8px 24px; font-weight: bold; font-size: 13px; }"
+        "QPushButton { background-color: #d32f2f; color: white; border-radius: 0px; padding: 8px 24px; font-weight: bold; font-size: 13px; }"
         "QPushButton:hover { background-color: #f44336; }"
     );
     connect(m_startBtn, &QPushButton::clicked, this, &ScreenRecordDialog::onStartClicked);
@@ -215,7 +215,7 @@ void ScreenRecordDialog::setupRecordingPage() {
     m_stopBtn = new QPushButton(LTR("screenRecord.stop"), m_recordingPage);
     m_stopBtn->setMinimumWidth(180);
     m_stopBtn->setStyleSheet(
-        "QPushButton { background-color: #e53935; color: white; border-radius: 6px; padding: 10px 24px; font-weight: bold; font-size: 14px; }"
+        "QPushButton { background-color: #e53935; color: white; border-radius: 0px; padding: 10px 24px; font-weight: bold; font-size: 14px; }"
         "QPushButton:hover { background-color: #ef5350; }"
     );
     connect(m_stopBtn, &QPushButton::clicked, this, &ScreenRecordDialog::onStopClicked);
@@ -257,7 +257,7 @@ void ScreenRecordDialog::setupSummaryPage() {
 
     m_closeBtn = new QPushButton(LTR("btn.close"), m_summaryPage);
     m_closeBtn->setStyleSheet(
-        "QPushButton { background-color: #2e7d32; color: white; border-radius: 4px; padding: 6px 20px; font-weight: bold; }"
+        "QPushButton { background-color: #2e7d32; color: white; border-radius: 0px; padding: 6px 20px; font-weight: bold; }"
         "QPushButton:hover { background-color: #388e3c; }"
     );
     connect(m_closeBtn, &QPushButton::clicked, this, &QDialog::accept);
